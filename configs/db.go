@@ -19,7 +19,7 @@ type MongoInstance struct {
 var MI MongoInstance
 
 func ConnectDB() {
-	dbName := fmt.Sprintf("%s-backend", AppEnv())
+	dbName := fmt.Sprintf("%s-fundis", AppEnv())
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI(EnvMongoURI()).SetServerAPIOptions(serverAPI)
 	client, err := mongo.Connect(context.TODO(), opts)
