@@ -10,6 +10,20 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+func RegisterPublicRoutes(g *echo.Group) {
+	g.POST("/register", HandleUserRegistration)
+	g.POST("/login", HandleUserLogin)
+	g.POST("/logout", HandleLogout)
+	g.POST("/refresh", HandleRefresh)
+	g.POST("/me", HandleMe)
+	g.GET("/login/:provider", HandleSocialLogin)
+	g.POST("/login/:provider/callback", HandleSocialLogin)
+}
+
+func RegisterAuthRoutes(g *echo.Group) {
+	g.POST("/admin/users", HandleCreateUserViaAdmin)
+}
+
 type RegisterRequest struct {
 	FirstName string `json:"first_name" form:"first_name"`
 	LastName  string `json:"last_name" form:"last_name"`

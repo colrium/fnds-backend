@@ -8,6 +8,11 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
+func RegisterPublicRoutes(g *echo.Group) {
+	g.GET("/assessments", HandleGetAssessments)
+	g.GET("/assessments/types", HandleGetAssessmentTypes)
+}
+
 func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/assessments/:assessmentId/responses", HandleSubmitResponse)
 	g.GET("/appointments", HandleListAppointments)

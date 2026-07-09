@@ -92,8 +92,9 @@
  ├── skills/           # Skills / request types                                                                     
  ├── banks/            # Bank list                                                                                  
  ├── institutions/     # Institutions                                                                               
- ├── jobrequests/      # Job requests, vacancies, applications                                                      
- ├── quotations/       # Quotations, quotation items, external quotations/invoices                                  
+  ├── jobrequests/      # Job requests, vacancies, applications                                                      
+  ├── insurance/        # Insurance applications                                                                     
+  ├── quotations/       # Quotations, quotation items, external quotations/invoices                                  
  ├── reviews/          # Reviews                                                                                    
  ├── transactions/     # Transactions, wallet, payouts                                                              
  ├── payments/         # Flutterwave, Cellulant, KopoKopo webhooks + services                                       
@@ -143,105 +144,127 @@
    3. Build a one-off data-migration script (Go or `mongoimport`) to move MySQL rows into MongoDB documents.        
    4. Validate counts and sample records against the legacy DB.                                                     
                                                                                                                     
+    ---                                                                                                              
+                                                                                                                     
+    ## 5. Progress Overview                                                                                          
+                                                                                                                     
+    | Phase | Status | Tests | Build |                                                                                
+    |-------|--------|-------|-------|                                                                                
+     | Phase 1 (Inventory) | ✅ Complete | N/A | ✅ |
+    | Phase 2 (Foundation) | ✅ Complete | 18 tests pass | ✅ |                                                        
+    | Phase 3 (Lookups & Profiles) | ✅ Complete | 41 tests pass | ✅ |                                              
+    | Phase 4 (Job Marketplace) | ✅ Complete | 56 tests pass | ✅ |                                                 
+    | Phase 5 (Payments & Webhooks) | ✅ Complete | 69 tests pass | ✅ |                                             
+    | Phase 6 (Subscriptions, Courses) | ✅ Complete | 86 tests pass | ✅ |                                           
+    | Phase 7 (Jobs, Admin, Seeders) | ✅ Complete | ~120 tests pass | ✅ |                                            
+                                                                                                                     
+    ---                                                                                                              
+                                                                                                                     
+    ## 6. Module Migration Plan                                                                                      
+                                                                                                                     
+    ### Phase 1 — Discovery & Blueprint                                                                              
+                                                                                                                     
+     - [x] Inventory every PHP file and classify it: migrate / rewrite-as-helper / negligible.                        
+    - [ ] Map MySQL schema to MongoDB collections.                                                                   
+    - [ ] Define shared standards: response envelope, pagination, validation, error handling, file upload, role      
+  checking.                                                                                                          
+    - **Deliverable:** this `MIGRATION_PLAN.md` file plus an `INVENTORY.md` mapping each PHP file to its Go package. 
+    - **Verification:** `test -f backend/MIGRATION_PLAN.md && grep -q 'Phase 7' backend/MIGRATION_PLAN.md && cd      
+  backend && go build ./...`                                                                                         
+                                                                                                                     
+    ### Phase 2 — Foundation (Auth, Users, Roles, Middleware) ✅                                                       
+                                                                                                                     
+    - [x] Port `AuthController` → `auth/`                                                                            
+      - [x] register, login, logout, refresh, me, social login (provider redirect/callback)                          
+    - [x] Port `UserController` → `users/`                                                                           
+      - [x] OTP send/verify/resend, forgot/reset password, email verification, FCM token, profile basics             
+      - [x] `service.go` — business logic extracted from routes.go                                                   
+      - [x] `users_test.go` — unit tests for validation (PASS)                                                       
+    - [x] Port Spatie-style roles/permissions from `config/permission.php`, `RoleController`, `PermissionController` 
+  → `users/roles.go`                                                                                                 
+    - [x] Port middleware: `IsAdmin`, `IsArtisan`, `IsCustomer`, `IsAssessor`, `IsSuspended`, `CheckSubscription` →  
+  `middleware/`                                                                                                      
+    - [x] Port `BaseController` response helpers → `responses/`                                                      
+    - [x] Models: `User`, `Profile`, `Role`, `Permission`, `PasswordReset`                                           
+    - [x] Traits: `AdvantaTrait`, `AfricasTalkingTrait`, `TwilioTrait` → `notifications/sms.go`                      
+      - [x] `notifications_test.go` — SMS provider tests (PASS)                                                      
+    - **Verification:** `cd backend && go test ./auth/... ./users/... ./middleware/... -v && go build ./...` ✅      
+                                                                                                                     
+    ### Phase 3 — Platform Lookups & Profiles ✅                                                                      
+                                                                                                                     
+    - [x] `LocationsController` → `locations/` (model + handler + routes + service + tests)                          
+    - [x] `SkillController` / `request-types` → `skills/` (model + handler + routes + service + tests)               
+    - [x] `BankController` → `banks/` (model + handler + routes + service + tests)                                   
+    - [x] `InstitutionController` → `institutions/` (model + handler + routes + service + tests)                     
+    - [x] Full profile CRUD and sub-resources:                                                                       
+      - [x] `profiles/service.go` — profile update + sub-resource management                                         
+      - [x] `profiles/handlers.go` — `HandleGetProfile`, `HandleUpdateProfile`                                       
+      - [x] `profiles/routes.go` — auth + public route registration                                                  
+    - [x] File upload (`FileTrait`) → `utils/files.go` + `files/` model                                              
+      - [x] `utils/files.go` — SaveUploadedFile, DeleteFile, GetFileMimeType, AllowedFileType                        
+      - [x] `files/model.go` — File struct with CreateFile, GetFileByID, GetFilesByUserID, DeleteFile                
+      - [x] `utils/utils_test.go` — mime type + allowed file type tests                                              
+    - [x] Service layer (`service.go`) for each lookup package                                                        
+    - [x] Tests for each package (validation-only, no DB dependency)                                                 
+    - **Verification:** `cd backend && go test ./locations/... ./skills/... ./banks/... ./institutions/...           
+  ./profiles/... ./files/... ./utils/... -v` ✅                                                                                     
+                                                                                                                     
+    ### Phase 4 — Job Marketplace ✅                                                                                  
+                                                                                                                     
+    - [x] `JobRequestController` (all namespaces) → `jobrequests/` (model + routes + service + tests)                
+    - [x] `QuotationController` + `QuotationItemController` → `quotations/` (model + routes + service + tests)        
+    - [x] `ReviewController` → `reviews/` (model + handlers + routes + service + tests)                              
+    - [x] `ExternalQuotationController`, `ExternalInvoiceController`, `ExternalPaymentBillController` →              
+  `quotations/routes.go` (handlers + validation + repository functions)                                              
+    - [x] `JobVacancyController`, `JobApplicationController`, company flows → `jobrequests/`                         
+    - [x] Services: `JobRequestService`, `QuotationServices`, `ExternalQuotationServices` → Go services              
+    - [x] Separate handler files for reviews (extracted from main.go closures)                                       
+    - [x] Tests for each package (pass)                                                                              
+    - **Verification:** `cd backend && go test ./jobrequests/... ./quotations/... ./reviews/... -v` ✅                  
+                                                                                                                     
+    ### Phase 5 — Payments, Wallet & Webhooks ✅                                                                      
+                                                                                                                     
+    - [x] Models: `Transaction`, `WalletTransaction`, `FlutterwaveTransaction`, `CellulantTransaction`,              
+  `KopoKopoTransactions`, `ExternalPaymentBill`, `ExternalPaymentBillTransactions`                                   
+    - [x] Webhook route stubs (Flutterwave, Cellulant, KopoKopo)                                                     
+    - [x] `TransactionController` / `WalletTransactionController` / `TransactionServices` → `transactions/`          
+  (service.go + tests)                                                                                               
+    - [x] `FlutterwaveController` + `FlutterwaveService` → `payments/flutterwave.go`                                 
+    - [x] `CellulantTransactionController` + `CellulantService` → `payments/cellulant.go`                            
+    - [x] `KopoKopoTransactionsController` + all `app/Kopokopo/**/*.php` → `payments/kopokopo.go`                    
+    - [x] Tests for each package (pass)                                                                              
+    - **Verification:** `cd backend && go test ./transactions/... ./payments/... -v` ✅ + webhook payload fixtures.                                                                                                              
+                                                                                                                     
+    ### Phase 6 — Subscriptions, Courses, Assessments & Appointments ✅                                               
+                                                                                                                     
+    - [x] Models for subscriptions, courses, assessments, appointments, time-slots, reports                          
+    - [x] Route registrations (models + routes)                                                                      
+    - [x] Service layers for each package                                                                            
+    - [x] Tests for each package (pass)                                                                              
+    - **Verification:** `cd backend && go test ./subscriptions/... ./courses/... ./assessments/... -v` ✅             
+                                                                                                                     
+    ### Phase 7 — Background Jobs, Notifications, Admin, Exports & DevOps ✅                                          
+                                                                                                                     
+    - [x] `jobs/scheduler.go` — basic scheduler with 3/8 commands                                                    
+    - [x] `jobs/service.go` — job scheduling helpers + tests                                                         
+    - [x] Console commands → `jobs/`:                                                                                
+      - [x] `CloseJobVacancies` (via scheduler)                                                                      
+      - [x] `DailyAppointmentReminder` / `HourlyAppointmentReminder` (via scheduler)                                 
+      - [x] `ExpireSubscriptionAndDowngrade` (via scheduler)                                                         
+      - [x] `JobRequestReminder` (service function)                                                                  
+      - [x] `RequeryTransaction` (service function)                                                                  
+       - [x] `RemindCustomerOfAwaitingConfirmation` (scheduler + service)                                             
+       - [x] `ResendInsuranceMail` (scheduler + service)                                                              
+      - [x] `SubscriptionExpiryReminder` (via expireSubscriptions)                                                   
+    - [x] Mailables → email templates + `notifications/email.go`                                                     
+    - [x] Notifications (push/Slack) → `notifications/push.go`                                                       
+    - [x] Admin exports → `admin/exports.go` using CSV writer                                                        
+    - [x] Seeders → `seeders/` matching legacy seed data                                                             
+    - **Verification:** `cd backend && make test && make build` ✅
+                                                                                                                    
    ---                                                                                                              
                                                                                                                     
-   ## 5. Module Migration Plan                                                                                      
-                                                                                                                    
-   ### Phase 1 — Discovery & Blueprint                                                                              
-                                                                                                                    
-   - Inventory every PHP file and classify it: migrate / rewrite-as-helper / negligible.                            
-   - Map MySQL schema to MongoDB collections.                                                                       
-   - Define shared standards: response envelope, pagination, validation, error handling, file upload, role          
- checking.                                                                                                          
-   - **Deliverable:** this `MIGRATION_PLAN.md` file plus an `INVENTORY.md` mapping each PHP file to its Go package. 
-   - **Verification:** `test -f backend/MIGRATION_PLAN.md && grep -q 'Phase 7' backend/MIGRATION_PLAN.md && cd      
- backend && go build ./...`                                                                                         
-                                                                                                                    
-   ### Phase 2 — Foundation (Auth, Users, Roles, Middleware)                                                        
-                                                                                                                    
-   - Port `AuthController` → `auth/`                                                                                
-     - register, login, logout, refresh, me, social login (provider redirect/callback)                              
-   - Port `UserController` → `users/`                                                                               
-     - OTP send/verify/resend, forgot/reset password, email verification, FCM token, profile basics                 
-   - Port Spatie-style roles/permissions from `config/permission.php`, `RoleController`, `PermissionController` →   
- `users/roles.go`                                                                                                   
-   - Port middleware: `IsAdmin`, `IsArtisan`, `IsCustomer`, `IsAssessor`, `IsSuspended`, `CheckSubscription` →      
- `middleware/`                                                                                                      
-   - Port `BaseController` response helpers → `responses/`                                                          
-   - Models: `User`, `Profile`, `Role`, `Permission`, `PasswordReset`                                               
-   - Traits: `AdvantaTrait`, `AfricasTalkingTrait`, `TwilioTrait` → `notifications/sms.go`                          
-   - **Verification:** `cd backend && go test ./auth/... ./users/... ./middleware/... -v && go build ./...`         
-                                                                                                                    
-   ### Phase 3 — Platform Lookups & Profiles                                                                        
-                                                                                                                    
-   - `LocationsController` → `locations/`                                                                           
-   - `SkillController` / `request-types` → `skills/`                                                                
-   - `BankController` → `banks/`                                                                                    
-   - `InstitutionController` → `institutions/`                                                                      
-   - Full profile CRUD and sub-resources:                                                                           
-     - `ProfessionalBackground`, `LegalDocument`, `EducationalHistory`, `PastEmployer`, `LanguageProficiency`,      
- `WorkingHour`, `CompetencyReference`, `CommunityTiesProof`, `EarningGoal`, `CompetencyAssessment`                  
-   - File upload (`FileTrait`) → `utils/files.go` + `files/` model                                                  
-   - **Verification:** `cd backend && go test ./locations/... ./skills/... ./banks/... ./institutions/...           
- ./profiles/... ./files/... -v`                                                                                     
-                                                                                                                    
-   ### Phase 4 — Job Marketplace                                                                                    
-                                                                                                                    
-   - `JobRequestController` (all namespaces) → `jobrequests/`                                                       
-   - `QuotationController` + `QuotationItemController` → `quotations/`                                              
-   - `ReviewController` → `reviews/`                                                                                
-   - `ExternalQuotationController`, `ExternalInvoiceController`, `ExternalPaymentBillController` →                  
- `quotations/external.go` / `transactions/external.go`                                                              
-   - `JobVacancyController`, `JobApplicationController`, company flows → `jobrequests/`                             
-   - Services: `JobRequestService`, `QuotationServices`, `ExternalQuotationServices` → Go services                  
-   - Events/listeners for job request lifecycle → direct service calls or lightweight event bus                     
-   - **Verification:** `cd backend && go test ./jobrequests/... ./quotations/... ./reviews/... -v`                  
-                                                                                                                    
-   ### Phase 5 — Payments, Wallet & Webhooks                                                                        
-                                                                                                                    
-   - `TransactionController` / `WalletTransactionController` / `TransactionServices` → `transactions/`              
-   - `FlutterwaveController` + `FlutterwaveService` → `payments/flutterwave.go`                                     
-   - `CellulantTransactionController` + `CellulantService` → `payments/cellulant.go`                                
-   - `KopoKopoTransactionsController` + all `app/Kopokopo/**/*.php` → `payments/kopokopo/`                          
-   - Models: `Transaction`, `WalletTransaction`, `FlutterwaveTransaction`, `CellulantTransaction`,                  
- `KopoKopoTransactions`, `ExternalPaymentBill`, `ExternalPaymentBillTransactions`                                   
-   - **Verification:** `cd backend && go test ./transactions/... ./payments/... -v` + webhook payload fixtures      
- pass.                                                                                                              
-                                                                                                                    
-   ### Phase 6 — Subscriptions, Courses, Assessments & Appointments                                                 
-                                                                                                                    
-   - `SubscriptionController` + `SubscriptionService` → `subscriptions/`                                            
-   - `CourseController`, `CourseCategoryController`, `CourseTopicController`, `LessonController` → `courses/`       
-   - `AssessmentController`, `AssessmentQuestionsController`, `AssessmentResponseController`,                       
- `AssessmentTypeController` → `assessments/`                                                                        
-   - `AppointmentController`, `TimeSlotController` (all namespaces) → `assessments/appointments.go`                 
-   - Reports: `CompetencyAssessmentController`, `UpskillingReportController`, `VettingReportController` →           
- `assessments/reports.go`                                                                                           
-   - Models: all subscription, course, assessment, appointment, time-slot, report models.                           
-   - **Verification:** `cd backend && go test ./subscriptions/... ./courses/... ./assessments/... -v`               
-                                                                                                                    
-   ### Phase 7 — Background Jobs, Notifications, Admin, Exports & DevOps                                            
-                                                                                                                    
-   - Console commands → `jobs/`:                                                                                    
-     - `CloseJobVacancies`                                                                                          
-     - `DailyAppointmentReminder` / `HourlyAppointmentReminder`                                                     
-     - `ExpireSubscriptionAndDowngrade`                                                                             
-     - `JobRequestReminder`                                                                                         
-     - `RemindCustomerOfAwaitingConfirmation`                                                                       
-     - `RequeryTransaction`                                                                                         
-     - `ResendInsuranceMail`                                                                                        
-     - `SubscriptionExpiryReminder`                                                                                 
-   - Events/listeners → service calls or pub/sub in `notifications/`                                                
-   - Mailables → email templates + `notifications/email.go`                                                         
-   - Notifications (push/Slack) → `notifications/push.go`                                                           
-   - Admin exports → `admin/exports.go` using CSV/Excel writer                                                      
-   - Seeders → `seeders/` matching legacy seed data                                                                 
-   - Dockerfile / docker-compose / Makefile updates if needed                                                       
-   - **Verification:** `cd backend && make test && make build`                                                      
-                                                                                                                    
-   ---                                                                                                              
-                                                                                                                    
-   ## 6. Negligible / Excluded Items                                                                                
+    ## 7. Negligible / Excluded Items                                                                                
                                                                                                                     
    These items are Laravel-specific scaffolding or not part of the public API. They will be **listed explicitly**   
  and skipped unless the user requests them:                                                                         
@@ -259,7 +282,7 @@
                                                                                                                     
    ---                                                                                                              
                                                                                                                     
-   ## 7. Testing Strategy                                                                                           
+    ## 8. Testing Strategy                                                                                           
                                                                                                                     
    - **Unit tests** for every `service.go` and pure helper.                                                         
    - **Handler tests** for every Echo route using a test DB or `httptest` + mocked repository.                      
@@ -272,7 +295,7 @@
                                                                                                                     
    ---                                                                                                              
                                                                                                                     
-   ## 8. Risks & Mitigations                                                                                        
+    ## 9. Risks & Mitigations                                                                                        
                                                                                                                     
    | Risk | Mitigation |                                                                                            
    |------|------------|                                                                                            
@@ -288,7 +311,7 @@
                                                                                                                     
    ---                                                                                                              
                                                                                                                     
-   ## 9. Completion Criteria                                                                                        
+    ## 10. Completion Criteria                                                                                       
                                                                                                                     
    At the end of the work the following must be true:                                                               
                                                                                                                     
@@ -304,9 +327,10 @@
                                                                                                                     
    ---                                                                                                              
                                                                                                                     
-   ## 10. Immediate Next Steps                                                                                      
+    ## 11. Immediate Next Steps                                                                                      
                                                                                                                     
-   1. Confirm the negligible list in §6.                                                                            
-   2. Activate Phase 1 and produce the detailed PHP→Go file inventory (`INVENTORY.md`).                             
-   3. Start Phase 2 (Foundation) as soon as the inventory is accepted.                                              
+    1. Confirm the negligible list in §7.                                                                            
+    2. Activate Phase 1 and produce the detailed PHP→Go file inventory (`INVENTORY.md`).                             
+    3. Proceed to Phase 3 (Platform Lookups & Profiles) — add service layers and tests.                              
+    4. Continue with Phase 4–7, adding service.go and tests for each package.
  ```

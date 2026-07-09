@@ -38,6 +38,8 @@ type ExternalQuotation struct {
 	CustomerName  string                  `json:"customer_name" bson:"customer_name"`
 	CustomerEmail string                  `json:"customer_email" bson:"customer_email"`
 	CustomerPhone string                  `json:"customer_phone" bson:"customer_phone"`
+	JobTitle      string                  `json:"job_title" bson:"job_title"`
+	JobDescription string                 `json:"job_description" bson:"job_description"`
 	Status        string                  `json:"status" bson:"status"`
 	TotalAmount   float64                 `json:"total_amount" bson:"total_amount"`
 	Items         []ExternalQuotationItem `json:"items" bson:"items"`
@@ -47,10 +49,12 @@ type ExternalQuotation struct {
 
 type ExternalQuotationItem struct {
 	ID          string  `json:"id" bson:"_id"`
-	Description string  `json:"description" bson:"description"`
+	Name        string  `json:"item" bson:"item"`
 	Quantity    int     `json:"quantity" bson:"quantity"`
+	Unit        string  `json:"unit" bson:"unit"`
 	UnitPrice   float64 `json:"unit_price" bson:"unit_price"`
 	TotalPrice  float64 `json:"total_price" bson:"total_price"`
+	Description string  `json:"description" bson:"description"`
 }
 
 type ExternalInvoice struct {
@@ -131,4 +135,68 @@ func UpdateExternalQuotation(id string, updates bson.M) error {
 	updates["updated_at"] = time.Now()
 	_, err := configs.MI.DB.Collection("external_quotations").UpdateOne(context.TODO(), bson.M{"_id": id}, bson.M{"$set": updates})
 	return err
+}
+
+func ListExternalQuotationsByArtisan(artisanID string) ([]ExternalQuotation, error) {
+	cursor, err := configs.MI.DB.Collection("external_quotations").Find(context.TODO(), bson.M{"artisan_id": artisanID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+	var quotations []ExternalQuotation
+	if err := cursor.All(context.TODO(), &quotations); err != nil {
+		return nil, err
+	}
+	return quotations, nil
+}
+
+func CreateExternalInvoice(inv *ExternalInvoice) error {
+	inv.ID = uuid.New().String()
+	inv.CreatedAt = time.Now()
+	inv.UpdatedAt = time.Now()
+	_, err := configs.MI.DB.Collection("external_invoices").InsertOne(context.TODO(), inv)
+	return err
+}
+
+func GetExternalInvoiceByID(id string) (*ExternalInvoice, error) {
+	var inv ExternalInvoice
+	err := configs.MI.DB.Collection("external_invoices").FindOne(context.TODO(), bson.M{"_id": id}).Decode(&inv)
+	if err != nil {
+		return nil, err
+	}
+	return &inv, nil
+}
+
+func ListExternalInvoicesByArtisan(artisanID string) ([]ExternalInvoice, error) {
+	cursor, err := configs.MI.DB.Collection("external_invoices").Find(context.TODO(), bson.M{"artisan_id": artisanID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+	var invoices []ExternalInvoice
+	if err := cursor.All(context.TODO(), &invoices); err != nil {
+		return nil, err
+	}
+	return invoices, nil
+}
+
+func CreateExternalPaymentBill(bill *ExternalPaymentBill) error {
+	bill.ID = uuid.New().String()
+	bill.CreatedAt = time.Now()
+	bill.UpdatedAt = time.Now()
+	_, err := configs.MI.DB.Collection("external_payment_bills").InsertOne(context.TODO(), bill)
+	return err
+}
+
+func ListExternalPaymentBillsByArtisan(artisanID string) ([]ExternalPaymentBill, error) {
+	cursor, err := configs.MI.DB.Collection("external_payment_bills").Find(context.TODO(), bson.M{"artisan_id": artisanID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+	var bills []ExternalPaymentBill
+	if err := cursor.All(context.TODO(), &bills); err != nil {
+		return nil, err
+	}
+	return bills, nil
 }

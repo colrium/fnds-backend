@@ -12,6 +12,22 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.GET("/quotations", HandleListQuotations)
 	g.GET("/quotations/:id", HandleGetQuotation)
 	g.PATCH("/quotations/:id", HandleUpdateQuotation)
+
+	g.POST("/external-quotations", HandleCreateExternalQuotation)
+	g.GET("/external-quotations", HandleListExternalQuotations)
+	g.GET("/external-quotations/:id", HandleGetExternalQuotation)
+	g.PATCH("/external-quotations/:id/status/:action", HandleUpdateExternalQuotationStatus)
+
+	g.POST("/external-invoices", HandleCreateExternalInvoice)
+	g.GET("/external-invoices", HandleListExternalInvoices)
+	g.GET("/external-invoices/:id", HandleGetExternalInvoice)
+
+	g.POST("/external-payment-bills", HandleCreateExternalPaymentBill)
+	g.GET("/external-payment-bills", HandleListExternalPaymentBills)
+}
+
+func RegisterPublicRoutes(g *echo.Group) {
+	g.GET("/external-quotations/:id/status/:action", HandleUpdateExternalQuotationStatus)
 }
 
 func HandleCreateQuotation(ctx echo.Context) error {
@@ -61,4 +77,212 @@ func HandleUpdateQuotation(ctx echo.Context) error {
 		return responses.SendError(ctx, 500, "Failed to update quotation")
 	}
 	return responses.SendOK(ctx, nil, "Quotation updated successfully")
+}
+
+func HandleCreateExternalQuotation(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+
+	var req struct {
+		CustomerEmail  string                      `json:"customer_email"`
+		CustomerPhone  string                      `json:"customer_phone"`
+		CustomerName   string                      `json:"customer_name"`
+		JobTitle       string                      `json:"job_title"`
+		JobDescription string                      `json:"job_description"`
+		Items          []ExternalQuotationItemInput `json:"items"`
+	}
+	if err := ctx.Bind(&req); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+
+	if err := ValidateExternalQuotation(req.CustomerEmail, req.CustomerName, req.JobTitle, req.Items); err != nil {
+		return responses.SendError(ctx, 400, err.Error())
+	}
+
+	eq := ExternalQuotation{
+		ArtisanID:      userID,
+		CustomerEmail:  req.CustomerEmail,
+		CustomerPhone:  req.CustomerPhone,
+		CustomerName:   req.CustomerName,
+		Status:         "pending",
+		JobTitle:       req.JobTitle,
+		JobDescription: req.JobDescription,
+	}
+	for _, item := range req.Items {
+		eq.Items = append(eq.Items, ExternalQuotationItem{
+			Name:       item.Name,
+			Quantity:   item.Quantity,
+			Unit:       item.Unit,
+			UnitPrice:  item.UnitPrice,
+			TotalPrice: item.TotalPrice,
+		})
+		eq.TotalAmount += item.TotalPrice
+	}
+
+	if err := CreateExternalQuotation(&eq); err != nil {
+		return responses.SendError(ctx, 500, "Failed to create external quotation")
+	}
+	return responses.SendCreated(ctx, eq, "External quotation created successfully")
+}
+
+func HandleListExternalQuotations(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	quotations, err := ListExternalQuotationsByArtisan(userID)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to fetch external quotations")
+	}
+	return responses.SendOK(ctx, quotations, "External quotations retrieved successfully")
+}
+
+func HandleGetExternalQuotation(ctx echo.Context) error {
+	id := ctx.Param("id")
+	eq, err := GetExternalQuotationByID(id)
+	if err != nil {
+		return responses.SendError(ctx, 404, "External quotation not found")
+	}
+	return responses.SendOK(ctx, eq, "External quotation retrieved successfully")
+}
+
+func HandleUpdateExternalQuotationStatus(ctx echo.Context) error {
+	id := ctx.Param("id")
+	action := ctx.Param("action")
+
+	if action != "accepted" && action != "rejected" {
+		return responses.SendError(ctx, 400, "Invalid action: must be accepted or rejected")
+	}
+
+	eq, err := GetExternalQuotationByID(id)
+	if err != nil {
+		return responses.SendError(ctx, 404, "External quotation not found")
+	}
+
+	if eq.Status != "pending" {
+		return responses.SendError(ctx, 400, "Quotation has already been processed")
+	}
+
+	if err := UpdateExternalQuotation(id, map[string]interface{}{"status": action}); err != nil {
+		return responses.SendError(ctx, 500, "Failed to update quotation status")
+	}
+
+	return responses.SendOK(ctx, nil, "Quotation status updated to "+action)
+}
+
+func HandleCreateExternalInvoice(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+
+	var req struct {
+		CustomerEmail   string                      `json:"customer_email"`
+		CustomerPhone   string                      `json:"customer_phone"`
+		CustomerName    string                      `json:"customer_name"`
+		JobTitle        string                      `json:"job_title"`
+		JobDescription  string                      `json:"job_description"`
+		Items           []ExternalQuotationItemInput `json:"items"`
+	}
+	if err := ctx.Bind(&req); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+
+	if err := ValidateExternalInvoice(req.CustomerEmail, req.CustomerPhone, req.CustomerName, req.JobTitle, req.Items); err != nil {
+		return responses.SendError(ctx, 400, err.Error())
+	}
+
+	eq := ExternalQuotation{
+		ArtisanID:      userID,
+		CustomerEmail:  req.CustomerEmail,
+		CustomerPhone:  req.CustomerPhone,
+		CustomerName:   req.CustomerName,
+		Status:         "invoice",
+		JobTitle:       req.JobTitle,
+		JobDescription: req.JobDescription,
+	}
+	for _, item := range req.Items {
+		eq.Items = append(eq.Items, ExternalQuotationItem{
+			Name:       item.Name,
+			Quantity:   item.Quantity,
+			Unit:       item.Unit,
+			UnitPrice:  item.UnitPrice,
+			TotalPrice: item.TotalPrice,
+		})
+		eq.TotalAmount += item.TotalPrice
+	}
+
+	if err := CreateExternalQuotation(&eq); err != nil {
+		return responses.SendError(ctx, 500, "Failed to create invoice quotation")
+	}
+
+	invoice := ExternalInvoice{
+		QuotationID: eq.ID,
+		ArtisanID:   userID,
+		Status:      "UNPAID",
+		TotalAmount: eq.TotalAmount,
+	}
+	if err := CreateExternalInvoice(&invoice); err != nil {
+		return responses.SendError(ctx, 500, "Failed to create invoice")
+	}
+
+	return responses.SendCreated(ctx, invoice, "Invoice created successfully")
+}
+
+func HandleListExternalInvoices(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	invoices, err := ListExternalInvoicesByArtisan(userID)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to fetch invoices")
+	}
+	return responses.SendOK(ctx, invoices, "Invoices retrieved successfully")
+}
+
+func HandleGetExternalInvoice(ctx echo.Context) error {
+	id := ctx.Param("id")
+	invoice, err := GetExternalInvoiceByID(id)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Invoice not found")
+	}
+	return responses.SendOK(ctx, invoice, "Invoice retrieved successfully")
+}
+
+func HandleCreateExternalPaymentBill(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+
+	var req struct {
+		CustomerEmail string  `json:"customer_email"`
+		CustomerPhone string  `json:"customer_phone"`
+		CustomerName  string  `json:"customer_name"`
+		Amount        float64 `json:"amount"`
+	}
+	if err := ctx.Bind(&req); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+
+	if err := ValidateExternalPaymentBill(req.CustomerEmail, req.CustomerPhone, req.CustomerName, req.Amount); err != nil {
+		return responses.SendError(ctx, 400, err.Error())
+	}
+
+	bill := ExternalPaymentBill{
+		ArtisanID:   userID,
+		Status:      "UNPAID",
+		TotalAmount: req.Amount,
+	}
+	if err := CreateExternalPaymentBill(&bill); err != nil {
+		return responses.SendError(ctx, 500, "Failed to create payment bill")
+	}
+
+	return responses.SendCreated(ctx, bill, "Payment bill created successfully")
+}
+
+func HandleListExternalPaymentBills(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	bills, err := ListExternalPaymentBillsByArtisan(userID)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to fetch payment bills")
+	}
+	return responses.SendOK(ctx, bills, "Payment bills retrieved successfully")
 }
