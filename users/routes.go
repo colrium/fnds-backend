@@ -6,9 +6,9 @@ import (
 	"backend/responses"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func HandleSendOtp(ctx echo.Context) error {
@@ -82,7 +82,7 @@ func HandleForgotPassword(ctx echo.Context) error {
 	}
 
 	otp := "123456"
-	_ = UpdateUser(user.ID.Hex(), bson.M{"otp": otp})
+	_ = UpdateUser(user.ID, bson.M{"otp": otp})
 
 	return responses.SendOK(ctx, nil, "OTP sent successfully")
 }
@@ -111,8 +111,7 @@ func HandleResetPassword(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Invalid OTP")
 	}
 
-	hashedPassword := []byte(password)
-	_ = UpdateUser(user.ID.Hex(), bson.M{"password": hashedPassword, "otp": "", "phone_verified": true})
+	_ = UpdateUser(user.ID, bson.M{"password": []byte(password), "otp": "", "phone_verified": true})
 
 	return responses.SendOK(ctx, nil, "Password reset successfully")
 }
@@ -134,40 +133,40 @@ func HandleUpdateToken(ctx echo.Context) error {
 }
 
 type ProfileUpdateRequest struct {
-	FirstName                string                    `json:"first_name"`
-	LastName                 string                    `json:"last_name"`
-	IDNumber                 string                    `json:"id_number"`
-	Locations                []string                  `json:"locations"`
-	Skills                   []string                  `json:"skills"`
-	DateOfBirth              string                    `json:"date_of_birth"`
-	Gender                   string                    `json:"gender"`
-	HasSocialMediaHandles    *bool                     `json:"has_social_media_handles"`
-	SocialMedias             string                    `json:"social_medias"`
-	HasSmartphone            *bool                     `json:"has_smartphone"`
-	IsBusinessRegistered     *bool                     `json:"is_business_registered"`
-	BusinessName             string                    `json:"business_name"`
-	BusinessRegistrationNumber string                  `json:"business_registration_number"`
-	RecentGoodConduct        *bool                     `json:"recent_good_conduct"`
-	Address                  string                    `json:"address"`
-	City                     string                    `json:"city"`
-	State                    string                    `json:"state"`
-	Zip                      string                    `json:"zip"`
-	Country                  string                    `json:"country"`
-	SkillAcquisitionMode     string                    `json:"skill_acquisition_mode"`
-	YearsOfExperience        int                       `json:"years_of_experience"`
-	NextOfKinName            string                    `json:"next_of_kin_name"`
-	NextOfKinPhoneNumber     string                    `json:"next_of_kin_phone_number"`
-	NextOfKinRelationship    string                    `json:"next_of_kin_relationship"`
-	IsCommunityOrgMember     *bool                     `json:"is_community_org_member"`
-	YearsAtCommunityOrg      int                       `json:"years_at_community_org"`
-	CharacterReferenceName   string                    `json:"character_reference_name"`
-	CharacterReferenceContact string                   `json:"character_reference_contact"`
-	CharacterReferenceRelationship string              `json:"character_reference_relationship"`
-	EarningGoalAmount        float64                   `json:"earning_goal_amount"`
-	WorkingHours             []WorkingHourInput        `json:"working_hours"`
-	PastEmployers            []PastEmployerInput       `json:"past_employers"`
-	LanguageProficiencies    []LanguageProficiencyInput `json:"language_proficiencies"`
-	References               []ReferenceInput          `json:"references"`
+	FirstName                 string                `json:"first_name"`
+	LastName                  string                `json:"last_name"`
+	IDNumber                  string                `json:"id_number"`
+	Locations                 []string              `json:"locations"`
+	Skills                    []string              `json:"skills"`
+	DateOfBirth               string                `json:"date_of_birth"`
+	Gender                    string                `json:"gender"`
+	HasSocialMediaHandles     *bool                 `json:"has_social_media_handles"`
+	SocialMedias              string                `json:"social_medias"`
+	HasSmartphone             *bool                 `json:"has_smartphone"`
+	IsBusinessRegistered      *bool                 `json:"is_business_registered"`
+	BusinessName              string                `json:"business_name"`
+	BusinessRegistrationNumber string              `json:"business_registration_number"`
+	RecentGoodConduct         *bool                 `json:"recent_good_conduct"`
+	Address                   string                `json:"address"`
+	City                      string                `json:"city"`
+	State                     string                `json:"state"`
+	Zip                       string                `json:"zip"`
+	Country                   string                `json:"country"`
+	SkillAcquisitionMode      string                `json:"skill_acquisition_mode"`
+	YearsOfExperience         int                   `json:"years_of_experience"`
+	NextOfKinName             string                `json:"next_of_kin_name"`
+	NextOfKinPhoneNumber      string                `json:"next_of_kin_phone_number"`
+	NextOfKinRelationship     string                `json:"next_of_kin_relationship"`
+	IsCommunityOrgMember      *bool                 `json:"is_community_org_member"`
+	YearsAtCommunityOrg       int                   `json:"years_at_community_org"`
+	CharacterReferenceName    string                `json:"character_reference_name"`
+	CharacterReferenceContact string                `json:"character_reference_contact"`
+	CharacterReferenceRelationship string           `json:"character_reference_relationship"`
+	EarningGoalAmount         float64               `json:"earning_goal_amount"`
+	WorkingHours              []WorkingHourInput    `json:"working_hours"`
+	PastEmployers             []PastEmployerInput   `json:"past_employers"`
+	LanguageProficiencies     []LanguageProficiencyInput `json:"language_proficiencies"`
+	References                []ReferenceInput      `json:"references"`
 }
 
 type WorkingHourInput struct {
@@ -288,9 +287,8 @@ func HandleUpdateProfile(ctx echo.Context) error {
 		profileUpdates["country"] = req.Country
 	}
 	if len(profileUpdates) > 0 {
-		coll := configs.MI.DB.Collection("profiles")
 		profileUpdates["updated_at"] = time.Now()
-		_, _ = coll.UpdateOne(
+		_, _ = configs.MI.DB.Collection("profiles").UpdateOne(
 			ctx.Request().Context(),
 			bson.M{"user_id": user.ID},
 			bson.M{"$set": profileUpdates},
@@ -305,8 +303,7 @@ func HandleUpdateProfile(ctx echo.Context) error {
 		if req.YearsOfExperience > 0 {
 			proTraining["years_of_experience"] = req.YearsOfExperience
 		}
-		coll := configs.MI.DB.Collection("professional_trainings")
-		_, _ = coll.UpdateOne(
+		_, _ = configs.MI.DB.Collection("professional_trainings").UpdateOne(
 			ctx.Request().Context(),
 			bson.M{"user_id": user.ID},
 			bson.M{"$set": proTraining},
@@ -337,14 +334,13 @@ func HandleUpdateProfile(ctx echo.Context) error {
 			}
 
 			if ref.ID != "" {
-				refObjID, _ := primitive.ObjectIDFromHex(ref.ID)
 				_, _ = coll.UpdateOne(
 					ctx.Request().Context(),
-					bson.M{"_id": refObjID, "user_id": user.ID},
+					bson.M{"_id": ref.ID, "user_id": user.ID},
 					bson.M{"$set": refData},
 				)
 			} else {
-				refData["_id"] = primitive.NewObjectID()
+				refData["_id"] = configUUID()
 				refData["created_at"] = time.Now()
 				_, _ = coll.InsertOne(ctx.Request().Context(), refData)
 			}
@@ -356,7 +352,7 @@ func HandleUpdateProfile(ctx echo.Context) error {
 		_, _ = coll.DeleteMany(ctx.Request().Context(), bson.M{"user_id": user.ID})
 		for _, wh := range req.WorkingHours {
 			_, _ = coll.InsertOne(ctx.Request().Context(), bson.M{
-				"_id":          primitive.NewObjectID(),
+				"_id":          configUUID(),
 				"user_id":      user.ID,
 				"day":          wh.Day,
 				"opening_time": wh.OpeningTime,
@@ -382,14 +378,13 @@ func HandleUpdateProfile(ctx echo.Context) error {
 			}
 
 			if pe.ID != "" {
-				peObjID, _ := primitive.ObjectIDFromHex(pe.ID)
 				_, _ = coll.UpdateOne(
 					ctx.Request().Context(),
-					bson.M{"_id": peObjID, "user_id": user.ID},
+					bson.M{"_id": pe.ID, "user_id": user.ID},
 					bson.M{"$set": peData},
 				)
 			} else {
-				peData["_id"] = primitive.NewObjectID()
+				peData["_id"] = configUUID()
 				peData["created_at"] = time.Now()
 				_, _ = coll.InsertOne(ctx.Request().Context(), peData)
 			}
@@ -411,14 +406,13 @@ func HandleUpdateProfile(ctx echo.Context) error {
 			}
 
 			if lp.ID != "" {
-				lpObjID, _ := primitive.ObjectIDFromHex(lp.ID)
 				_, _ = coll.UpdateOne(
 					ctx.Request().Context(),
-					bson.M{"_id": lpObjID, "user_id": user.ID},
+					bson.M{"_id": lp.ID, "user_id": user.ID},
 					bson.M{"$set": lpData},
 				)
 			} else {
-				lpData["_id"] = primitive.NewObjectID()
+				lpData["_id"] = configUUID()
 				lpData["created_at"] = time.Now()
 				_, _ = coll.InsertOne(ctx.Request().Context(), lpData)
 			}
@@ -426,4 +420,8 @@ func HandleUpdateProfile(ctx echo.Context) error {
 	}
 
 	return responses.SendOK(ctx, nil, "Profile updated successfully")
+}
+
+func configUUID() string {
+	return uuid.New().String()
 }
