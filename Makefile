@@ -47,8 +47,8 @@ dev:
 	else \
 	    read -p "Go's 'air' is not installed on your machine. Do you want to install it? [Y/n] " choice; \
 	    if [ "$$choice" != "n" ] && [ "$$choice" != "N" ]; then \
-	        go install github.com/cosmtrek/air@latest; \
-	        air; \
+	        go install github.com/air-verse/air@latest; \
+	        $(shell go env GOPATH)/bin/air; \
 	        echo "Watching...";\
 	    else \
 	        echo "You chose not to install air. Exiting..."; \
