@@ -199,3 +199,67 @@ func CreateTimeSlot(ts *TimeSlot) error {
 	_, err := configs.MI.DB.Collection("time_slots").InsertOne(context.TODO(), ts)
 	return err
 }
+
+type AssessmentOption struct {
+	ID         string `json:"id" bson:"_id"`
+	QuestionID string `json:"question_id" bson:"question_id"`
+	OptionText string `json:"option_text" bson:"option_text"`
+	IsCorrect  bool   `json:"is_correct" bson:"is_correct"`
+}
+
+func CreateAssessmentOption(o *AssessmentOption) error {
+	o.ID = uuid.New().String()
+	_, err := configs.MI.DB.Collection("assessment_options").InsertOne(context.TODO(), o)
+	return err
+}
+
+func ListOptionsByQuestion(questionID string) ([]AssessmentOption, error) {
+	cursor, err := configs.MI.DB.Collection("assessment_options").Find(context.TODO(), bson.M{"question_id": questionID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+	var options []AssessmentOption
+	if err := cursor.All(context.TODO(), &options); err != nil {
+		return nil, err
+	}
+	return options, nil
+}
+
+type AssessmentReport struct {
+	ID               string    `json:"id" bson:"_id"`
+	ArtisanID        string    `json:"artisan_id" bson:"artisan_id"`
+	AssessorID       string    `json:"assessor_id" bson:"assessor_id"`
+	SkillID          string    `json:"skill_id" bson:"skill_id"`
+	PracticalScore   float64   `json:"practical_score" bson:"practical_score"`
+	TheoreticalScore float64   `json:"theoretical_score" bson:"theoretical_score"`
+	OralScore        float64   `json:"oral_score" bson:"oral_score"`
+	Grade            string    `json:"grade" bson:"grade"`
+	Comment          string    `json:"comment" bson:"comment"`
+	Recommendation   string    `json:"recommendation" bson:"recommendation"`
+	PracticalComment string    `json:"practical_comment" bson:"practical_comment"`
+	OralComment      string    `json:"oral_comment" bson:"oral_comment"`
+	CreatedAt        time.Time `json:"created_at" bson:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at" bson:"updated_at"`
+}
+
+func CreateAssessmentReport(ar *AssessmentReport) error {
+	ar.ID = uuid.New().String()
+	ar.CreatedAt = time.Now()
+	ar.UpdatedAt = time.Now()
+	_, err := configs.MI.DB.Collection("assessment_reports").InsertOne(context.TODO(), ar)
+	return err
+}
+
+func ListAssessmentReports(filter bson.M) ([]AssessmentReport, error) {
+	cursor, err := configs.MI.DB.Collection("assessment_reports").Find(context.TODO(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+	var reports []AssessmentReport
+	if err := cursor.All(context.TODO(), &reports); err != nil {
+		return nil, err
+	}
+	return reports, nil
+}

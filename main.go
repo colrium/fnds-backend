@@ -10,8 +10,10 @@ import (
 	"backend/assessments"
 	"backend/auth"
 	"backend/banks"
+	"backend/chat"
 	"backend/configs"
 	"backend/courses"
+	"backend/documenttypes"
 	"backend/insurance"
 	"backend/institutions"
 	"backend/jobrequests"
@@ -62,6 +64,7 @@ func main() {
 	courses.RegisterRoutes(api)
 	reviews.RegisterPublicRoutes(api)
 	quotations.RegisterPublicRoutes(api)
+	documenttypes.RegisterRoutes(api)
 
 	api.GET("/artisans", auth.HandleAllArtisans)
 	api.GET("/profile/:fundis_id", auth.HandleShareUserRecord)
@@ -82,6 +85,9 @@ func main() {
 	subscriptions.RegisterAuthRoutes(authGroup)
 	assessments.RegisterAuthRoutes(authGroup)
 	insurance.RegisterAuthRoutes(authGroup)
+	chat.RegisterAuthRoutes(authGroup)
+	banks.RegisterAuthRoutes(authGroup)
+	documenttypes.RegisterAuthRoutes(authGroup)
 
 	authGroup.GET("/email/resend", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"message": "Verification email sent"})
