@@ -2,7 +2,7 @@ package users
 
 import (
 	"backend/configs"
-	"backend/middleware"
+	"backend/contextutil"
 	"backend/responses"
 	"time"
 
@@ -12,7 +12,7 @@ import (
 )
 
 func HandleSendOtp(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
@@ -33,7 +33,7 @@ func HandleSendOtp(ctx echo.Context) error {
 }
 
 func HandleVerifyOtp(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
@@ -117,7 +117,7 @@ func HandleResetPassword(ctx echo.Context) error {
 }
 
 func HandleUpdateToken(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
@@ -200,7 +200,7 @@ type ReferenceInput struct {
 }
 
 func HandleGetProfile(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
@@ -214,7 +214,7 @@ func HandleGetProfile(ctx echo.Context) error {
 }
 
 func HandleUpdateProfile(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}

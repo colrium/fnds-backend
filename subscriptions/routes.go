@@ -1,19 +1,16 @@
 package subscriptions
 
 import (
-	"backend/middleware"
+	"backend/contextutil"
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
 )
 
-func RegisterRoutes(e *echo.Group) {
-	auth := e.Group("")
-	auth.Use(middleware.JWTAuth)
-
-	auth.GET("/subscriptions/plans", HandleGetPlans)
-	auth.POST("/subscriptions", HandleCreateSubscription)
-	auth.GET("/subscriptions", HandleGetUserSubscription)
+func RegisterAuthRoutes(g *echo.Group) {
+	g.GET("/subscriptions/plans", HandleGetPlans)
+	g.POST("/subscriptions", HandleCreateSubscription)
+	g.GET("/subscriptions", HandleGetUserSubscription)
 }
 
 func HandleGetPlans(ctx echo.Context) error {
@@ -25,7 +22,7 @@ func HandleGetPlans(ctx echo.Context) error {
 }
 
 func HandleCreateSubscription(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
@@ -45,7 +42,7 @@ func HandleCreateSubscription(ctx echo.Context) error {
 }
 
 func HandleGetUserSubscription(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}

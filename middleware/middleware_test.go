@@ -5,22 +5,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"backend/contextutil"
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
 )
-
-func TestGetCurrentUserReturnsNilWhenNotSet(t *testing.T) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	user := GetCurrentUser(c)
-	if user != nil {
-		t.Error("expected nil user when not set in context")
-	}
-}
 
 func TestGetUserIDReturnsEmptyWhenNotSet(t *testing.T) {
 	e := echo.New()
@@ -28,7 +17,7 @@ func TestGetUserIDReturnsEmptyWhenNotSet(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	id := GetUserID(c)
+	id := contextutil.GetUserID(c)
 	if id != "" {
 		t.Error("expected empty user ID when not set in context")
 	}
@@ -44,9 +33,10 @@ func TestIsAdminRejectsNonAdmin(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	err := handler(c)
-	if err == nil {
-		t.Error("expected error for non-admin user")
+	handler(c)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", rec.Code)
 	}
 }
 
@@ -60,9 +50,10 @@ func TestIsArtisanRejectsNonArtisan(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	err := handler(c)
-	if err == nil {
-		t.Error("expected error for non-artisan user")
+	handler(c)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", rec.Code)
 	}
 }
 
@@ -76,9 +67,10 @@ func TestIsCustomerRejectsNonCustomer(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	err := handler(c)
-	if err == nil {
-		t.Error("expected error for non-customer user")
+	handler(c)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", rec.Code)
 	}
 }
 
@@ -92,9 +84,10 @@ func TestIsAssessorRejectsNonAssessor(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	err := handler(c)
-	if err == nil {
-		t.Error("expected error for non-assessor user")
+	handler(c)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", rec.Code)
 	}
 }
 
@@ -108,9 +101,10 @@ func TestIsSuspendedRejectsInactiveUser(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	err := handler(c)
-	if err == nil {
-		t.Error("expected error for inactive user")
+	handler(c)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("expected status 401, got %d", rec.Code)
 	}
 }
 

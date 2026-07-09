@@ -6,13 +6,6 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func RegisterRoutes(e *echo.Group) {
-	e.GET("/institution/all", HandleGetAll)
-	e.GET("/institution/:institutionId", HandleGetOne)
-	e.POST("/institution/create", HandleCreate)
-	e.PATCH("/institution/:institutionId", HandleUpdate)
-}
-
 func HandleGetAll(ctx echo.Context) error {
 	institutions, err := GetAllInstitutions()
 	if err != nil {

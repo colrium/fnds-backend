@@ -1,30 +1,25 @@
 package jobrequests
 
 import (
-	"backend/middleware"
+	"backend/contextutil"
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-func RegisterRoutes(e *echo.Group) {
-	auth := e.Group("")
-	auth.Use(middleware.JWTAuth)
-
-	auth.POST("/job-requests", HandleCreateJobRequest)
-	auth.GET("/job-requests", HandleListJobRequests)
-	auth.GET("/job-requests/:id", HandleGetJobRequest)
-	auth.PATCH("/job-requests/:id", HandleUpdateJobRequest)
-
-	auth.POST("/job-vacancies", HandleCreateJobVacancy)
-	auth.GET("/job-vacancies", HandleListJobVacancies)
-
-	auth.POST("/job-applications", HandleCreateJobApplication)
+func RegisterAuthRoutes(g *echo.Group) {
+	g.POST("/job-requests", HandleCreateJobRequest)
+	g.GET("/job-requests", HandleListJobRequests)
+	g.GET("/job-requests/:id", HandleGetJobRequest)
+	g.PATCH("/job-requests/:id", HandleUpdateJobRequest)
+	g.POST("/job-vacancies", HandleCreateJobVacancy)
+	g.GET("/job-vacancies", HandleListJobVacancies)
+	g.POST("/job-applications", HandleCreateJobApplication)
 }
 
 func HandleCreateJobRequest(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
@@ -79,7 +74,7 @@ func HandleUpdateJobRequest(ctx echo.Context) error {
 }
 
 func HandleCreateJobVacancy(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
@@ -113,7 +108,7 @@ func HandleListJobVacancies(ctx echo.Context) error {
 }
 
 func HandleCreateJobApplication(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}

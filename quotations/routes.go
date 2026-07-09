@@ -1,24 +1,21 @@
 package quotations
 
 import (
-	"backend/middleware"
+	"backend/contextutil"
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
 )
 
-func RegisterRoutes(e *echo.Group) {
-	auth := e.Group("")
-	auth.Use(middleware.JWTAuth)
-
-	auth.POST("/quotations", HandleCreateQuotation)
-	auth.GET("/quotations", HandleListQuotations)
-	auth.GET("/quotations/:id", HandleGetQuotation)
-	auth.PATCH("/quotations/:id", HandleUpdateQuotation)
+func RegisterAuthRoutes(g *echo.Group) {
+	g.POST("/quotations", HandleCreateQuotation)
+	g.GET("/quotations", HandleListQuotations)
+	g.GET("/quotations/:id", HandleGetQuotation)
+	g.PATCH("/quotations/:id", HandleUpdateQuotation)
 }
 
 func HandleCreateQuotation(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}

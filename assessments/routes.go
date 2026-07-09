@@ -1,35 +1,28 @@
 package assessments
 
 import (
-	"backend/middleware"
+	"backend/contextutil"
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-func RegisterRoutes(e *echo.Group) {
-	e.GET("/assessments", HandleGetAssessments)
-	e.GET("/assessments/types", HandleGetAssessmentTypes)
-	e.GET("/assessments/:assessmentId/questions", HandleGetQuestions)
-
-	auth := e.Group("")
-	auth.Use(middleware.JWTAuth)
-
-	auth.POST("/assessments/:assessmentId/responses", HandleSubmitResponse)
-	auth.GET("/appointments", HandleListAppointments)
-	auth.POST("/appointments", HandleCreateAppointment)
-	auth.PATCH("/appointments/:id", HandleUpdateAppointment)
-	auth.GET("/time-slots", HandleListTimeSlots)
-	auth.POST("/time-slots", HandleCreateTimeSlot)
+func RegisterAuthRoutes(g *echo.Group) {
+	g.POST("/assessments/:assessmentId/responses", HandleSubmitResponse)
+	g.GET("/appointments", HandleListAppointments)
+	g.POST("/appointments", HandleCreateAppointment)
+	g.PATCH("/appointments/:id", HandleUpdateAppointment)
+	g.GET("/time-slots", HandleListTimeSlots)
+	g.POST("/time-slots", HandleCreateTimeSlot)
 }
 
 func HandleGetAssessments(ctx echo.Context) error {
-	assessments, err := GetAllAssessments()
+	assessmentList, err := GetAllAssessments()
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to fetch assessments")
 	}
-	return responses.SendOK(ctx, assessments, "Assessments retrieved successfully")
+	return responses.SendOK(ctx, assessmentList, "Assessments retrieved successfully")
 }
 
 func HandleGetAssessmentTypes(ctx echo.Context) error {
@@ -50,7 +43,7 @@ func HandleGetQuestions(ctx echo.Context) error {
 }
 
 func HandleSubmitResponse(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
@@ -70,7 +63,7 @@ func HandleSubmitResponse(ctx echo.Context) error {
 }
 
 func HandleListAppointments(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
@@ -83,7 +76,7 @@ func HandleListAppointments(ctx echo.Context) error {
 }
 
 func HandleCreateAppointment(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}

@@ -4,11 +4,11 @@ import (
 	"net/http"
 	"strings"
 
-	"backend/auth"
+	"backend/contextutil"
+	"backend/jwtutil"
 	"backend/responses"
 	"backend/users"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 )
 
@@ -25,12 +25,8 @@ func JWTAuth(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-		claims := &auth.Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(auth.GetJWTSecret()), nil
-		})
-
-		if err != nil || !token.Valid {
+		claims, err := jwtutil.ValidateToken(tokenString)
+		if err != nil {
 			return responses.SendError(c, http.StatusUnauthorized, "Invalid or expired token")
 		}
 
@@ -39,24 +35,7 @@ func JWTAuth(next echo.HandlerFunc) echo.HandlerFunc {
 			return responses.SendError(c, http.StatusUnauthorized, "User not found")
 		}
 
-		c.Set("user", user)
-		c.Set("user_id", user.ID)
+		contextutil.SetUser(c, user.ID)
 		return next(c)
 	}
-}
-
-func GetCurrentUser(c echo.Context) *users.User {
-	user, ok := c.Get("user").(*users.User)
-	if !ok {
-		return nil
-	}
-	return user
-}
-
-func GetUserID(c echo.Context) string {
-	id, ok := c.Get("user_id").(string)
-	if !ok {
-		return ""
-	}
-	return id
 }

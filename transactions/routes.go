@@ -1,24 +1,21 @@
 package transactions
 
 import (
-	"backend/middleware"
+	"backend/contextutil"
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-func RegisterRoutes(e *echo.Group) {
-	auth := e.Group("")
-	auth.Use(middleware.JWTAuth)
-
-	auth.GET("/transactions", HandleListTransactions)
-	auth.GET("/transactions/:id", HandleGetTransaction)
-	auth.POST("/wallet/transactions", HandleCreateWalletTransaction)
+func RegisterAuthRoutes(g *echo.Group) {
+	g.GET("/transactions", HandleListTransactions)
+	g.GET("/transactions/:id", HandleGetTransaction)
+	g.POST("/wallet/transactions", HandleCreateWalletTransaction)
 }
 
 func HandleListTransactions(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
@@ -40,7 +37,7 @@ func HandleGetTransaction(ctx echo.Context) error {
 }
 
 func HandleCreateWalletTransaction(ctx echo.Context) error {
-	userID := middleware.GetUserID(ctx)
+	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}

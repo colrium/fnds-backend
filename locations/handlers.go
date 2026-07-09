@@ -6,10 +6,6 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func RegisterRoutes(e *echo.Group) {
-	e.GET("/locations", HandleGetLocations)
-}
-
 func HandleGetLocations(ctx echo.Context) error {
 	locations, err := GetAllLocations()
 	if err != nil {
