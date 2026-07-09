@@ -2,47 +2,98 @@ package auth
 
 import (
 	"fmt"
-	"time"
 
 	"backend/users"
 
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func processUserLogin(email, password string) (string, bool, error) {
-	user, err := users.GetUserByEmail(email)
+func processUserLogin(email, phone, password, userType string) (*users.User, string, error) {
+	var user *users.User
+	var err error
+
+	if email != "" {
+		user, err = users.GetUserByEmail(email)
+	} else if phone != "" {
+		user, err = users.GetUserByPhone(phone)
+	} else {
+		return nil, "", fmt.Errorf("email or phone required")
+	}
+
 	if err != nil {
-		return "", false, err
-	}
-	if user.Status != "active" {
-		return "", false, fmt.Errorf("user is not active")
-	}
-	errr := bcrypt.CompareHashAndPassword(user.Password, []byte(password))
-	if errr != nil {
-		return "", false, fmt.Errorf("the password provided is not valid")
+		return nil, "", fmt.Errorf("invalid credentials")
 	}
 
-	return user.ID, true, nil
+	if user.UserType != userType {
+		return nil, "", fmt.Errorf("invalid credentials")
+	}
 
+	if !user.IsActive {
+		return nil, "", fmt.Errorf("account suspended")
+	}
+
+	err = bcrypt.CompareHashAndPassword(user.Password, []byte(password))
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid credentials")
+	}
+
+	token, _, err := GenerateToken(user)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return user, token, nil
 }
 
-func createNewUser(email string, password []byte) (users.User, error) {
-	uid := uuid.New().String()
+func createNewUser(firstName, lastName, email, phone, password, userType string) (*users.User, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	if err != nil {
-		return users.User{}, err
+		return nil, err
 	}
-	user := users.User{
-		Email:     email,
-		Status:    "pending",
-		Password:  hashedPassword,
-		ID:        uid,
-		CreatedAt: time.Now(),
+
+	otp := "123456"
+
+	user := &users.User{
+		FirstName:     firstName,
+		LastName:      lastName,
+		Email:         email,
+		Phone:         phone,
+		Password:      hashedPassword,
+		UserType:      userType,
+		Status:        "active",
+		IsActive:      true,
+		Otp:           otp,
+		PhoneVerified: false,
 	}
-	err = user.CreateNewUser()
+
+	err = users.CreateNewUser(user)
 	if err != nil {
-		return users.User{}, err
+		return nil, err
+	}
+	return user, nil
+}
+
+func createUserViaAdmin(firstName, lastName, email, phone, password, userType string) (*users.User, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	if err != nil {
+		return nil, err
+	}
+
+	user := &users.User{
+		FirstName:     firstName,
+		LastName:      lastName,
+		Email:         email,
+		Phone:         phone,
+		Password:      hashedPassword,
+		UserType:      userType,
+		Status:        "active",
+		IsActive:      true,
+		PhoneVerified: true,
+	}
+
+	err = users.CreateNewUser(user)
+	if err != nil {
+		return nil, err
 	}
 	return user, nil
 }
