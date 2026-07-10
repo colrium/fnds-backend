@@ -107,7 +107,7 @@ func ListQuotations(filter bson.M) ([]Quotation, error) {
 		return nil, err
 	}
 	defer cursor.Close(context.TODO())
-	var quotations []Quotation
+	quotations := make([]Quotation, 0)
 	if err := cursor.All(context.TODO(), &quotations); err != nil {
 		return nil, err
 	}
