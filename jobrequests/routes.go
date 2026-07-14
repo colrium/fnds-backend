@@ -3,6 +3,7 @@ package jobrequests
 import (
 	"backend/contextutil"
 	"backend/responses"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -38,11 +39,29 @@ func HandleCreateJobRequest(ctx echo.Context) error {
 	return responses.SendCreated(ctx, jr, "Job request created successfully")
 }
 
+func buildJobRequestFilter(status, artisanID string) bson.M {
+	filter := bson.M{}
+	if status != "" {
+		filter["status"] = status
+	}
+	// Pending is the open pool (unassigned). All other statuses are the artisan's own.
+	if status != "" && status != "pending" {
+		filter["artisan_id"] = artisanID
+	}
+	return filter
+}
+
 func HandleListJobRequests(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+	status := ctx.QueryParam("status")
+	filter := buildJobRequestFilter(status, userID)
+
 	page := int64(1)
 	limit := int64(20)
-
-	requests, total, err := ListJobRequests(bson.M{}, page, limit)
+	requests, total, err := ListJobRequests(filter, page, limit)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to fetch job requests")
 	}
@@ -125,4 +144,49 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 		return responses.SendError(ctx, 500, "Failed to create job application")
 	}
 	return responses.SendCreated(ctx, app, "Job application created successfully")
+}
+
+func HandleAcceptJobRequest(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+	id := ctx.Param("id")
+	jr, err := GetJobRequestByID(id)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Job request not found")
+	}
+	if jr.Status != "pending" || jr.ArtisanID != "" {
+		return responses.SendError(ctx, 400, "Job request is no longer available")
+	}
+	now := time.Now()
+	if err := UpdateJobRequest(id, bson.M{"artisan_id": userID, "status": "accepted", "accepted_at": now}); err != nil {
+		return responses.SendError(ctx, 500, "Failed to accept job request")
+	}
+	return responses.SendOK(ctx, nil, "Job request accepted")
+}
+
+func HandleCompleteJobRequest(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+	id := ctx.Param("id")
+	jr, err := GetJobRequestByID(id)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Job request not found")
+	}
+	if jr.ArtisanID != userID || jr.Status != "accepted" {
+		return responses.SendError(ctx, 400, "Job request cannot be completed")
+	}
+	now := time.Now()
+	if err := UpdateJobRequest(id, bson.M{"status": "completed", "completed_at": now}); err != nil {
+		return responses.SendError(ctx, 500, "Failed to complete job request")
+	}
+	return responses.SendOK(ctx, nil, "Job request completed")
+}
+
+func RegisterArtisanRoutes(g *echo.Group) {
+	g.POST("/job-requests/:id/accept", HandleAcceptJobRequest)
+	g.POST("/job-requests/:id/complete", HandleCompleteJobRequest)
 }
