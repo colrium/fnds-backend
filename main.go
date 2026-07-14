@@ -104,6 +104,11 @@ func main() {
 	banks.RegisterAuthRoutes(authGroup)
 	documenttypes.RegisterAuthRoutes(authGroup)
 
+	// Artisan-only routes
+	artisanGroup := api.Group("")
+	artisanGroup.Use(middleware.JWTAuth, middleware.IsArtisan)
+	users.RegisterArtisanRoutes(artisanGroup)
+
 	authGroup.GET("/email/resend", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"message": "Verification email sent"})
 	})

@@ -83,6 +83,11 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/artisan/availability", HandleSetAvailability)
 }
 
+// RegisterArtisanRoutes registers artisan-only authenticated routes
+func RegisterArtisanRoutes(g *echo.Group) {
+	g.POST("/artisan/availability", HandleSetAvailability)
+}
+
 func RegisterPublicRoutes(g *echo.Group) {
 	g.POST("/forgot-password", HandleForgotPassword)
 	g.POST("/reset-password/:phone", HandleResetPassword)

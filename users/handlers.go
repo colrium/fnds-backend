@@ -54,7 +54,7 @@ func HandleSetAvailability(ctx echo.Context) error {
 	}
 	user, err := GetUserByID(userID)
 	if err != nil {
-		return responses.SendOK(ctx, map[string]interface{}{"is_available": req.IsAvailable}, "Availability updated")
+		return responses.SendError(ctx, 500, "failed to load updated user")
 	}
 	return responses.SendOK(ctx, user, "Availability updated")
 }
