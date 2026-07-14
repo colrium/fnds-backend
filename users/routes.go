@@ -1,12 +1,29 @@
 package users
 
 import (
+	"log"
+
 	"backend/contextutil"
+	"backend/notifications"
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+// issuePhoneOTP generates a fresh code, persists it, and sends it by SMS.
+// SMS delivery failures are logged but do not fail the request, so the user
+// can still retry via resend without the account being wedged.
+func issuePhoneOTP(userID, phone string) {
+	otp := GenerateOTP()
+	if err := UpdateUser(userID, bson.M{"otp": otp}); err != nil {
+		log.Printf("[otp] failed to persist code for user %s: %v", userID, err)
+		return
+	}
+	if err := notifications.SendOTPSMS(phone, otp); err != nil {
+		log.Printf("[otp] failed to send SMS to %s: %v", phone, err)
+	}
+}
 
 func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/otp/send", HandleSendOtp)
@@ -32,8 +49,7 @@ func HandleSendOtp(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "OTP already verified")
 	}
 
-	otp := "123456"
-	_ = UpdateUser(userID, bson.M{"otp": otp})
+	issuePhoneOTP(user.ID, user.Phone)
 
 	return responses.SendOK(ctx, nil, "OTP sent successfully")
 }
@@ -62,7 +78,15 @@ func HandleVerifyOtp(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Invalid OTP")
 	}
 
-	_ = UpdateUser(userID, bson.M{"otp": "", "phone_verified": true})
+	err = UpdateUser(userID, bson.M{
+		"otp":            "",
+		"phone_verified": true,
+		"status":         StatusActive,
+		"is_active":      true,
+	})
+	if err != nil {
+		return responses.SendError(ctx, 500, "failed to verify OTP")
+	}
 
 	return responses.SendOK(ctx, nil, "OTP verified successfully")
 }
@@ -87,8 +111,7 @@ func HandleForgotPassword(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Phone number does not exist")
 	}
 
-	otp := "123456"
-	_ = UpdateUser(user.ID, bson.M{"otp": otp})
+	issuePhoneOTP(user.ID, user.Phone)
 
 	return responses.SendOK(ctx, nil, "OTP sent successfully")
 }

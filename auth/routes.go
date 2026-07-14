@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"net/mail"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 	"backend/users"
 
 	"github.com/labstack/echo/v4"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func RegisterPublicRoutes(g *echo.Group) {
@@ -37,7 +39,6 @@ type RegisterRequest struct {
 type LoginRequest struct {
 	Username string `json:"username" form:"username"`
 	Password string `json:"password" form:"password"`
-	UserType string `json:"user_type" form:"user_type"`
 }
 
 type SocialLoginRequest struct {
@@ -62,15 +63,6 @@ func HandleUserLogin(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "username and password are required")
 	}
 
-	if req.UserType == "" {
-		return responses.SendError(ctx, 400, "user_type is required")
-	}
-
-_validTypes := map[string]bool{"admin": true, "customer": true, "artisan": true, "assessor": true}
-	if !_validTypes[req.UserType] {
-		return responses.SendError(ctx, 400, "invalid user_type")
-	}
-
 	username := strings.TrimSpace(req.Username)
 	var email, phone string
 
@@ -80,9 +72,16 @@ _validTypes := map[string]bool{"admin": true, "customer": true, "artisan": true,
 		phone = username
 	}
 
-	user, token, err := processUserLogin(email, phone, req.Password, req.UserType)
+	user, token, err := processUserLogin(email, phone, req.Password)
 	if err != nil {
-		return responses.SendError(ctx, 401, "invalid credentials")
+		switch {
+		case errors.Is(err, ErrAccountPending):
+			return responses.SendError(ctx, 403, "Your account is pending phone verification. Please verify your phone number to continue.")
+		case errors.Is(err, ErrAccountSuspended):
+			return responses.SendError(ctx, 403, "Your account has been suspended.")
+		default:
+			return responses.SendError(ctx, 401, "invalid credentials")
+		}
 	}
 
 	return responses.SendOK(ctx, map[string]interface{}{
@@ -183,6 +182,11 @@ func HandleSocialLogin(ctx echo.Context) error {
 		if err != nil {
 			return responses.SendError(ctx, 500, "failed to create user")
 		}
+		if err := users.UpdateUser(user.ID, bson.M{"status": users.StatusActive, "is_active": true}); err != nil {
+			return responses.SendError(ctx, 500, "failed to activate user")
+		}
+		user.Status = users.StatusActive
+		user.IsActive = true
 	}
 
 	token, _, err := GenerateToken(user)

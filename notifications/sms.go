@@ -3,6 +3,8 @@ package notifications
 import (
 	"fmt"
 	"log"
+
+	"backend/integrations"
 )
 
 type SMSProvider string
@@ -20,8 +22,7 @@ type SMSClient interface {
 type AdvantaSMS struct{}
 
 func (s *AdvantaSMS) Send(to, message string) error {
-	log.Printf("[AdvantaSMS] sending to %s: %s", to, message)
-	return nil
+	return integrations.SendAdvantaSMS(to, message)
 }
 
 type AfricasTalkingSMS struct{}
@@ -57,4 +58,13 @@ func SendSMS(provider SMSProvider, to, message string) error {
 		return err
 	}
 	return client.Send(to, message)
+}
+
+// DefaultSMSProvider is the provider used for transactional messages (OTP, etc.).
+const DefaultSMSProvider = SMSProviderAdvanta
+
+// SendOTPSMS sends a verification code to a phone number via the default provider.
+func SendOTPSMS(to, otp string) error {
+	message := fmt.Sprintf("Your Fundis verification code is %s. It expires shortly. Do not share it with anyone.", otp)
+	return SendSMS(DefaultSMSProvider, to, message)
 }

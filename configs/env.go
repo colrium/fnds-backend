@@ -40,6 +40,18 @@ func GetPlunkKey() string {
 	return os.Getenv("USE_PLUNK")
 }
 
+func AdvantaApiKey() string {
+	return os.Getenv("ADVANTA_API_KEY")
+}
+
+func AdvantaPartnerID() string {
+	return os.Getenv("ADVANTA_PARTNER_ID")
+}
+
+func AdvantaShortcode() string {
+	return os.Getenv("ADVANTA_SHORTCODE")
+}
+
 func TelegramBotId() string {
 	return os.Getenv("TELEGRAM_BOT_ID")
 }

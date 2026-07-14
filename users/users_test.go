@@ -5,9 +5,19 @@ import (
 )
 
 func TestGenerateOTP(t *testing.T) {
-	otp := generateOTP()
-	if otp != "123456" {
-		t.Errorf("generateOTP() = %q, want %q", otp, "123456")
+	otp := GenerateOTP()
+	if len(otp) != 6 {
+		t.Errorf("GenerateOTP() = %q, want a 6-character code", otp)
+	}
+	for _, c := range otp {
+		if c < '0' || c > '9' {
+			t.Errorf("GenerateOTP() = %q, want digits only", otp)
+			break
+		}
+	}
+	// Two calls should almost never collide; a repeat signals a non-random source.
+	if GenerateOTP() == otp && GenerateOTP() == otp {
+		t.Errorf("GenerateOTP() appears non-random: repeated %q", otp)
 	}
 }
 

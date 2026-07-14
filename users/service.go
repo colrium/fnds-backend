@@ -2,7 +2,9 @@ package users
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"time"
 
 	"backend/configs"
@@ -19,7 +21,7 @@ func SendOTP(userID string) error {
 	if user.PhoneVerified {
 		return fmt.Errorf("phone already verified")
 	}
-	otp := generateOTP()
+	otp := GenerateOTP()
 	return UpdateUser(userID, bson.M{"otp": otp})
 }
 
@@ -34,7 +36,12 @@ func VerifyOTP(userID, otp string) error {
 	if user.Otp != otp {
 		return fmt.Errorf("invalid OTP")
 	}
-	return UpdateUser(userID, bson.M{"otp": "", "phone_verified": true})
+	return UpdateUser(userID, bson.M{
+		"otp":            "",
+		"phone_verified": true,
+		"status":         StatusActive,
+		"is_active":      true,
+	})
 }
 
 func ResendOTP(userID string) error {
@@ -49,7 +56,7 @@ func ForgotPassword(phone, userType string) error {
 	if err != nil {
 		return fmt.Errorf("phone number does not exist")
 	}
-	otp := generateOTP()
+	otp := GenerateOTP()
 	user, _ := GetUserByPhoneAndType(phone, userType)
 	return UpdateUser(user.ID, bson.M{"otp": otp})
 }
@@ -355,6 +362,13 @@ type ReferenceInput struct {
 	Location    string `json:"location"`
 }
 
-func generateOTP() string {
-	return "123456"
+// GenerateOTP returns a cryptographically-random 6-digit verification code.
+func GenerateOTP() string {
+	max := big.NewInt(1000000)
+	n, err := rand.Int(rand.Reader, max)
+	if err != nil {
+		// crypto/rand should never fail; fall back to a time-derived value.
+		n = big.NewInt(time.Now().UnixNano() % 1000000)
+	}
+	return fmt.Sprintf("%06d", n.Int64())
 }

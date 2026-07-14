@@ -50,13 +50,6 @@ func TestNewSMSClientUnknownProvider(t *testing.T) {
 	}
 }
 
-func TestSendSMSValidProvider(t *testing.T) {
-	err := SendSMS(SMSProviderAdvanta, "+250700000000", "Test message")
-	if err != nil {
-		t.Errorf("SendSMS() returned error: %v", err)
-	}
-}
-
 func TestSendSMSInvalidProvider(t *testing.T) {
 	err := SendSMS("invalid", "+250700000000", "Test message")
 	if err == nil {
@@ -64,11 +57,15 @@ func TestSendSMSInvalidProvider(t *testing.T) {
 	}
 }
 
-func TestAdvantaSMSSend(t *testing.T) {
+func TestAdvantaSMSSendUnconfigured(t *testing.T) {
+	// Without ADVANTA_* credentials, Advanta must refuse rather than pretend success.
+	t.Setenv("ADVANTA_API_KEY", "")
+	t.Setenv("ADVANTA_PARTNER_ID", "")
+	t.Setenv("ADVANTA_SHORTCODE", "")
 	sms := &AdvantaSMS{}
-	err := sms.Send("+250700000000", "Hello from Advanta")
-	if err != nil {
-		t.Errorf("AdvantaSMS.Send() returned error: %v", err)
+	err := sms.Send("+254700000000", "Hello from Advanta")
+	if err == nil {
+		t.Error("expected error when Advanta is not configured, got nil")
 	}
 }
 
