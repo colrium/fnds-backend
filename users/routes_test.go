@@ -28,11 +28,16 @@ func TestForgotPasswordBindsJSON(t *testing.T) {
 			// we got past the "phone is required" validation, which means JSON was bound.
 			return
 		}
-		// If no panic, check response for validation error.
+		// If no panic, the handler must have returned a DB-level error
+		// ("Phone number does not exist"), NOT a validation error
+		// ("phone is required") and NOT an empty/unparseable body.
 		var resp map[string]any
-		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
-		if msg, _ := resp["message"].(string); strings.Contains(msg, "required") {
-			t.Fatalf("handler did not read JSON body; got required-field error: %v", resp)
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("could not parse response body: %v", err)
+		}
+		msg, ok := resp["message"].(string)
+		if !ok || strings.Contains(msg, "required") {
+			t.Fatalf("handler did not read JSON body; got validation error or no message: %v", resp)
 		}
 	}()
 
