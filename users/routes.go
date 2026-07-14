@@ -57,7 +57,9 @@ func verifyUserOtp(user *User, otp string) error {
 	if user.Otp == "" {
 		return fmt.Errorf("no verification code found; request a new one")
 	}
-	if !user.OtpExpiresAt.IsZero() && time.Now().UTC().After(user.OtpExpiresAt) {
+	// Fail closed: a missing expiry (stale pre-feature OTP) is treated as expired,
+	// never as "never expires".
+	if user.OtpExpiresAt.IsZero() || time.Now().UTC().After(user.OtpExpiresAt) {
 		_ = UpdateUser(user.ID, bson.M{"otp": "", "otp_attempts": 0})
 		return fmt.Errorf("verification code has expired; request a new one")
 	}
