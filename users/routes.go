@@ -11,6 +11,20 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
+type verifyOtpRequest struct {
+	Otp string `json:"otp"`
+}
+type forgotPasswordRequest struct {
+	Phone    string `json:"phone"`
+	UserType string `json:"user_type"`
+}
+type resetPasswordRequest struct {
+	Otp             string `json:"otp"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
+	UserType        string `json:"user_type"`
+}
+
 // issuePhoneOTP generates a fresh code, persists it, and sends it by SMS.
 // SMS delivery failures are logged but do not fail the request, so the user
 // can still retry via resend without the account being wedged.
@@ -29,9 +43,12 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/otp/send", HandleSendOtp)
 	g.POST("/otp/verify", HandleVerifyOtp)
 	g.POST("/otp/resend", HandleResendOtp)
+	g.PATCH("/fcm-token", HandleUpdateToken)
+}
+
+func RegisterPublicRoutes(g *echo.Group) {
 	g.POST("/forgot-password", HandleForgotPassword)
 	g.POST("/reset-password/:phone", HandleResetPassword)
-	g.PATCH("/fcm-token", HandleUpdateToken)
 }
 
 func HandleSendOtp(ctx echo.Context) error {
@@ -60,7 +77,12 @@ func HandleVerifyOtp(ctx echo.Context) error {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
 
-	otp := ctx.FormValue("otp")
+	var req verifyOtpRequest
+	if err := ctx.Bind(&req); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+	otp := req.Otp
+
 	if otp == "" {
 		return responses.SendError(ctx, 400, "otp is required")
 	}
@@ -96,8 +118,12 @@ func HandleResendOtp(ctx echo.Context) error {
 }
 
 func HandleForgotPassword(ctx echo.Context) error {
-	phone := ctx.FormValue("phone")
-	userType := ctx.FormValue("user_type")
+	var req forgotPasswordRequest
+	if err := ctx.Bind(&req); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+	phone := req.Phone
+	userType := req.UserType
 
 	if phone == "" {
 		return responses.SendError(ctx, 400, "phone is required")
@@ -118,10 +144,14 @@ func HandleForgotPassword(ctx echo.Context) error {
 
 func HandleResetPassword(ctx echo.Context) error {
 	phone := ctx.Param("phone")
-	otp := ctx.FormValue("otp")
-	password := ctx.FormValue("password")
-	confirmPassword := ctx.FormValue("confirm_password")
-	userType := ctx.FormValue("user_type")
+	var req resetPasswordRequest
+	if err := ctx.Bind(&req); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+	otp := req.Otp
+	password := req.Password
+	confirmPassword := req.ConfirmPassword
+	userType := req.UserType
 
 	if phone == "" || otp == "" || password == "" || confirmPassword == "" || userType == "" {
 		return responses.SendError(ctx, 400, "All fields are required")

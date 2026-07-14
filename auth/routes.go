@@ -27,13 +27,13 @@ func RegisterAuthRoutes(g *echo.Group) {
 }
 
 type RegisterRequest struct {
-	FirstName string `json:"first_name" form:"first_name"`
-	LastName  string `json:"last_name" form:"last_name"`
-	Email     string `json:"email" form:"email"`
-	Phone     string `json:"phone" form:"phone"`
-	Password  string `json:"password" form:"password"`
-	UserType  string `json:"user_type" form:"user_type"`
-	Skills    []int  `json:"skills" form:"skills"`
+	FirstName string   `json:"first_name" form:"first_name"`
+	LastName  string   `json:"last_name" form:"last_name"`
+	Email     string   `json:"email" form:"email"`
+	Phone     string   `json:"phone" form:"phone"`
+	Password  string   `json:"password" form:"password"`
+	UserType  string   `json:"user_type" form:"user_type"`
+	Skills    []string `json:"skills" form:"skills"`
 }
 
 type LoginRequest struct {

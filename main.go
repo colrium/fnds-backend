@@ -53,6 +53,7 @@ func main() {
 	})
 
 	auth.RegisterPublicRoutes(api)
+	users.RegisterPublicRoutes(api)
 	applications.RegisterRoutes(api)
 	locations.RegisterRoutes(api)
 	skills.RegisterRoutes(api)
