@@ -13,6 +13,7 @@ require (
 	github.com/samueltuyizere/validate_rw_phone_numbers v1.0.1
 	go.mongodb.org/mongo-driver v1.17.1
 	golang.org/x/crypto v0.31.0
+	golang.org/x/time v0.8.0
 )
 
 require (
@@ -33,5 +34,4 @@ require (
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	golang.org/x/time v0.8.0 // indirect
 )
