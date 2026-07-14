@@ -13,6 +13,7 @@ import (
 )
 
 type ProfileUpdateRequest struct {
+	Email                          string                     `json:"email"`
 	IDNumber                       string                     `json:"id_number"`
 	DateOfBirth                    string                     `json:"date_of_birth"`
 	Gender                         string                     `json:"gender"`
@@ -35,12 +36,12 @@ type ProfileUpdateRequest struct {
 	ProfessionalMembership         *bool                      `json:"professional_membership"`
 	ProfessionalBody               string                     `json:"professional_body"`
 	SkillAcquisitionMode           string                     `json:"skill_acquisition_mode"`
-	YearsOfExperience              int                        `json:"years_of_experience"`
+	YearsOfExperience              *int                       `json:"years_of_experience"`
 	NextOfKinName                  string                     `json:"next_of_kin_name"`
 	NextOfKinPhoneNumber           string                     `json:"next_of_kin_phone_number"`
 	NextOfKinRelationship          string                     `json:"next_of_kin_relationship"`
 	IsCommunityOrgMember           *bool                      `json:"is_community_org_member"`
-	YearsAtCommunityOrg            int                        `json:"years_at_community_org"`
+	YearsAtCommunityOrg            *int                       `json:"years_at_community_org"`
 	CharacterReferenceName         string                     `json:"character_reference_name"`
 	CharacterReferenceContact      string                     `json:"character_reference_contact"`
 	CharacterReferenceRelationship string                     `json:"character_reference_relationship"`
@@ -213,11 +214,12 @@ func buildProfileUpdates(req ProfileUpdateRequest) bson.M {
 	setBool("recent_good_conduct", req.RecentGoodConduct)
 	setBool("professional_membership", req.ProfessionalMembership)
 	setBool("is_community_org_member", req.IsCommunityOrgMember)
-	if req.YearsOfExperience > 0 {
-		u["years_of_experience"] = req.YearsOfExperience
+	setBool("has_social_media_handles", req.HasSocialMediaHandles)
+	if req.YearsOfExperience != nil {
+		u["years_of_experience"] = *req.YearsOfExperience
 	}
-	if req.YearsAtCommunityOrg > 0 {
-		u["years_at_community_org"] = req.YearsAtCommunityOrg
+	if req.YearsAtCommunityOrg != nil {
+		u["years_at_community_org"] = *req.YearsAtCommunityOrg
 	}
 	if req.EarningGoalAmount > 0 {
 		u["earning_goal_amount"] = req.EarningGoalAmount
@@ -238,8 +240,8 @@ func UpdateProfile(userID string, req ProfileUpdateRequest) error {
 	}
 
 	userUpdates := bson.M{}
-	if req.HasSocialMediaHandles != nil {
-		userUpdates["has_social_media_handles"] = *req.HasSocialMediaHandles
+	if req.Email != "" {
+		userUpdates["email"] = req.Email
 	}
 	if len(userUpdates) > 0 {
 		_ = users.UpdateUser(userID, userUpdates)
@@ -261,13 +263,13 @@ func UpdateProfile(userID string, req ProfileUpdateRequest) error {
 }
 
 func updateSubResources(userID string, req ProfileUpdateRequest) {
-	if req.SkillAcquisitionMode != "" || req.YearsOfExperience > 0 {
+	if req.SkillAcquisitionMode != "" || req.YearsOfExperience != nil {
 		training := bson.M{"user_id": userID, "updated_at": time.Now()}
 		if req.SkillAcquisitionMode != "" {
 			training["skill_acquisition_mode"] = req.SkillAcquisitionMode
 		}
-		if req.YearsOfExperience > 0 {
-			training["years_of_experience"] = req.YearsOfExperience
+		if req.YearsOfExperience != nil {
+			training["years_of_experience"] = *req.YearsOfExperience
 		}
 		_, _ = configs.MI.DB.Collection("professional_trainings").UpdateOne(
 			context.TODO(),

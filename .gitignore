@@ -2,6 +2,7 @@
 .mimocode
 .env
 main
+tmp/
 
 # Spartan AI config (contains API keys)
 .spartan/ai.env
