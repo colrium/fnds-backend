@@ -66,7 +66,7 @@ func verifyUserOtp(user *User, otp string) error {
 		return fmt.Errorf("too many attempts; request a new code")
 	}
 	if user.Otp != otp {
-		_ = UpdateUser(user.ID, bson.M{"otp_attempts": user.OtpAttempts + 1})
+		_ = IncrementOtpAttempts(user.ID)
 		return fmt.Errorf("Invalid OTP")
 	}
 	return nil
@@ -195,11 +195,11 @@ func HandleResetPassword(ctx echo.Context) error {
 
 	user, err := GetUserByPhoneAndType(phone, userType)
 	if err != nil {
-		return responses.SendError(ctx, 400, "Invalid phone number")
+		return responses.SendError(ctx, 400, "Invalid phone or code")
 	}
 
 	if err := verifyUserOtp(user, otp); err != nil {
-		return responses.SendError(ctx, 400, err.Error())
+		return responses.SendError(ctx, 400, "Invalid phone or code")
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(password), 14)

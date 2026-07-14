@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 	_ "time/tzdata"
 
 	"backend/applications"
@@ -40,6 +41,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	app := echo.New()
+	app.IPExtractor = echo.ExtractIPDirect()
 	app.Use(echomiddleware.Logger())
 	app.Use(echomiddleware.Recover())
 	app.Use(echomiddleware.CORS())
@@ -55,9 +57,15 @@ func main() {
 
 	auth.RegisterPublicRoutes(api)
 	// Rate-limit password-reset endpoints: they send SMS and are brute-forceable.
+	// Note: IPExtractor set to ExtractIPDirect() for security. If fronting LB is added,
+	// switch to ExtractIPFromXFFHeader with LB CIDR trusted.
 	resetGroup := api.Group("")
 	resetGroup.Use(echomiddleware.RateLimiterWithConfig(echomiddleware.RateLimiterConfig{
-		Store: echomiddleware.NewRateLimiterMemoryStore(rate.Limit(1)), // ~1 req/sec/IP, small burst
+		Store: echomiddleware.NewRateLimiterMemoryStoreWithConfig(echomiddleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Limit(1),
+			Burst:     3,
+			ExpiresIn: 3 * time.Minute,
+		}),
 	}))
 	users.RegisterPublicRoutes(resetGroup)
 	applications.RegisterRoutes(api)

@@ -106,6 +106,13 @@ func UpdateUser(id string, update bson.M) error {
 	return err
 }
 
+func IncrementOtpAttempts(id string) error {
+	_, err := configs.MI.DB.Collection("users").UpdateOne(context.TODO(),
+		bson.M{"_id": id},
+		bson.M{"$inc": bson.M{"otp_attempts": 1}, "$set": bson.M{"updated_at": time.Now()}})
+	return err
+}
+
 func ListArtisans(page, limit int64) ([]User, int64, error) {
 	filter := bson.M{"user_type": "artisan"}
 	opts := options.Find().SetSkip((page - 1) * limit).SetLimit(limit)
