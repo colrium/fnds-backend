@@ -75,6 +75,60 @@ type ReferenceInput struct {
 	Location    string `json:"location"`
 }
 
+// FullProfile is the merged user + profile view returned to clients. The
+// frontend Profile type extends User, so it needs both the core identity
+// fields (from the users collection) and the extension fields (from the
+// profiles collection). It renders even when no profiles row exists yet.
+type FullProfile struct {
+	*users.User
+	IDNumber                   string   `json:"id_number"`
+	DateOfBirth                string   `json:"date_of_birth"`
+	Gender                     string   `json:"gender"`
+	HasSocialMediaHandles      bool     `json:"has_social_media_handles"`
+	SocialMedias               string   `json:"social_medias"`
+	HasSmartphone              bool     `json:"has_smartphone"`
+	IsBusinessRegistered       bool     `json:"is_business_registered"`
+	BusinessName               string   `json:"business_name"`
+	BusinessRegistrationNumber string   `json:"business_registration_number"`
+	RecentGoodConduct          bool     `json:"recent_good_conduct"`
+	Address                    string   `json:"address"`
+	City                       string   `json:"city"`
+	State                      string   `json:"state"`
+	Zip                        string   `json:"zip"`
+	Country                    string   `json:"country"`
+	Skills                     []string `json:"skills"`
+}
+
+// GetFullProfile returns the authenticated user's identity merged with their
+// profile extension. A missing profiles row is not an error — the user always
+// has core fields, so we return those with empty extension fields.
+func GetFullProfile(userID string) (*FullProfile, error) {
+	user, err := users.GetUserByID(userID)
+	if err != nil {
+		return nil, err
+	}
+	full := &FullProfile{User: user}
+	if profile, err := GetProfileByUserID(userID); err == nil {
+		full.IDNumber = profile.IDNumber
+		full.DateOfBirth = profile.DateOfBirth
+		full.Gender = profile.Gender
+		full.HasSocialMediaHandles = profile.HasSocialMediaHandles
+		full.SocialMedias = profile.SocialMedias
+		full.HasSmartphone = profile.HasSmartphone
+		full.IsBusinessRegistered = profile.IsBusinessRegistered
+		full.BusinessName = profile.BusinessName
+		full.BusinessRegistrationNumber = profile.BusinessRegistrationNumber
+		full.RecentGoodConduct = profile.RecentGoodConduct
+		full.Address = profile.Address
+		full.City = profile.City
+		full.State = profile.State
+		full.Zip = profile.Zip
+		full.Country = profile.Country
+		full.Skills = profile.Skills
+	}
+	return full, nil
+}
+
 func UpdateProfile(userID string, req ProfileUpdateRequest) error {
 	user, err := users.GetUserByID(userID)
 	if err != nil {

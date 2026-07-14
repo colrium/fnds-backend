@@ -13,7 +13,7 @@ func HandleGetProfile(ctx echo.Context) error {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
 
-	profile, err := GetProfileByUserID(userID)
+	profile, err := GetFullProfile(userID)
 	if err != nil {
 		return responses.SendError(ctx, 404, "Profile not found")
 	}
@@ -45,7 +45,7 @@ func HandleGetProfileByUserID(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "User ID is required")
 	}
 
-	profile, err := GetProfileByUserID(userID)
+	profile, err := GetFullProfile(userID)
 	if err != nil {
 		return responses.SendError(ctx, 404, "Profile not found")
 	}
