@@ -34,6 +34,7 @@ type User struct {
 	FundisID      string    `json:"fundis_id,omitempty" bson:"fundis_id,omitempty"`
 	AvatarID      string    `json:"avatar_id,omitempty" bson:"avatar_id,omitempty"`
 	FCMToken      string    `json:"fcm_token,omitempty" bson:"fcm_token,omitempty"`
+	IsAvailable   bool      `json:"is_available" bson:"is_available"`
 	CreatedAt     time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at" bson:"updated_at"`
 }

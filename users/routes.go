@@ -80,6 +80,7 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/otp/resend", HandleResendOtp)
 	g.PATCH("/fcm-token", HandleUpdateToken)
 	g.POST("/profile/avatar", HandleUpdateAvatar)
+	g.POST("/artisan/availability", HandleSetAvailability)
 }
 
 func RegisterPublicRoutes(g *echo.Group) {
