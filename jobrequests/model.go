@@ -111,6 +111,36 @@ func UpdateJobRequest(id string, updates bson.M) error {
 	return err
 }
 
+// ClaimJobRequest atomically assigns an unclaimed pending request to an artisan.
+// Returns false when no matching pending+unassigned request exists (already taken).
+func ClaimJobRequest(id, artisanID string) (bool, error) {
+	now := time.Now()
+	res, err := configs.MI.DB.Collection("job_requests").UpdateOne(
+		context.TODO(),
+		bson.M{"_id": id, "status": "pending", "artisan_id": ""},
+		bson.M{"$set": bson.M{"artisan_id": artisanID, "status": "accepted", "accepted_at": now, "updated_at": now}},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount > 0, nil
+}
+
+// CompleteJobRequest atomically completes a request owned by the artisan and in accepted state.
+// Returns false when no matching request exists (wrong owner or state).
+func CompleteJobRequest(id, artisanID string) (bool, error) {
+	now := time.Now()
+	res, err := configs.MI.DB.Collection("job_requests").UpdateOne(
+		context.TODO(),
+		bson.M{"_id": id, "artisan_id": artisanID, "status": "accepted"},
+		bson.M{"$set": bson.M{"status": "completed", "completed_at": now, "updated_at": now}},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount > 0, nil
+}
+
 func ListJobVacancies(filter bson.M, page, limit int64) ([]JobVacancy, int64, error) {
 	opts := options.Find().SetSkip((page - 1) * limit).SetLimit(limit)
 	cursor, err := configs.MI.DB.Collection("job_vacancies").Find(context.TODO(), filter, opts)

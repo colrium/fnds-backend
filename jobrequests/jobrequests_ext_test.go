@@ -9,12 +9,10 @@ import (
 )
 
 func TestBuildJobRequestFilter(t *testing.T) {
+	// Pending = open pool: only truly-unassigned requests (artisan_id == "").
 	pending := buildJobRequestFilter("pending", "artisan1")
-	if pending["status"] != "pending" {
-		t.Fatalf("pending filter should set status=pending, got %v", pending["status"])
-	}
-	if _, hasArtisan := pending["artisan_id"]; hasArtisan {
-		t.Fatalf("pending pool should NOT scope by artisan_id")
+	if pending["status"] != "pending" || pending["artisan_id"] != "" {
+		t.Fatalf("pending filter should be status=pending + artisan_id empty, got %v", pending)
 	}
 	accepted := buildJobRequestFilter("accepted", "artisan1")
 	if accepted["status"] != "accepted" || accepted["artisan_id"] != "artisan1" {
@@ -23,6 +21,14 @@ func TestBuildJobRequestFilter(t *testing.T) {
 	completed := buildJobRequestFilter("completed", "artisan1")
 	if completed["status"] != "completed" || completed["artisan_id"] != "artisan1" {
 		t.Fatalf("completed filter wrong: %v", completed)
+	}
+	// Empty/unknown status must NOT collapse tenancy — always scope to the artisan.
+	empty := buildJobRequestFilter("", "artisan1")
+	if empty["artisan_id"] != "artisan1" {
+		t.Fatalf("empty status must scope to artisan, got %v", empty)
+	}
+	if _, hasStatus := empty["status"]; hasStatus {
+		t.Fatalf("empty status should not set a status filter, got %v", empty["status"])
 	}
 }
 

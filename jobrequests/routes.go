@@ -3,7 +3,6 @@ package jobrequests
 import (
 	"backend/contextutil"
 	"backend/responses"
-	"time"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -39,15 +38,25 @@ func HandleCreateJobRequest(ctx echo.Context) error {
 	return responses.SendCreated(ctx, jr, "Job request created successfully")
 }
 
+var allowedJobStatuses = map[string]bool{
+	"pending": true, "accepted": true, "completed": true, "closed": true,
+}
+
+// buildJobRequestFilter scopes results to the caller. Only "pending" is the open,
+// unassigned pool; every other case (including an empty/unknown status) is scoped
+// to the artisan's own requests so a client cannot collapse the tenancy filter.
 func buildJobRequestFilter(status, artisanID string) bson.M {
 	filter := bson.M{}
-	if status != "" {
+	if status == "pending" {
+		filter["status"] = "pending"
+		filter["artisan_id"] = ""
+		return filter
+	}
+	if allowedJobStatuses[status] {
 		filter["status"] = status
 	}
-	// Pending is the open pool (unassigned). All other statuses are the artisan's own.
-	if status != "" && status != "pending" {
-		filter["artisan_id"] = artisanID
-	}
+	// Non-pending (or empty/unknown) → always the artisan's own requests.
+	filter["artisan_id"] = artisanID
 	return filter
 }
 
@@ -152,16 +161,12 @@ func HandleAcceptJobRequest(ctx echo.Context) error {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
 	id := ctx.Param("id")
-	jr, err := GetJobRequestByID(id)
+	claimed, err := ClaimJobRequest(id, userID)
 	if err != nil {
-		return responses.SendError(ctx, 404, "Job request not found")
-	}
-	if jr.Status != "pending" || jr.ArtisanID != "" {
-		return responses.SendError(ctx, 400, "Job request is no longer available")
-	}
-	now := time.Now()
-	if err := UpdateJobRequest(id, bson.M{"artisan_id": userID, "status": "accepted", "accepted_at": now}); err != nil {
 		return responses.SendError(ctx, 500, "Failed to accept job request")
+	}
+	if !claimed {
+		return responses.SendError(ctx, 400, "Job request is no longer available")
 	}
 	return responses.SendOK(ctx, nil, "Job request accepted")
 }
@@ -172,16 +177,12 @@ func HandleCompleteJobRequest(ctx echo.Context) error {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
 	id := ctx.Param("id")
-	jr, err := GetJobRequestByID(id)
+	completed, err := CompleteJobRequest(id, userID)
 	if err != nil {
-		return responses.SendError(ctx, 404, "Job request not found")
-	}
-	if jr.ArtisanID != userID || jr.Status != "accepted" {
-		return responses.SendError(ctx, 400, "Job request cannot be completed")
-	}
-	now := time.Now()
-	if err := UpdateJobRequest(id, bson.M{"status": "completed", "completed_at": now}); err != nil {
 		return responses.SendError(ctx, 500, "Failed to complete job request")
+	}
+	if !completed {
+		return responses.SendError(ctx, 400, "Job request cannot be completed")
 	}
 	return responses.SendOK(ctx, nil, "Job request completed")
 }
