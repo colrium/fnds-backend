@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func SendOTP(userID string) error {
@@ -78,7 +79,11 @@ func ResetPassword(phone, otp, password, confirmPassword, userType string) error
 	if user.Otp != otp {
 		return fmt.Errorf("invalid OTP")
 	}
-	return UpdateUser(user.ID, bson.M{"password": []byte(password), "otp": "", "phone_verified": true})
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+	return UpdateUser(user.ID, bson.M{"password": hashed, "otp": "", "phone_verified": true})
 }
 
 func UpdateFCMToken(userID, token string) error {

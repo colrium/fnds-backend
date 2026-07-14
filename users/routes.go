@@ -9,6 +9,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type verifyOtpRequest struct {
@@ -170,7 +171,14 @@ func HandleResetPassword(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Invalid OTP")
 	}
 
-	_ = UpdateUser(user.ID, bson.M{"password": []byte(password), "otp": "", "phone_verified": true})
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	if err != nil {
+		return responses.SendError(ctx, 500, "failed to hash password")
+	}
+
+	if err := UpdateUser(user.ID, bson.M{"password": hashed, "otp": "", "phone_verified": true}); err != nil {
+		return responses.SendError(ctx, 500, "failed to reset password")
+	}
 
 	return responses.SendOK(ctx, nil, "Password reset successfully")
 }
