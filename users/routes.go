@@ -80,7 +80,6 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/otp/resend", HandleResendOtp)
 	g.PATCH("/fcm-token", HandleUpdateToken)
 	g.POST("/profile/avatar", HandleUpdateAvatar)
-	g.POST("/artisan/availability", HandleSetAvailability)
 }
 
 // RegisterArtisanRoutes registers artisan-only authenticated routes
