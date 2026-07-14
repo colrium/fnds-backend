@@ -11,26 +11,44 @@ import (
 )
 
 type Profile struct {
-	ID                        string   `json:"id" bson:"_id"`
-	UserID                    string   `json:"user_id" bson:"user_id"`
-	IDNumber                  string   `json:"id_number" bson:"id_number"`
-	DateOfBirth               string   `json:"date_of_birth" bson:"date_of_birth"`
-	Gender                    string   `json:"gender" bson:"gender"`
-	HasSocialMediaHandles     bool     `json:"has_social_media_handles" bson:"has_social_media_handles"`
-	SocialMedias              string   `json:"social_medias" bson:"social_medias"`
-	HasSmartphone             bool     `json:"has_smartphone" bson:"has_smartphone"`
-	IsBusinessRegistered      bool     `json:"is_business_registered" bson:"is_business_registered"`
-	BusinessName              string   `json:"business_name" bson:"business_name"`
-	BusinessRegistrationNumber string  `json:"business_registration_number" bson:"business_registration_number"`
-	RecentGoodConduct         bool     `json:"recent_good_conduct" bson:"recent_good_conduct"`
-	Address                   string   `json:"address" bson:"address"`
-	City                      string   `json:"city" bson:"city"`
-	State                     string   `json:"state" bson:"state"`
-	Zip                       string   `json:"zip" bson:"zip"`
-	Country                   string   `json:"country" bson:"country"`
-	Skills                    []string `json:"skills" bson:"skills"`
-	CreatedAt                 time.Time `json:"created_at" bson:"created_at"`
-	UpdatedAt                 time.Time `json:"updated_at" bson:"updated_at"`
+	ID                             string    `json:"id" bson:"_id"`
+	UserID                         string    `json:"user_id" bson:"user_id"`
+	IDNumber                       string    `json:"id_number" bson:"id_number"`
+	DateOfBirth                    string    `json:"date_of_birth" bson:"date_of_birth"`
+	Gender                         string    `json:"gender" bson:"gender"`
+	HasSocialMediaHandles          bool      `json:"has_social_media_handles" bson:"has_social_media_handles"`
+	SocialMedias                   string    `json:"social_medias" bson:"social_medias"`
+	HasSmartphone                  bool      `json:"has_smartphone" bson:"has_smartphone"`
+	IsBusinessRegistered           bool      `json:"is_business_registered" bson:"is_business_registered"`
+	BusinessName                   string    `json:"business_name" bson:"business_name"`
+	BusinessRegistrationNumber     string    `json:"business_registration_number" bson:"business_registration_number"`
+	RecentGoodConduct              bool      `json:"recent_good_conduct" bson:"recent_good_conduct"`
+	Address                        string    `json:"address" bson:"address"`
+	City                           string    `json:"city" bson:"city"`
+	State                          string    `json:"state" bson:"state"`
+	Zip                            string    `json:"zip" bson:"zip"`
+	Country                        string    `json:"country" bson:"country"`
+	HighestEducationLevel          string    `json:"highest_education_level" bson:"highest_education_level"`
+	Certificate                    string    `json:"certificate" bson:"certificate"`
+	Institution                    string    `json:"institution" bson:"institution"`
+	OtherQualifications            string    `json:"other_qualifications" bson:"other_qualifications"`
+	ProfessionalMembership         bool      `json:"professional_membership" bson:"professional_membership"`
+	ProfessionalBody               string    `json:"professional_body" bson:"professional_body"`
+	SkillAcquisitionMode           string    `json:"skill_acquisition_mode" bson:"skill_acquisition_mode"`
+	YearsOfExperience              int       `json:"years_of_experience" bson:"years_of_experience"`
+	NextOfKinName                  string    `json:"next_of_kin_name" bson:"next_of_kin_name"`
+	NextOfKinPhoneNumber           string    `json:"next_of_kin_phone_number" bson:"next_of_kin_phone_number"`
+	NextOfKinRelationship          string    `json:"next_of_kin_relationship" bson:"next_of_kin_relationship"`
+	IsCommunityOrgMember           bool      `json:"is_community_org_member" bson:"is_community_org_member"`
+	YearsAtCommunityOrg            int       `json:"years_at_community_org" bson:"years_at_community_org"`
+	CharacterReferenceName         string    `json:"character_reference_name" bson:"character_reference_name"`
+	CharacterReferenceContact      string    `json:"character_reference_contact" bson:"character_reference_contact"`
+	CharacterReferenceRelationship string    `json:"character_reference_relationship" bson:"character_reference_relationship"`
+	EarningGoalAmount              float64   `json:"earning_goal_amount" bson:"earning_goal_amount"`
+	Skills                         []string  `json:"skills" bson:"skills"`
+	Locations                      []string  `json:"locations" bson:"locations"`
+	CreatedAt                      time.Time `json:"created_at" bson:"created_at"`
+	UpdatedAt                      time.Time `json:"updated_at" bson:"updated_at"`
 }
 
 func GetProfileByUserID(userID string) (*Profile, error) {

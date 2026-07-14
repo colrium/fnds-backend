@@ -13,36 +13,44 @@ import (
 )
 
 type ProfileUpdateRequest struct {
-	IDNumber                  string                     `json:"id_number"`
-	DateOfBirth               string                     `json:"date_of_birth"`
-	Gender                    string                     `json:"gender"`
-	HasSocialMediaHandles     *bool                      `json:"has_social_media_handles"`
-	SocialMedias              string                     `json:"social_medias"`
-	HasSmartphone             *bool                      `json:"has_smartphone"`
-	IsBusinessRegistered      *bool                      `json:"is_business_registered"`
-	BusinessName              string                     `json:"business_name"`
-	BusinessRegistrationNumber string                    `json:"business_registration_number"`
-	RecentGoodConduct         *bool                      `json:"recent_good_conduct"`
-	Address                   string                     `json:"address"`
-	City                      string                     `json:"city"`
-	State                     string                     `json:"state"`
-	Zip                       string                     `json:"zip"`
-	Country                   string                     `json:"country"`
-	SkillAcquisitionMode      string                     `json:"skill_acquisition_mode"`
-	YearsOfExperience         int                        `json:"years_of_experience"`
-	NextOfKinName             string                     `json:"next_of_kin_name"`
-	NextOfKinPhoneNumber      string                     `json:"next_of_kin_phone_number"`
-	NextOfKinRelationship     string                     `json:"next_of_kin_relationship"`
-	IsCommunityOrgMember      *bool                      `json:"is_community_org_member"`
-	YearsAtCommunityOrg       int                        `json:"years_at_community_org"`
-	CharacterReferenceName    string                     `json:"character_reference_name"`
-	CharacterReferenceContact string                     `json:"character_reference_contact"`
-	CharacterReferenceRelationship string                `json:"character_reference_relationship"`
-	EarningGoalAmount         float64                    `json:"earning_goal_amount"`
-	WorkingHours              []WorkingHourInput         `json:"working_hours"`
-	PastEmployers             []PastEmployerInput        `json:"past_employers"`
-	LanguageProficiencies     []LanguageProficiencyInput `json:"language_proficiencies"`
-	References                []ReferenceInput           `json:"references"`
+	IDNumber                       string                     `json:"id_number"`
+	DateOfBirth                    string                     `json:"date_of_birth"`
+	Gender                         string                     `json:"gender"`
+	HasSocialMediaHandles          *bool                      `json:"has_social_media_handles"`
+	SocialMedias                   string                     `json:"social_medias"`
+	HasSmartphone                  *bool                      `json:"has_smartphone"`
+	IsBusinessRegistered           *bool                      `json:"is_business_registered"`
+	BusinessName                   string                     `json:"business_name"`
+	BusinessRegistrationNumber     string                     `json:"business_registration_number"`
+	RecentGoodConduct              *bool                      `json:"recent_good_conduct"`
+	Address                        string                     `json:"address"`
+	City                           string                     `json:"city"`
+	State                          string                     `json:"state"`
+	Zip                            string                     `json:"zip"`
+	Country                        string                     `json:"country"`
+	HighestEducationLevel          string                     `json:"highest_education_level"`
+	Certificate                    string                     `json:"certificate"`
+	Institution                    string                     `json:"institution"`
+	OtherQualifications            string                     `json:"other_qualifications"`
+	ProfessionalMembership         *bool                      `json:"professional_membership"`
+	ProfessionalBody               string                     `json:"professional_body"`
+	SkillAcquisitionMode           string                     `json:"skill_acquisition_mode"`
+	YearsOfExperience              int                        `json:"years_of_experience"`
+	NextOfKinName                  string                     `json:"next_of_kin_name"`
+	NextOfKinPhoneNumber           string                     `json:"next_of_kin_phone_number"`
+	NextOfKinRelationship          string                     `json:"next_of_kin_relationship"`
+	IsCommunityOrgMember           *bool                      `json:"is_community_org_member"`
+	YearsAtCommunityOrg            int                        `json:"years_at_community_org"`
+	CharacterReferenceName         string                     `json:"character_reference_name"`
+	CharacterReferenceContact      string                     `json:"character_reference_contact"`
+	CharacterReferenceRelationship string                     `json:"character_reference_relationship"`
+	EarningGoalAmount              float64                    `json:"earning_goal_amount"`
+	Skills                         []string                   `json:"skills"`
+	Locations                      []string                   `json:"locations"`
+	WorkingHours                   []WorkingHourInput         `json:"working_hours"`
+	PastEmployers                  []PastEmployerInput        `json:"past_employers"`
+	LanguageProficiencies          []LanguageProficiencyInput `json:"language_proficiencies"`
+	References                     []ReferenceInput           `json:"references"`
 }
 
 type WorkingHourInput struct {
@@ -81,22 +89,40 @@ type ReferenceInput struct {
 // profiles collection). It renders even when no profiles row exists yet.
 type FullProfile struct {
 	*users.User
-	IDNumber                   string   `json:"id_number"`
-	DateOfBirth                string   `json:"date_of_birth"`
-	Gender                     string   `json:"gender"`
-	HasSocialMediaHandles      bool     `json:"has_social_media_handles"`
-	SocialMedias               string   `json:"social_medias"`
-	HasSmartphone              bool     `json:"has_smartphone"`
-	IsBusinessRegistered       bool     `json:"is_business_registered"`
-	BusinessName               string   `json:"business_name"`
-	BusinessRegistrationNumber string   `json:"business_registration_number"`
-	RecentGoodConduct          bool     `json:"recent_good_conduct"`
-	Address                    string   `json:"address"`
-	City                       string   `json:"city"`
-	State                      string   `json:"state"`
-	Zip                        string   `json:"zip"`
-	Country                    string   `json:"country"`
-	Skills                     []string `json:"skills"`
+	IDNumber                       string   `json:"id_number"`
+	DateOfBirth                    string   `json:"date_of_birth"`
+	Gender                         string   `json:"gender"`
+	HasSocialMediaHandles          bool     `json:"has_social_media_handles"`
+	SocialMedias                   string   `json:"social_medias"`
+	HasSmartphone                  bool     `json:"has_smartphone"`
+	IsBusinessRegistered           bool     `json:"is_business_registered"`
+	BusinessName                   string   `json:"business_name"`
+	BusinessRegistrationNumber     string   `json:"business_registration_number"`
+	RecentGoodConduct              bool     `json:"recent_good_conduct"`
+	Address                        string   `json:"address"`
+	City                           string   `json:"city"`
+	State                          string   `json:"state"`
+	Zip                            string   `json:"zip"`
+	Country                        string   `json:"country"`
+	HighestEducationLevel          string   `json:"highest_education_level"`
+	Certificate                    string   `json:"certificate"`
+	Institution                    string   `json:"institution"`
+	OtherQualifications            string   `json:"other_qualifications"`
+	ProfessionalMembership         bool     `json:"professional_membership"`
+	ProfessionalBody               string   `json:"professional_body"`
+	SkillAcquisitionMode           string   `json:"skill_acquisition_mode"`
+	YearsOfExperience              int      `json:"years_of_experience"`
+	NextOfKinName                  string   `json:"next_of_kin_name"`
+	NextOfKinPhoneNumber           string   `json:"next_of_kin_phone_number"`
+	NextOfKinRelationship          string   `json:"next_of_kin_relationship"`
+	IsCommunityOrgMember           bool     `json:"is_community_org_member"`
+	YearsAtCommunityOrg            int      `json:"years_at_community_org"`
+	CharacterReferenceName         string   `json:"character_reference_name"`
+	CharacterReferenceContact      string   `json:"character_reference_contact"`
+	CharacterReferenceRelationship string   `json:"character_reference_relationship"`
+	EarningGoalAmount              float64  `json:"earning_goal_amount"`
+	Skills                         []string `json:"skills"`
+	Locations                      []string `json:"locations"`
 }
 
 // GetFullProfile returns the authenticated user's identity merged with their
@@ -124,9 +150,85 @@ func GetFullProfile(userID string) (*FullProfile, error) {
 		full.State = profile.State
 		full.Zip = profile.Zip
 		full.Country = profile.Country
+		full.HighestEducationLevel = profile.HighestEducationLevel
+		full.Certificate = profile.Certificate
+		full.Institution = profile.Institution
+		full.OtherQualifications = profile.OtherQualifications
+		full.ProfessionalMembership = profile.ProfessionalMembership
+		full.ProfessionalBody = profile.ProfessionalBody
+		full.SkillAcquisitionMode = profile.SkillAcquisitionMode
+		full.YearsOfExperience = profile.YearsOfExperience
+		full.NextOfKinName = profile.NextOfKinName
+		full.NextOfKinPhoneNumber = profile.NextOfKinPhoneNumber
+		full.NextOfKinRelationship = profile.NextOfKinRelationship
+		full.IsCommunityOrgMember = profile.IsCommunityOrgMember
+		full.YearsAtCommunityOrg = profile.YearsAtCommunityOrg
+		full.CharacterReferenceName = profile.CharacterReferenceName
+		full.CharacterReferenceContact = profile.CharacterReferenceContact
+		full.CharacterReferenceRelationship = profile.CharacterReferenceRelationship
+		full.EarningGoalAmount = profile.EarningGoalAmount
 		full.Skills = profile.Skills
+		full.Locations = profile.Locations
 	}
 	return full, nil
+}
+
+func buildProfileUpdates(req ProfileUpdateRequest) bson.M {
+	u := bson.M{}
+	setStr := func(k, v string) {
+		if v != "" {
+			u[k] = v
+		}
+	}
+	setBool := func(k string, v *bool) {
+		if v != nil {
+			u[k] = *v
+		}
+	}
+	setStr("id_number", req.IDNumber)
+	setStr("date_of_birth", req.DateOfBirth)
+	setStr("gender", req.Gender)
+	setStr("social_medias", req.SocialMedias)
+	setStr("business_name", req.BusinessName)
+	setStr("business_registration_number", req.BusinessRegistrationNumber)
+	setStr("address", req.Address)
+	setStr("city", req.City)
+	setStr("state", req.State)
+	setStr("zip", req.Zip)
+	setStr("country", req.Country)
+	setStr("highest_education_level", req.HighestEducationLevel)
+	setStr("certificate", req.Certificate)
+	setStr("institution", req.Institution)
+	setStr("other_qualifications", req.OtherQualifications)
+	setStr("professional_body", req.ProfessionalBody)
+	setStr("skill_acquisition_mode", req.SkillAcquisitionMode)
+	setStr("next_of_kin_name", req.NextOfKinName)
+	setStr("next_of_kin_phone_number", req.NextOfKinPhoneNumber)
+	setStr("next_of_kin_relationship", req.NextOfKinRelationship)
+	setStr("character_reference_name", req.CharacterReferenceName)
+	setStr("character_reference_contact", req.CharacterReferenceContact)
+	setStr("character_reference_relationship", req.CharacterReferenceRelationship)
+	setBool("has_smartphone", req.HasSmartphone)
+	setBool("is_business_registered", req.IsBusinessRegistered)
+	setBool("recent_good_conduct", req.RecentGoodConduct)
+	setBool("professional_membership", req.ProfessionalMembership)
+	setBool("is_community_org_member", req.IsCommunityOrgMember)
+	if req.YearsOfExperience > 0 {
+		u["years_of_experience"] = req.YearsOfExperience
+	}
+	if req.YearsAtCommunityOrg > 0 {
+		u["years_at_community_org"] = req.YearsAtCommunityOrg
+	}
+	if req.EarningGoalAmount > 0 {
+		u["earning_goal_amount"] = req.EarningGoalAmount
+	}
+	if len(req.Skills) > 0 {
+		u["skills"] = req.Skills
+	}
+	if len(req.Locations) > 0 {
+		u["locations"] = req.Locations
+	}
+	return u
 }
 
 func UpdateProfile(userID string, req ProfileUpdateRequest) error {
@@ -143,31 +245,7 @@ func UpdateProfile(userID string, req ProfileUpdateRequest) error {
 		_ = users.UpdateUser(userID, userUpdates)
 	}
 
-	profileUpdates := bson.M{}
-	if req.IDNumber != "" {
-		profileUpdates["id_number"] = req.IDNumber
-	}
-	if req.DateOfBirth != "" {
-		profileUpdates["date_of_birth"] = req.DateOfBirth
-	}
-	if req.Gender != "" {
-		profileUpdates["gender"] = req.Gender
-	}
-	if req.Address != "" {
-		profileUpdates["address"] = req.Address
-	}
-	if req.City != "" {
-		profileUpdates["city"] = req.City
-	}
-	if req.State != "" {
-		profileUpdates["state"] = req.State
-	}
-	if req.Zip != "" {
-		profileUpdates["zip"] = req.Zip
-	}
-	if req.Country != "" {
-		profileUpdates["country"] = req.Country
-	}
+	profileUpdates := buildProfileUpdates(req)
 	if len(profileUpdates) > 0 {
 		profileUpdates["updated_at"] = time.Now()
 		_, _ = configs.MI.DB.Collection("profiles").UpdateOne(
