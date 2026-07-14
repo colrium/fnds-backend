@@ -32,6 +32,7 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/labstack/echo/v4"
 	echomiddleware "github.com/labstack/echo/v4/middleware"
+	"golang.org/x/time/rate"
 )
 
 func main() {
@@ -53,7 +54,12 @@ func main() {
 	})
 
 	auth.RegisterPublicRoutes(api)
-	users.RegisterPublicRoutes(api)
+	// Rate-limit password-reset endpoints: they send SMS and are brute-forceable.
+	resetGroup := api.Group("")
+	resetGroup.Use(echomiddleware.RateLimiterWithConfig(echomiddleware.RateLimiterConfig{
+		Store: echomiddleware.NewRateLimiterMemoryStore(rate.Limit(1)), // ~1 req/sec/IP, small burst
+	}))
+	users.RegisterPublicRoutes(resetGroup)
 	applications.RegisterRoutes(api)
 	locations.RegisterRoutes(api)
 	skills.RegisterRoutes(api)

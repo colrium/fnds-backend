@@ -1,7 +1,9 @@
 package users
 
 import (
+	"fmt"
 	"log"
+	"time"
 
 	"backend/contextutil"
 	"backend/notifications"
@@ -10,6 +12,11 @@ import (
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
 	"golang.org/x/crypto/bcrypt"
+)
+
+const (
+	otpTTL         = 10 * time.Minute
+	otpMaxAttempts = 5
 )
 
 type verifyOtpRequest struct {
@@ -31,13 +38,38 @@ type resetPasswordRequest struct {
 // can still retry via resend without the account being wedged.
 func issuePhoneOTP(userID, phone string) {
 	otp := GenerateOTP()
-	if err := UpdateUser(userID, bson.M{"otp": otp}); err != nil {
+	if err := UpdateUser(userID, bson.M{
+		"otp":            otp,
+		"otp_expires_at": time.Now().UTC().Add(otpTTL),
+		"otp_attempts":   0,
+	}); err != nil {
 		log.Printf("[otp] failed to persist code for user %s: %v", userID, err)
 		return
 	}
 	if err := notifications.SendOTPSMS(phone, otp); err != nil {
 		log.Printf("[otp] failed to send SMS to %s: %v", phone, err)
 	}
+}
+
+// verifyUserOtp checks the supplied otp against the user's stored code,
+// enforcing expiry and a max-attempts lockout. Returns nil when valid.
+func verifyUserOtp(user *User, otp string) error {
+	if user.Otp == "" {
+		return fmt.Errorf("no verification code found; request a new one")
+	}
+	if !user.OtpExpiresAt.IsZero() && time.Now().UTC().After(user.OtpExpiresAt) {
+		_ = UpdateUser(user.ID, bson.M{"otp": "", "otp_attempts": 0})
+		return fmt.Errorf("verification code has expired; request a new one")
+	}
+	if user.OtpAttempts >= otpMaxAttempts {
+		_ = UpdateUser(user.ID, bson.M{"otp": "", "otp_attempts": 0})
+		return fmt.Errorf("too many attempts; request a new code")
+	}
+	if user.Otp != otp {
+		_ = UpdateUser(user.ID, bson.M{"otp_attempts": user.OtpAttempts + 1})
+		return fmt.Errorf("Invalid OTP")
+	}
+	return nil
 }
 
 func RegisterAuthRoutes(g *echo.Group) {
@@ -97,12 +129,13 @@ func HandleVerifyOtp(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "OTP already verified")
 	}
 
-	if user.Otp != otp {
-		return responses.SendError(ctx, 400, "Invalid OTP")
+	if err := verifyUserOtp(user, otp); err != nil {
+		return responses.SendError(ctx, 400, err.Error())
 	}
 
 	err = UpdateUser(userID, bson.M{
 		"otp":            "",
+		"otp_attempts":   0,
 		"phone_verified": true,
 		"status":         StatusActive,
 		"is_active":      true,
@@ -134,13 +167,11 @@ func HandleForgotPassword(ctx echo.Context) error {
 	}
 
 	user, err := GetUserByPhoneAndType(phone, userType)
-	if err != nil {
-		return responses.SendError(ctx, 400, "Phone number does not exist")
+	if err == nil {
+		issuePhoneOTP(user.ID, user.Phone)
 	}
-
-	issuePhoneOTP(user.ID, user.Phone)
-
-	return responses.SendOK(ctx, nil, "OTP sent successfully")
+	// Always the same response — do not leak whether the account exists.
+	return responses.SendOK(ctx, nil, "If an account with that phone exists, a reset code has been sent.")
 }
 
 func HandleResetPassword(ctx echo.Context) error {
@@ -167,8 +198,8 @@ func HandleResetPassword(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Invalid phone number")
 	}
 
-	if user.Otp != otp {
-		return responses.SendError(ctx, 400, "Invalid OTP")
+	if err := verifyUserOtp(user, otp); err != nil {
+		return responses.SendError(ctx, 400, err.Error())
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(password), 14)
@@ -176,7 +207,7 @@ func HandleResetPassword(ctx echo.Context) error {
 		return responses.SendError(ctx, 500, "failed to hash password")
 	}
 
-	if err := UpdateUser(user.ID, bson.M{"password": hashed, "otp": "", "phone_verified": true}); err != nil {
+	if err := UpdateUser(user.ID, bson.M{"password": hashed, "otp": "", "otp_attempts": 0, "phone_verified": true}); err != nil {
 		return responses.SendError(ctx, 500, "failed to reset password")
 	}
 

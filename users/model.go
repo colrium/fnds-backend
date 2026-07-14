@@ -28,6 +28,8 @@ type User struct {
 	Status        string    `json:"status" bson:"status"`
 	IsActive      bool      `json:"is_active" bson:"is_active"`
 	Otp           string    `json:"-" bson:"otp,omitempty"`
+	OtpExpiresAt  time.Time `json:"-" bson:"otp_expires_at,omitempty"`
+	OtpAttempts   int       `json:"-" bson:"otp_attempts,omitempty"`
 	PhoneVerified bool      `json:"phone_verified" bson:"phone_verified"`
 	FundisID      string    `json:"fundis_id,omitempty" bson:"fundis_id,omitempty"`
 	AvatarID      string    `json:"avatar_id,omitempty" bson:"avatar_id,omitempty"`
