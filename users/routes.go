@@ -32,6 +32,15 @@ type resetPasswordRequest struct {
 	ConfirmPassword string `json:"confirm_password"`
 	UserType        string `json:"user_type"`
 }
+type sendPhoneOtpRequest struct {
+	Phone    string `json:"phone"`
+	UserType string `json:"user_type"`
+}
+type verifyPhoneOtpRequest struct {
+	Phone    string `json:"phone"`
+	UserType string `json:"user_type"`
+	Otp      string `json:"otp"`
+}
 
 // issuePhoneOTP generates a fresh code, persists it, and sends it by SMS.
 // SMS delivery failures are logged but do not fail the request, so the user
@@ -84,6 +93,8 @@ func RegisterAuthRoutes(g *echo.Group) {
 func RegisterPublicRoutes(g *echo.Group) {
 	g.POST("/forgot-password", HandleForgotPassword)
 	g.POST("/reset-password/:phone", HandleResetPassword)
+	g.POST("/otp/send-phone", HandleSendPhoneOtp)
+	g.POST("/otp/verify-phone", HandleVerifyPhoneOtp)
 }
 
 func HandleSendOtp(ctx echo.Context) error {
@@ -230,4 +241,51 @@ func HandleUpdateToken(ctx echo.Context) error {
 	_ = UpdateUser(userID, bson.M{"fcm_token": token})
 
 	return responses.SendOK(ctx, nil, "FCM token updated")
+}
+
+// HandleSendPhoneOtp re-issues an OTP for an unverified account, keyed by phone.
+// Anti-enumeration: identical response whether or not the account exists / is already verified.
+func HandleSendPhoneOtp(ctx echo.Context) error {
+	var req sendPhoneOtpRequest
+	if err := ctx.Bind(&req); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+	if req.Phone == "" || req.UserType == "" {
+		return responses.SendError(ctx, 400, "phone and user_type are required")
+	}
+	user, err := GetUserByPhoneAndType(req.Phone, req.UserType)
+	if err == nil && !user.PhoneVerified {
+		issuePhoneOTP(user.ID, user.Phone)
+	}
+	return responses.SendOK(ctx, nil, "If an unverified account with that phone exists, a code has been sent.")
+}
+
+// HandleVerifyPhoneOtp verifies an OTP by phone for an unverified account and
+// activates it. Opaque errors (no enumeration).
+func HandleVerifyPhoneOtp(ctx echo.Context) error {
+	var req verifyPhoneOtpRequest
+	if err := ctx.Bind(&req); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+	if req.Phone == "" || req.UserType == "" || req.Otp == "" {
+		return responses.SendError(ctx, 400, "phone, user_type, and otp are required")
+	}
+	user, err := GetUserByPhoneAndType(req.Phone, req.UserType)
+	if err != nil {
+		return responses.SendError(ctx, 400, "Invalid phone or code")
+	}
+	if user.PhoneVerified {
+		// Already verified — nothing to do, but don't leak specifics.
+		return responses.SendOK(ctx, nil, "Phone already verified")
+	}
+	if err := verifyUserOtp(user, req.Otp); err != nil {
+		return responses.SendError(ctx, 400, "Invalid phone or code")
+	}
+	if err := UpdateUser(user.ID, bson.M{
+		"otp": "", "otp_attempts": 0, "phone_verified": true,
+		"status": StatusActive, "is_active": true,
+	}); err != nil {
+		return responses.SendError(ctx, 500, "failed to verify phone")
+	}
+	return responses.SendOK(ctx, nil, "Phone verified successfully")
 }
