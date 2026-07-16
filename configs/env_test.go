@@ -83,8 +83,6 @@ func TestEnvVarsReturnEmptyWhenUnset(t *testing.T) {
 		{"GetSessionKey", GetSessionKey},
 		{"EnvMongoURI", EnvMongoURI},
 		{"EnvPort", EnvPort},
-		{"GetPaypackSecret", GetPaypackSecret},
-		{"GetPaypackId", GetPaypackId},
 		{"GetPlunkKey", GetPlunkKey},
 		{"TelegramBotId", TelegramBotId},
 		{"TelegramChatID", TelegramChatID},
@@ -97,8 +95,6 @@ func TestEnvVarsReturnEmptyWhenUnset(t *testing.T) {
 			os.Unsetenv("SESSION_KEY")
 			os.Unsetenv("MONGODB_URI")
 			os.Unsetenv("PORT")
-			os.Unsetenv("PAYPACK_CLIENT_SECRET")
-			os.Unsetenv("PAYPACK_CLIENT_ID")
 			os.Unsetenv("USE_PLUNK")
 			os.Unsetenv("TELEGRAM_BOT_ID")
 			os.Unsetenv("TELEGRAM_CHAT_ID")
