@@ -63,8 +63,6 @@ Domain packages are organized by business capability:
 - `auth` - Registration, login, social auth, JWT token generation
 - `users` - User model, CRUD operations, user management
 - `profiles` - User profiles, educational history, working hours
-- `assessments` - Assessments, questions, responses, appointments, time slots
-- `courses` - Courses, categories, topics, lessons
 - `jobrequests` - Job requests, vacancies, applications
 - `quotations` - Quotations, external quotations, invoices, payment bills
 - `payments` - Flutterwave, Cellulant, KopoKopo payment integrations
@@ -87,7 +85,7 @@ Domain packages are organized by business capability:
 - `contextutil` - Extract/store user ID from Echo context
 - `jwtutil` - JWT token generation and validation
 - `utils` - File utilities, email validation
-- `jobs` - Scheduled jobs (subscription expiry, appointment reminders)
+- `jobs` - Scheduled jobs (subscription expiry, vacancy closing)
 
 ### User Types
 Four user types with role-based access:
@@ -111,7 +109,6 @@ responses.SendError(c, 400, "message")    // Error with status
 Background jobs run hourly via `jobs/scheduler.go`:
 - Close expired job vacancies
 - Expire subscriptions
-- Send appointment reminders
 
 ## Testing
 

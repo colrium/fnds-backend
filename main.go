@@ -9,12 +9,10 @@ import (
 	_ "time/tzdata"
 
 	"backend/applications"
-	"backend/assessments"
 	"backend/auth"
 	"backend/banks"
 	"backend/chat"
 	"backend/configs"
-	"backend/courses"
 	"backend/documenttypes"
 	"backend/insurance"
 	"backend/institutions"
@@ -81,8 +79,6 @@ func main() {
 	institutions.RegisterRoutes(api)
 	payments.RegisterRoutes(api)
 	notifications.RegisterPublicRoutes(api)
-	assessments.RegisterPublicRoutes(api)
-	courses.RegisterRoutes(api)
 	reviews.RegisterPublicRoutes(api)
 	quotations.RegisterPublicRoutes(api)
 	documenttypes.RegisterRoutes(api)
@@ -104,7 +100,6 @@ func main() {
 	quotations.RegisterAuthRoutes(authGroup)
 	transactions.RegisterAuthRoutes(authGroup)
 	subscriptions.RegisterAuthRoutes(authGroup)
-	assessments.RegisterAuthRoutes(authGroup)
 	insurance.RegisterAuthRoutes(authGroup)
 	chat.RegisterAuthRoutes(authGroup)
 	banks.RegisterAuthRoutes(authGroup)

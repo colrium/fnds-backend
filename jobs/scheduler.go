@@ -48,7 +48,6 @@ func (s *Scheduler) executeJobs() {
 	slog.Info("executing scheduled jobs")
 	closeJobVacancies()
 	expireSubscriptions()
-	sendAppointmentReminders()
 	closeAwaitingConfirmation()
 	resendInsuranceMail()
 }
@@ -73,10 +72,6 @@ func expireSubscriptions() {
 	if err != nil {
 		slog.Error("failed to expire subscriptions", "error", err)
 	}
-}
-
-func sendAppointmentReminders() {
-	slog.Info("checking for upcoming appointments")
 }
 
 func closeAwaitingConfirmation() {

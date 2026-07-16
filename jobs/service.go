@@ -20,11 +20,6 @@ func ExpireSubscriptions() JobResult {
 	return JobResult{Name: "ExpireSubscriptions", Success: true, Message: "Subscriptions expired"}
 }
 
-func SendAppointmentReminders() JobResult {
-	sendAppointmentReminders()
-	return JobResult{Name: "SendAppointmentReminders", Success: true, Message: "Reminders sent"}
-}
-
 func SendJobRequestReminders() JobResult {
 	return JobResult{Name: "SendJobRequestReminders", Success: true, Message: "Reminders sent"}
 }
