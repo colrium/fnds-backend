@@ -28,14 +28,6 @@ func EnvPort() string {
 	return os.Getenv("PORT")
 }
 
-func GetPaypackSecret() string {
-	return os.Getenv("PAYPACK_CLIENT_SECRET")
-}
-
-func GetPaypackId() string {
-	return os.Getenv("PAYPACK_CLIENT_ID")
-}
-
 func GetPlunkKey() string {
 	return os.Getenv("USE_PLUNK")
 }
