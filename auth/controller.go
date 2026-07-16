@@ -7,6 +7,7 @@ import (
 	"backend/notifications"
 	"backend/users"
 
+	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -14,6 +15,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrAccountPending     = errors.New("account pending phone verification")
 	ErrAccountSuspended   = errors.New("account suspended")
+	ErrDuplicateUser      = errors.New("an account with this phone or email already exists for this user type")
 )
 
 func processUserLogin(email, phone, password string) (*users.User, string, error) {
@@ -84,6 +86,9 @@ func createNewUser(firstName, lastName, email, phone, password, userType string)
 
 	err = users.CreateNewUser(user)
 	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return nil, ErrDuplicateUser
+		}
 		return nil, err
 	}
 
@@ -115,6 +120,9 @@ func createUserViaAdmin(firstName, lastName, email, phone, password, userType st
 
 	err = users.CreateNewUser(user)
 	if err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return nil, ErrDuplicateUser
+		}
 		return nil, err
 	}
 	return user, nil

@@ -130,6 +130,9 @@ _validTypes := map[string]bool{"customer": true, "artisan": true}
 
 	user, err := createNewUser(req.FirstName, req.LastName, req.Email, req.Phone, req.Password, req.UserType)
 	if err != nil {
+		if errors.Is(err, ErrDuplicateUser) {
+			return responses.SendError(ctx, 409, ErrDuplicateUser.Error())
+		}
 		return responses.SendError(ctx, 500, "failed to create user: "+err.Error())
 	}
 
@@ -191,6 +194,9 @@ func HandleSocialLogin(ctx echo.Context) error {
 	if err != nil {
 		user, err = createNewUser(req.FirstName, req.LastName, req.Email, req.Phone, "social_login_placeholder", req.UserType)
 		if err != nil {
+			if errors.Is(err, ErrDuplicateUser) {
+				return responses.SendError(ctx, 409, ErrDuplicateUser.Error())
+			}
 			return responses.SendError(ctx, 500, "failed to create user")
 		}
 		if err := users.UpdateUser(user.ID, bson.M{"status": users.StatusActive, "is_active": true}); err != nil {
@@ -260,6 +266,9 @@ _validTypes := map[string]bool{"customer": true, "artisan": true, "assessor": tr
 
 	user, err := createUserViaAdmin(req.FirstName, req.LastName, req.Email, req.Phone, req.Password, req.UserType)
 	if err != nil {
+		if errors.Is(err, ErrDuplicateUser) {
+			return responses.SendError(ctx, 409, ErrDuplicateUser.Error())
+		}
 		return responses.SendError(ctx, 500, "failed to create user: "+err.Error())
 	}
 

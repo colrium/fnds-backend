@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -48,6 +49,11 @@ func main() {
 
 	configs.ConnectDB()
 	slog.Info("database connected", "env", configs.AppEnv())
+
+	if err := users.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to ensure user indexes", "error", err)
+		os.Exit(1)
+	}
 
 	api := app.Group("/api/v1")
 

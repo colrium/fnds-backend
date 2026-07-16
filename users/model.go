@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -44,6 +45,27 @@ func CreateNewUser(user *User) error {
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
 	_, err := configs.MI.DB.Collection("users").InsertOne(context.TODO(), user)
+	return err
+}
+
+// EnsureIndexes creates the unique constraints for the users collection.
+// Uniqueness is scoped per user_type so the same person can hold both a
+// customer and an artisan account. Email is enforced only when present, since
+// it is optional at registration.
+func EnsureIndexes(ctx context.Context) error {
+	_, err := configs.MI.DB.Collection("users").Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "phone", Value: 1}, {Key: "user_type", Value: 1}},
+			Options: options.Index().SetName("uniq_phone_user_type").SetUnique(true),
+		},
+		{
+			Keys: bson.D{{Key: "email", Value: 1}, {Key: "user_type", Value: 1}},
+			Options: options.Index().
+				SetName("uniq_email_user_type").
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{"email": bson.M{"$type": "string", "$gt": ""}}),
+		},
+	})
 	return err
 }
 
