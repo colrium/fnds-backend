@@ -8,6 +8,7 @@ import (
 	"backend/contextutil"
 	"backend/notifications"
 	"backend/responses"
+	"backend/turnstile"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -23,8 +24,9 @@ type verifyOtpRequest struct {
 	Otp string `json:"otp"`
 }
 type forgotPasswordRequest struct {
-	Phone    string `json:"phone"`
-	UserType string `json:"user_type"`
+	Phone          string `json:"phone"`
+	UserType       string `json:"user_type"`
+	TurnstileToken string `json:"turnstile_token"`
 }
 type resetPasswordRequest struct {
 	Otp             string `json:"otp"`
@@ -163,6 +165,9 @@ func HandleForgotPassword(ctx echo.Context) error {
 	var req forgotPasswordRequest
 	if err := ctx.Bind(&req); err != nil {
 		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+	if err := turnstile.Verify(req.TurnstileToken, ctx.RealIP()); err != nil {
+		return responses.SendError(ctx, 400, "captcha verification failed")
 	}
 	phone := req.Phone
 	userType := req.UserType
