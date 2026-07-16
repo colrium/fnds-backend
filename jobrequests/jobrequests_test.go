@@ -40,18 +40,21 @@ func TestValidateCreateJobVacancy(t *testing.T) {
 		title       string
 		description string
 		location    string
+		skill       string
 		wantErr     bool
 		errMsg      string
 	}{
-		{"valid vacancy", "Electrician", "Need electrician", "Kigali", false, ""},
-		{"empty title", "", "Need electrician", "Kigali", true, "title is required"},
-		{"empty description", "Electrician", "", "Kigali", true, "description is required"},
-		{"empty location", "Electrician", "Need electrician", "", true, "location is required"},
+		{"valid vacancy", "Electrician needed", "Need electrician", "Kigali", "Electrician", false, ""},
+		{"empty title", "", "Need electrician", "Kigali", "Electrician", true, "title is required"},
+		{"empty description", "Electrician needed", "", "Kigali", "Electrician", true, "description is required"},
+		{"empty location", "Electrician needed", "Need electrician", "", "Electrician", true, "location is required"},
+		{"empty skill", "Electrician needed", "Need electrician", "Kigali", "", true, "skill is required and must be a valid trade"},
+		{"invalid skill", "Electrician needed", "Need electrician", "Kigali", "Astronaut", true, "skill is required and must be a valid trade"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateCreateJobVacancy(tt.title, tt.description, tt.location)
+			err := ValidateCreateJobVacancy(tt.title, tt.description, tt.location, tt.skill)
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")

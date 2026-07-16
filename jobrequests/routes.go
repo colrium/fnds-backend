@@ -112,6 +112,10 @@ func HandleCreateJobVacancy(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
 
+	if err := ValidateCreateJobVacancy(v.Title, v.Description, v.Location, v.Skill); err != nil {
+		return responses.SendError(ctx, 400, err.Error())
+	}
+
 	v.CompanyID = userID
 	v.Status = "open"
 

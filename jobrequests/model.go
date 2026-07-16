@@ -39,6 +39,7 @@ type JobVacancy struct {
 	CompanyID   string    `json:"company_id" bson:"company_id"`
 	Title       string    `json:"title" bson:"title"`
 	Description string    `json:"description" bson:"description"`
+	Skill       string    `json:"skill" bson:"skill"`
 	Location    string    `json:"location" bson:"location"`
 	Salary      string    `json:"salary" bson:"salary"`
 	Status      string    `json:"status" bson:"status"`

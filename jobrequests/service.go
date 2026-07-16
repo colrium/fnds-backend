@@ -2,6 +2,7 @@ package jobrequests
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -15,7 +16,25 @@ func ValidateCreateJobRequest(title, description string) error {
 	return nil
 }
 
-func ValidateCreateJobVacancy(title, description, location string) error {
+// ValidSkills is the fixed set of trades an employer can select for a vacancy.
+var ValidSkills = []string{
+	"Mason",
+	"Carpenter",
+	"Electrician",
+	"Plumber",
+	"Painter",
+	"Welder",
+	"Tile Fixer",
+	"Gardener",
+	"Cleaner",
+	"General Labourer",
+}
+
+func IsValidSkill(skill string) bool {
+	return slices.Contains(ValidSkills, skill)
+}
+
+func ValidateCreateJobVacancy(title, description, location, skill string) error {
 	if strings.TrimSpace(title) == "" {
 		return fmt.Errorf("title is required")
 	}
@@ -24,6 +43,9 @@ func ValidateCreateJobVacancy(title, description, location string) error {
 	}
 	if strings.TrimSpace(location) == "" {
 		return fmt.Errorf("location is required")
+	}
+	if !IsValidSkill(skill) {
+		return fmt.Errorf("skill is required and must be a valid trade")
 	}
 	return nil
 }
