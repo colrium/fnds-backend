@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -43,12 +45,20 @@ func Verify(token, remoteIP string) error {
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Post(SiteVerifyURL, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
 	if err != nil {
+		log.Printf("turnstile: siteverify request failed: %v", err)
 		return fmt.Errorf("turnstile: siteverify request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("turnstile: siteverify returned status %d", resp.StatusCode)
+		return fmt.Errorf("turnstile: siteverify returned status %d", resp.StatusCode)
+	}
+
 	var result siteVerifyResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	limitedBody := io.LimitReader(resp.Body, 1<<16)
+	if err := json.NewDecoder(limitedBody).Decode(&result); err != nil {
+		log.Printf("turnstile: decode response failed: %v", err)
 		return fmt.Errorf("turnstile: decode response failed: %w", err)
 	}
 	if !result.Success {

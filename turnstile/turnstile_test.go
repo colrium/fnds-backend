@@ -65,3 +65,19 @@ func TestVerifyFailure(t *testing.T) {
 		t.Fatal("Verify() = nil, want error for failed verification")
 	}
 }
+
+func TestVerifyErrorsOnNon200(t *testing.T) {
+	os.Setenv("TURNSTILE_SECRET_KEY", "secret")
+	defer os.Unsetenv("TURNSTILE_SECRET_KEY")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	old := SiteVerifyURL
+	SiteVerifyURL = srv.URL
+	defer func() { SiteVerifyURL = old }()
+
+	if err := Verify("any-token", "1.2.3.4"); err == nil {
+		t.Fatal("Verify() = nil, want error for non-200 status")
+	}
+}
