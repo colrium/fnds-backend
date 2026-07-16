@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"backend/responses"
+	"backend/turnstile"
 	"backend/users"
 
 	"github.com/labstack/echo/v4"
@@ -27,18 +28,20 @@ func RegisterAuthRoutes(g *echo.Group) {
 }
 
 type RegisterRequest struct {
-	FirstName string   `json:"first_name" form:"first_name"`
-	LastName  string   `json:"last_name" form:"last_name"`
-	Email     string   `json:"email" form:"email"`
-	Phone     string   `json:"phone" form:"phone"`
-	Password  string   `json:"password" form:"password"`
-	UserType  string   `json:"user_type" form:"user_type"`
-	Skills    []string `json:"skills" form:"skills"`
+	FirstName      string   `json:"first_name" form:"first_name"`
+	LastName       string   `json:"last_name" form:"last_name"`
+	Email          string   `json:"email" form:"email"`
+	Phone          string   `json:"phone" form:"phone"`
+	Password       string   `json:"password" form:"password"`
+	UserType       string   `json:"user_type" form:"user_type"`
+	Skills         []string `json:"skills" form:"skills"`
+	TurnstileToken string   `json:"turnstile_token" form:"turnstile_token"`
 }
 
 type LoginRequest struct {
-	Username string `json:"username" form:"username"`
-	Password string `json:"password" form:"password"`
+	Username       string `json:"username" form:"username"`
+	Password       string `json:"password" form:"password"`
+	TurnstileToken string `json:"turnstile_token" form:"turnstile_token"`
 }
 
 type SocialLoginRequest struct {
@@ -57,6 +60,10 @@ func HandleUserLogin(ctx echo.Context) error {
 	var req LoginRequest
 	if err := ctx.Bind(&req); err != nil {
 		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+
+	if err := turnstile.Verify(req.TurnstileToken, ctx.RealIP()); err != nil {
+		return responses.SendError(ctx, 400, "captcha verification failed")
 	}
 
 	if req.Username == "" || req.Password == "" {
@@ -98,6 +105,10 @@ func HandleUserRegistration(ctx echo.Context) error {
 	var req RegisterRequest
 	if err := ctx.Bind(&req); err != nil {
 		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+
+	if err := turnstile.Verify(req.TurnstileToken, ctx.RealIP()); err != nil {
+		return responses.SendError(ctx, 400, "captcha verification failed")
 	}
 
 	if req.FirstName == "" || req.LastName == "" || req.Phone == "" || req.Password == "" {
