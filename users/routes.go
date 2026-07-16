@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	otpTTL         = 10 * time.Minute
+	// OTPTTL is how long a verification code stays valid after it is issued.
+	OTPTTL         = 5 * time.Minute
 	otpMaxAttempts = 5
 )
 
@@ -42,7 +43,7 @@ func issuePhoneOTP(userID, phone string) {
 	otp := GenerateOTP()
 	if err := UpdateUser(userID, bson.M{
 		"otp":            otp,
-		"otp_expires_at": time.Now().UTC().Add(otpTTL),
+		"otp_expires_at": time.Now().UTC().Add(OTPTTL),
 		"otp_attempts":   0,
 	}); err != nil {
 		log.Printf("[otp] failed to persist code for user %s: %v", userID, err)

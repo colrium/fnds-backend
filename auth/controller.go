@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"log"
+	"time"
 
 	"backend/notifications"
 	"backend/users"
@@ -81,6 +82,7 @@ func createNewUser(firstName, lastName, email, phone, password, userType string)
 		Status:        users.StatusPending,
 		IsActive:      false,
 		Otp:           otp,
+		OtpExpiresAt:  time.Now().UTC().Add(users.OTPTTL),
 		PhoneVerified: false,
 	}
 
