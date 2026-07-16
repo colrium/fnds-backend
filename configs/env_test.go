@@ -64,6 +64,15 @@ func TestGetSessionKey(t *testing.T) {
 	}
 }
 
+func TestTurnstileSecretKey(t *testing.T) {
+	os.Setenv("TURNSTILE_SECRET_KEY", "secret-123")
+	defer os.Unsetenv("TURNSTILE_SECRET_KEY")
+
+	if got := TurnstileSecretKey(); got != "secret-123" {
+		t.Errorf("TurnstileSecretKey() = %q, want %q", got, "secret-123")
+	}
+}
+
 func TestEnvVarsReturnEmptyWhenUnset(t *testing.T) {
 	vars := []struct {
 		name string

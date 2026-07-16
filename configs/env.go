@@ -59,3 +59,7 @@ func TelegramBotId() string {
 func TelegramChatID() string {
 	return os.Getenv("TELEGRAM_CHAT_ID")
 }
+
+func TurnstileSecretKey() string {
+	return os.Getenv("TURNSTILE_SECRET_KEY")
+}
