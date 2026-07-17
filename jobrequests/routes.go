@@ -24,6 +24,7 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/job-applications", HandleCreateJobApplication)
 	g.GET("/job-applications", HandleListVacancyApplications)
 	g.POST("/job-applications/decision", HandleDecideJobApplication)
+	g.GET("/employer/dashboard", HandleEmployerDashboard)
 	g.GET("/companies", HandleListCompanies)
 	g.POST("/companies", HandleCreateCompany)
 	g.POST("/companies/update", HandleUpdateCompany)
@@ -421,6 +422,55 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 		return responses.SendError(ctx, 500, "Failed to create job application")
 	}
 	return responses.SendCreated(ctx, app, "Job application created successfully")
+}
+
+// HandleEmployerDashboard returns vacancy + application analytics and recent
+// vacancies for the authenticated employer.
+func HandleEmployerDashboard(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+
+	vacancies, err := ListJobVacanciesByOwner(userID)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to fetch vacancies")
+	}
+
+	vacancyIDs := make([]string, 0, len(vacancies))
+	openCount := 0
+	for _, v := range vacancies {
+		vacancyIDs = append(vacancyIDs, v.ID)
+		if v.Status == "open" {
+			openCount++
+		}
+	}
+
+	statusCounts, err := CountApplicationsByStatusForVacancies(vacancyIDs)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to fetch applications")
+	}
+
+	pending := statusCounts[ApplicationStatusPending]
+	accepted := statusCounts[ApplicationStatusAccepted]
+	rejected := statusCounts[ApplicationStatusRejected]
+
+	recent := vacancies
+	if len(recent) > 5 {
+		recent = recent[:5]
+	}
+
+	dashboard := EmployerDashboard{
+		TotalVacancies:       len(vacancies),
+		OpenVacancies:        openCount,
+		ClosedVacancies:      len(vacancies) - openCount,
+		TotalApplications:    pending + accepted + rejected,
+		PendingApplications:  pending,
+		AcceptedApplications: accepted,
+		RejectedApplications: rejected,
+		RecentVacancies:      recent,
+	}
+	return responses.SendOK(ctx, dashboard, "Employer dashboard retrieved successfully")
 }
 
 // HandleListVacancyApplications returns applications for a vacancy, but only to

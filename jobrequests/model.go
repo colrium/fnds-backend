@@ -75,6 +75,19 @@ type JobApplication struct {
 	UpdatedAt   time.Time `json:"updated_at" bson:"updated_at"`
 }
 
+// EmployerDashboard is the analytics + recent-activity payload for an employer's
+// landing page.
+type EmployerDashboard struct {
+	TotalVacancies       int          `json:"total_vacancies"`
+	OpenVacancies        int          `json:"open_vacancies"`
+	ClosedVacancies      int          `json:"closed_vacancies"`
+	TotalApplications    int          `json:"total_applications"`
+	PendingApplications  int          `json:"pending_applications"`
+	AcceptedApplications int          `json:"accepted_applications"`
+	RejectedApplications int          `json:"rejected_applications"`
+	RecentVacancies      []JobVacancy `json:"recent_vacancies"`
+}
+
 // JobApplicationWithApplicant enriches an application with the applicant's
 // current profile, resolved at read time so contact details stay fresh.
 type JobApplicationWithApplicant struct {
@@ -197,6 +210,49 @@ func CreateJobVacancy(v *JobVacancy) error {
 	v.UpdatedAt = time.Now()
 	_, err := configs.MI.DB.Collection("job_vacancies").InsertOne(context.TODO(), v)
 	return err
+}
+
+// ListJobVacanciesByOwner returns all of an owner's vacancies (newest first),
+// unpaginated — used for dashboard analytics and recent-activity lists.
+func ListJobVacanciesByOwner(ownerID string) ([]JobVacancy, error) {
+	opts := options.Find().SetSort(bson.M{"created_at": -1})
+	cursor, err := configs.MI.DB.Collection("job_vacancies").Find(context.TODO(), bson.M{"owner_id": ownerID}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	vacancies := []JobVacancy{}
+	if err := cursor.All(context.TODO(), &vacancies); err != nil {
+		return nil, err
+	}
+	return vacancies, nil
+}
+
+// CountApplicationsByStatusForVacancies returns, for the given vacancy IDs, a map
+// of application status -> count. Empty input yields an empty map.
+func CountApplicationsByStatusForVacancies(vacancyIDs []string) (map[string]int, error) {
+	counts := map[string]int{}
+	if len(vacancyIDs) == 0 {
+		return counts, nil
+	}
+	cursor, err := configs.MI.DB.Collection("job_applications").Find(
+		context.TODO(),
+		bson.M{"vacancy_id": bson.M{"$in": vacancyIDs}},
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	applications := []JobApplication{}
+	if err := cursor.All(context.TODO(), &applications); err != nil {
+		return nil, err
+	}
+	for _, a := range applications {
+		counts[a.Status]++
+	}
+	return counts, nil
 }
 
 func GetJobVacancyByID(id string) (*JobVacancy, error) {
