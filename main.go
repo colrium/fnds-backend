@@ -85,6 +85,7 @@ func main() {
 	notifications.RegisterPublicRoutes(api)
 	reviews.RegisterPublicRoutes(api)
 	quotations.RegisterPublicRoutes(api)
+	jobrequests.RegisterPublicRoutes(api)
 	documenttypes.RegisterRoutes(api)
 
 	api.GET("/artisans", auth.HandleAllArtisans)

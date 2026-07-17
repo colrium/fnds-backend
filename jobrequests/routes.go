@@ -27,6 +27,10 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/companies/delete", HandleDeleteCompany)
 }
 
+func RegisterPublicRoutes(g *echo.Group) {
+	g.GET("/public/vacancy", HandleGetPublicJobVacancy)
+}
+
 func HandleCreateJobRequest(ctx echo.Context) error {
 	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
@@ -310,6 +314,20 @@ func HandleListJobVacancies(ctx echo.Context) error {
 }
 
 func HandleGetJobVacancy(ctx echo.Context) error {
+	id := ctx.QueryParam("id")
+	if id == "" {
+		return responses.SendError(ctx, 400, "id is required")
+	}
+	v, err := GetJobVacancyByID(id)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Job vacancy not found")
+	}
+	return responses.SendOK(ctx, v, "Job vacancy retrieved successfully")
+}
+
+// HandleGetPublicJobVacancy serves a single vacancy without authentication so it
+// can be opened from a shared link.
+func HandleGetPublicJobVacancy(ctx echo.Context) error {
 	id := ctx.QueryParam("id")
 	if id == "" {
 		return responses.SendError(ctx, 400, "id is required")
