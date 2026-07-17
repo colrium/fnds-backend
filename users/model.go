@@ -78,6 +78,22 @@ func GetUserByID(id string) (*User, error) {
 	return &user, nil
 }
 
+func GetUsersByIDs(ids []string) ([]User, error) {
+	users := []User{}
+	if len(ids) == 0 {
+		return users, nil
+	}
+	cursor, err := configs.MI.DB.Collection("users").Find(context.TODO(), bson.M{"_id": bson.M{"$in": ids}})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+	if err := cursor.All(context.TODO(), &users); err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 func GetUserByEmail(email string) (*User, error) {
 	var user User
 	err := configs.MI.DB.Collection("users").FindOne(context.TODO(), bson.M{"email": email}).Decode(&user)

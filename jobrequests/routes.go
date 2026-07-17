@@ -417,13 +417,6 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 	app.ApplicantID = userID
 	app.Status = ApplicationStatusPending
 
-	// Snapshot applicant identity so the employer's review list needs no per-row lookup.
-	if applicant, err := users.GetUserByID(userID); err == nil && applicant != nil {
-		app.ApplicantName = strings.TrimSpace(applicant.FirstName + " " + applicant.LastName)
-		app.ApplicantEmail = applicant.Email
-		app.ApplicantPhone = applicant.Phone
-	}
-
 	if err := CreateJobApplication(&app); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create job application")
 	}
@@ -454,7 +447,32 @@ func HandleListVacancyApplications(ctx echo.Context) error {
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to fetch applications")
 	}
-	return responses.SendOK(ctx, applications, "Applications retrieved successfully")
+
+	// Resolve applicant profiles at read time so contact details stay current.
+	applicantIDs := make([]string, 0, len(applications))
+	for _, a := range applications {
+		applicantIDs = append(applicantIDs, a.ApplicantID)
+	}
+	profiles, err := users.GetUsersByIDs(applicantIDs)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to fetch applicants")
+	}
+	profileByID := make(map[string]users.User, len(profiles))
+	for _, p := range profiles {
+		profileByID[p.ID] = p
+	}
+
+	enriched := make([]JobApplicationWithApplicant, 0, len(applications))
+	for _, a := range applications {
+		item := JobApplicationWithApplicant{JobApplication: a}
+		if p, ok := profileByID[a.ApplicantID]; ok {
+			item.ApplicantName = strings.TrimSpace(p.FirstName + " " + p.LastName)
+			item.ApplicantEmail = p.Email
+			item.ApplicantPhone = p.Phone
+		}
+		enriched = append(enriched, item)
+	}
+	return responses.SendOK(ctx, enriched, "Applications retrieved successfully")
 }
 
 // HandleDecideJobApplication lets the vacancy owner accept or reject an application.

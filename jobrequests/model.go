@@ -66,18 +66,22 @@ type JobVacancy struct {
 }
 
 type JobApplication struct {
-	ID          string `json:"id" bson:"_id"`
-	VacancyID   string `json:"vacancy_id" bson:"vacancy_id"`
-	ApplicantID string `json:"applicant_id" bson:"applicant_id"`
-	Status      string `json:"status" bson:"status"`
-	CoverLetter string `json:"cover_letter" bson:"cover_letter"`
-	// Applicant snapshot — captured at apply time so the employer sees who
-	// applied without a per-row user lookup.
-	ApplicantName  string    `json:"applicant_name" bson:"applicant_name"`
-	ApplicantEmail string    `json:"applicant_email" bson:"applicant_email"`
-	ApplicantPhone string    `json:"applicant_phone" bson:"applicant_phone"`
-	CreatedAt      time.Time `json:"created_at" bson:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at" bson:"updated_at"`
+	ID          string    `json:"id" bson:"_id"`
+	VacancyID   string    `json:"vacancy_id" bson:"vacancy_id"`
+	ApplicantID string    `json:"applicant_id" bson:"applicant_id"`
+	Status      string    `json:"status" bson:"status"`
+	CoverLetter string    `json:"cover_letter" bson:"cover_letter"`
+	CreatedAt   time.Time `json:"created_at" bson:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" bson:"updated_at"`
+}
+
+// JobApplicationWithApplicant enriches an application with the applicant's
+// current profile, resolved at read time so contact details stay fresh.
+type JobApplicationWithApplicant struct {
+	JobApplication
+	ApplicantName  string `json:"applicant_name"`
+	ApplicantEmail string `json:"applicant_email"`
+	ApplicantPhone string `json:"applicant_phone"`
 }
 
 type Company struct {
