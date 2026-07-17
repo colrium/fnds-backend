@@ -49,7 +49,6 @@ func (s *Scheduler) executeJobs() {
 	closeJobVacancies()
 	expireSubscriptions()
 	closeAwaitingConfirmation()
-	resendInsuranceMail()
 }
 
 func closeJobVacancies() {
@@ -89,41 +88,5 @@ func closeAwaitingConfirmation() {
 	}
 	if result.ModifiedCount > 0 {
 		slog.Info("closed awaiting confirmation jobs", "count", result.ModifiedCount)
-	}
-}
-
-func resendInsuranceMail() {
-	cursor, err := configs.MI.DB.Collection("insurances").Find(
-		context.TODO(),
-		bson.M{"sent": false},
-	)
-	if err != nil {
-		slog.Error("failed to query unsent insurances", "error", err)
-		return
-	}
-	defer cursor.Close(context.TODO())
-
-	type insuranceDoc struct {
-		ID string `bson:"_id"`
-	}
-	var insurances []insuranceDoc
-	if err := cursor.All(context.TODO(), &insurances); err != nil {
-		slog.Error("failed to decode insurances", "error", err)
-		return
-	}
-
-	for _, ins := range insurances {
-		_, err := configs.MI.DB.Collection("insurances").UpdateOne(
-			context.TODO(),
-			bson.M{"_id": ins.ID},
-			bson.M{"$set": bson.M{"sent": true, "updated_at": time.Now()}},
-		)
-		if err != nil {
-			slog.Error("failed to mark insurance as sent", "id", ins.ID, "error", err)
-		}
-	}
-
-	if len(insurances) > 0 {
-		slog.Info("marked unsent insurances as sent", "count", len(insurances))
 	}
 }

@@ -74,7 +74,6 @@ Domain packages are organized by business capability:
 - `institutions` - Training institutions
 - `locations` - Geographic locations
 - `skills` - Skill categories
-- `insurance` - Insurance records
 - `chat` - Chat functionality
 - `documenttypes` - Document type management
 

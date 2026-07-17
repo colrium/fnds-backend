@@ -14,7 +14,6 @@ import (
 	"backend/chat"
 	"backend/configs"
 	"backend/documenttypes"
-	"backend/insurance"
 	"backend/institutions"
 	"backend/jobrequests"
 	"backend/locations"
@@ -100,7 +99,6 @@ func main() {
 	quotations.RegisterAuthRoutes(authGroup)
 	transactions.RegisterAuthRoutes(authGroup)
 	subscriptions.RegisterAuthRoutes(authGroup)
-	insurance.RegisterAuthRoutes(authGroup)
 	chat.RegisterAuthRoutes(authGroup)
 	banks.RegisterAuthRoutes(authGroup)
 	documenttypes.RegisterAuthRoutes(authGroup)

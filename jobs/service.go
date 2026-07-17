@@ -33,11 +33,6 @@ func CloseAwaitingConfirmation() JobResult {
 	return JobResult{Name: "CloseAwaitingConfirmation", Success: true, Message: "Closed awaiting confirmation jobs"}
 }
 
-func ResendInsuranceMail() JobResult {
-	resendInsuranceMail()
-	return JobResult{Name: "ResendInsuranceMail", Success: true, Message: "Insurance mail resent"}
-}
-
 func IsAfterHour(t time.Time) bool {
 	return t.Hour() >= 6 && t.Hour() < 22
 }
