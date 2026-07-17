@@ -62,6 +62,10 @@ func main() {
 		return c.JSON(200, map[string]string{"message": "Welcome to API v1"})
 	})
 
+	// Crawlable, server-rendered vacancy share page (no /api/v1 prefix so the URL
+	// is clean for sharing). Humans clicking "Apply" are deep-linked into the SPA.
+	app.GET("/vacancy/:id", jobrequests.HandleVacancySharePage)
+
 	auth.RegisterPublicRoutes(api)
 	// Rate-limit password-reset endpoints: they send SMS and are brute-forceable.
 	// Note: IPExtractor set to ExtractIPDirect() for security. If fronting LB is added,
