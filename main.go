@@ -23,6 +23,7 @@ import (
 	"backend/profiles"
 	"backend/quotations"
 	"backend/reviews"
+	"backend/seeders"
 	"backend/skills"
 	"backend/subscriptions"
 	"backend/transactions"
@@ -46,6 +47,9 @@ func main() {
 
 	configs.ConnectDB()
 	slog.Info("database connected", "env", configs.AppEnv())
+
+	// Idempotent: each seeder skips when its collection is already populated.
+	seeders.RunAll()
 
 	if err := users.EnsureIndexes(context.Background()); err != nil {
 		slog.Error("failed to ensure user indexes", "error", err)
