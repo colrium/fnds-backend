@@ -50,6 +50,19 @@ func ValidateCreateJobVacancy(title, description, location, skill string) error 
 	return nil
 }
 
+func ValidateCompany(name, contactPerson, contactPersonPhone string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("company name is required")
+	}
+	if strings.TrimSpace(contactPerson) == "" {
+		return fmt.Errorf("contact person is required")
+	}
+	if strings.TrimSpace(contactPersonPhone) == "" {
+		return fmt.Errorf("contact person phone is required")
+	}
+	return nil
+}
+
 func ValidateCreateJobApplication(vacancyID, coverLetter string) error {
 	if strings.TrimSpace(vacancyID) == "" {
 		return fmt.Errorf("vacancy ID is required")

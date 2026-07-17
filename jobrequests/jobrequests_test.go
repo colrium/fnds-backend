@@ -96,3 +96,35 @@ func TestValidateCreateJobApplication(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateCompany(t *testing.T) {
+	tests := []struct {
+		name               string
+		companyName        string
+		contactPerson      string
+		contactPersonPhone string
+		wantErr            bool
+		errMsg             string
+	}{
+		{"valid company", "Acme Ltd", "Jane Doe", "+254700000000", false, ""},
+		{"empty name", "", "Jane Doe", "+254700000000", true, "company name is required"},
+		{"empty contact person", "Acme Ltd", "", "+254700000000", true, "contact person is required"},
+		{"empty contact phone", "Acme Ltd", "Jane Doe", "", true, "contact person phone is required"},
+		{"whitespace name", "   ", "Jane Doe", "+254700000000", true, "company name is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCompany(tt.companyName, tt.contactPerson, tt.contactPersonPhone)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if err.Error() != tt.errMsg {
+					t.Errorf("expected error %q, got %q", tt.errMsg, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}

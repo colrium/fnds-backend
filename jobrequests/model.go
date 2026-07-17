@@ -35,16 +35,24 @@ type JobRequest struct {
 }
 
 type JobVacancy struct {
-	ID          string    `json:"id" bson:"_id"`
-	CompanyID   string    `json:"company_id" bson:"company_id"`
-	Title       string    `json:"title" bson:"title"`
-	Description string    `json:"description" bson:"description"`
-	Skill       string    `json:"skill" bson:"skill"`
-	Location    string    `json:"location" bson:"location"`
-	Salary      string    `json:"salary" bson:"salary"`
-	Status      string    `json:"status" bson:"status"`
-	CreatedAt   time.Time `json:"created_at" bson:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" bson:"updated_at"`
+	ID          string `json:"id" bson:"_id"`
+	OwnerID     string `json:"owner_id" bson:"owner_id"`
+	CompanyID   string `json:"company_id" bson:"company_id"`
+	Title       string `json:"title" bson:"title"`
+	Description string `json:"description" bson:"description"`
+	Skill       string `json:"skill" bson:"skill"`
+	Location    string `json:"location" bson:"location"`
+	Salary      string `json:"salary" bson:"salary"`
+	Status      string `json:"status" bson:"status"`
+	// Company snapshot — captured at creation so listings render without a join.
+	CompanyName        string    `json:"company_name" bson:"company_name"`
+	CompanyWebsite     string    `json:"company_website" bson:"company_website"`
+	CompanyLocation    string    `json:"company_location" bson:"company_location"`
+	ContactPerson      string    `json:"contact_person" bson:"contact_person"`
+	ContactPersonPhone string    `json:"contact_person_phone" bson:"contact_person_phone"`
+	ContactPersonEmail string    `json:"contact_person_email" bson:"contact_person_email"`
+	CreatedAt          time.Time `json:"created_at" bson:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at" bson:"updated_at"`
 }
 
 type JobApplication struct {
@@ -58,14 +66,16 @@ type JobApplication struct {
 }
 
 type Company struct {
-	ID          string    `json:"id" bson:"_id"`
-	Name        string    `json:"name" bson:"name"`
-	Description string    `json:"description" bson:"description"`
-	Logo        string    `json:"logo" bson:"logo"`
-	Website     string    `json:"website" bson:"website"`
-	OwnerID     string    `json:"owner_id" bson:"owner_id"`
-	CreatedAt   time.Time `json:"created_at" bson:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" bson:"updated_at"`
+	ID                 string    `json:"id" bson:"_id"`
+	OwnerID            string    `json:"owner_id" bson:"owner_id"`
+	Name               string    `json:"name" bson:"name"`
+	Website            string    `json:"website" bson:"website"`
+	Location           string    `json:"location" bson:"location"`
+	ContactPerson      string    `json:"contact_person" bson:"contact_person"`
+	ContactPersonPhone string    `json:"contact_person_phone" bson:"contact_person_phone"`
+	ContactPersonEmail string    `json:"contact_person_email" bson:"contact_person_email"`
+	CreatedAt          time.Time `json:"created_at" bson:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at" bson:"updated_at"`
 }
 
 func CreateJobRequest(jr *JobRequest) error {
@@ -176,4 +186,68 @@ func CreateJobApplication(a *JobApplication) error {
 	a.UpdatedAt = time.Now()
 	_, err := configs.MI.DB.Collection("job_applications").InsertOne(context.TODO(), a)
 	return err
+}
+
+func CreateCompany(c *Company) error {
+	c.ID = uuid.New().String()
+	c.CreatedAt = time.Now()
+	c.UpdatedAt = time.Now()
+	_, err := configs.MI.DB.Collection("companies").InsertOne(context.TODO(), c)
+	return err
+}
+
+func ListCompaniesByOwner(ownerID string) ([]Company, error) {
+	opts := options.Find().SetSort(bson.M{"created_at": -1})
+	cursor, err := configs.MI.DB.Collection("companies").Find(context.TODO(), bson.M{"owner_id": ownerID}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	companies := []Company{}
+	if err := cursor.All(context.TODO(), &companies); err != nil {
+		return nil, err
+	}
+	return companies, nil
+}
+
+// GetCompanyForOwner fetches a company by id but only if it belongs to ownerID,
+// so one employer can never read or reuse another's company.
+func GetCompanyForOwner(id, ownerID string) (*Company, error) {
+	var c Company
+	err := configs.MI.DB.Collection("companies").
+		FindOne(context.TODO(), bson.M{"_id": id, "owner_id": ownerID}).
+		Decode(&c)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// UpdateCompanyForOwner applies updates only when the company belongs to ownerID.
+// Returns false when no matching company exists (wrong owner or missing).
+func UpdateCompanyForOwner(id, ownerID string, updates bson.M) (bool, error) {
+	updates["updated_at"] = time.Now()
+	res, err := configs.MI.DB.Collection("companies").UpdateOne(
+		context.TODO(),
+		bson.M{"_id": id, "owner_id": ownerID},
+		bson.M{"$set": updates},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount > 0, nil
+}
+
+// DeleteCompanyForOwner removes a company only when it belongs to ownerID.
+// Returns false when no matching company exists (wrong owner or missing).
+func DeleteCompanyForOwner(id, ownerID string) (bool, error) {
+	res, err := configs.MI.DB.Collection("companies").DeleteOne(
+		context.TODO(),
+		bson.M{"_id": id, "owner_id": ownerID},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.DeletedCount > 0, nil
 }
