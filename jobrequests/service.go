@@ -72,3 +72,14 @@ func ValidateCreateJobApplication(vacancyID, coverLetter string) error {
 	}
 	return nil
 }
+
+// Application statuses an employer can transition an application to.
+const (
+	ApplicationStatusPending  = "pending"
+	ApplicationStatusAccepted = "accepted"
+	ApplicationStatusRejected = "rejected"
+)
+
+func IsValidApplicationDecision(status string) bool {
+	return status == ApplicationStatusAccepted || status == ApplicationStatusRejected
+}

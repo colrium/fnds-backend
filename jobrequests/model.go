@@ -66,13 +66,18 @@ type JobVacancy struct {
 }
 
 type JobApplication struct {
-	ID          string    `json:"id" bson:"_id"`
-	VacancyID   string    `json:"vacancy_id" bson:"vacancy_id"`
-	ApplicantID string    `json:"applicant_id" bson:"applicant_id"`
-	Status      string    `json:"status" bson:"status"`
-	CoverLetter string    `json:"cover_letter" bson:"cover_letter"`
-	CreatedAt   time.Time `json:"created_at" bson:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" bson:"updated_at"`
+	ID          string `json:"id" bson:"_id"`
+	VacancyID   string `json:"vacancy_id" bson:"vacancy_id"`
+	ApplicantID string `json:"applicant_id" bson:"applicant_id"`
+	Status      string `json:"status" bson:"status"`
+	CoverLetter string `json:"cover_letter" bson:"cover_letter"`
+	// Applicant snapshot — captured at apply time so the employer sees who
+	// applied without a per-row user lookup.
+	ApplicantName  string    `json:"applicant_name" bson:"applicant_name"`
+	ApplicantEmail string    `json:"applicant_email" bson:"applicant_email"`
+	ApplicantPhone string    `json:"applicant_phone" bson:"applicant_phone"`
+	CreatedAt      time.Time `json:"created_at" bson:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at" bson:"updated_at"`
 }
 
 type Company struct {
@@ -220,6 +225,42 @@ func CreateJobApplication(a *JobApplication) error {
 	a.UpdatedAt = time.Now()
 	_, err := configs.MI.DB.Collection("job_applications").InsertOne(context.TODO(), a)
 	return err
+}
+
+func GetJobApplicationByID(id string) (*JobApplication, error) {
+	var a JobApplication
+	err := configs.MI.DB.Collection("job_applications").FindOne(context.TODO(), bson.M{"_id": id}).Decode(&a)
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func ListJobApplicationsByVacancy(vacancyID string) ([]JobApplication, error) {
+	opts := options.Find().SetSort(bson.M{"created_at": -1})
+	cursor, err := configs.MI.DB.Collection("job_applications").Find(context.TODO(), bson.M{"vacancy_id": vacancyID}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	applications := []JobApplication{}
+	if err := cursor.All(context.TODO(), &applications); err != nil {
+		return nil, err
+	}
+	return applications, nil
+}
+
+func UpdateJobApplicationStatus(id, status string) (bool, error) {
+	res, err := configs.MI.DB.Collection("job_applications").UpdateOne(
+		context.TODO(),
+		bson.M{"_id": id},
+		bson.M{"$set": bson.M{"status": status, "updated_at": time.Now()}},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount > 0, nil
 }
 
 func CreateCompany(c *Company) error {

@@ -128,3 +128,23 @@ func TestValidateCompany(t *testing.T) {
 		})
 	}
 }
+
+func TestIsValidApplicationDecision(t *testing.T) {
+	tests := []struct {
+		status string
+		want   bool
+	}{
+		{"accepted", true},
+		{"rejected", true},
+		{"pending", false},
+		{"", false},
+		{"deleted", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.status, func(t *testing.T) {
+			if got := IsValidApplicationDecision(tt.status); got != tt.want {
+				t.Errorf("IsValidApplicationDecision(%q) = %v, want %v", tt.status, got, tt.want)
+			}
+		})
+	}
+}

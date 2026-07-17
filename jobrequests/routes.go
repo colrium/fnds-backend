@@ -6,6 +6,7 @@ import (
 
 	"backend/contextutil"
 	"backend/responses"
+	"backend/users"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -21,6 +22,8 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.GET("/job-vacancy", HandleGetJobVacancy)
 	g.POST("/job-vacancies/update", HandleUpdateJobVacancy)
 	g.POST("/job-applications", HandleCreateJobApplication)
+	g.GET("/job-applications", HandleListVacancyApplications)
+	g.POST("/job-applications/decision", HandleDecideJobApplication)
 	g.GET("/companies", HandleListCompanies)
 	g.POST("/companies", HandleCreateCompany)
 	g.POST("/companies/update", HandleUpdateCompany)
@@ -404,13 +407,91 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
 
+	if strings.TrimSpace(app.VacancyID) == "" {
+		return responses.SendError(ctx, 400, "vacancy_id is required")
+	}
+	if _, err := GetJobVacancyByID(app.VacancyID); err != nil {
+		return responses.SendError(ctx, 404, "Job vacancy not found")
+	}
+
 	app.ApplicantID = userID
-	app.Status = "pending"
+	app.Status = ApplicationStatusPending
+
+	// Snapshot applicant identity so the employer's review list needs no per-row lookup.
+	if applicant, err := users.GetUserByID(userID); err == nil && applicant != nil {
+		app.ApplicantName = strings.TrimSpace(applicant.FirstName + " " + applicant.LastName)
+		app.ApplicantEmail = applicant.Email
+		app.ApplicantPhone = applicant.Phone
+	}
 
 	if err := CreateJobApplication(&app); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create job application")
 	}
 	return responses.SendCreated(ctx, app, "Job application created successfully")
+}
+
+// HandleListVacancyApplications returns applications for a vacancy, but only to
+// the employer that owns the vacancy.
+func HandleListVacancyApplications(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+	vacancyID := ctx.QueryParam("vacancy_id")
+	if vacancyID == "" {
+		return responses.SendError(ctx, 400, "vacancy_id is required")
+	}
+
+	vacancy, err := GetJobVacancyByID(vacancyID)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Job vacancy not found")
+	}
+	if vacancy.OwnerID != userID {
+		return responses.SendError(ctx, 403, "You do not own this vacancy")
+	}
+
+	applications, err := ListJobApplicationsByVacancy(vacancyID)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to fetch applications")
+	}
+	return responses.SendOK(ctx, applications, "Applications retrieved successfully")
+}
+
+// HandleDecideJobApplication lets the vacancy owner accept or reject an application.
+func HandleDecideJobApplication(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+	id := ctx.QueryParam("id")
+	if id == "" {
+		return responses.SendError(ctx, 400, "id is required")
+	}
+	status := ctx.QueryParam("status")
+	if !IsValidApplicationDecision(status) {
+		return responses.SendError(ctx, 400, "status must be 'accepted' or 'rejected'")
+	}
+
+	app, err := GetJobApplicationByID(id)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Application not found")
+	}
+	vacancy, err := GetJobVacancyByID(app.VacancyID)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Job vacancy not found")
+	}
+	if vacancy.OwnerID != userID {
+		return responses.SendError(ctx, 403, "You do not own this vacancy")
+	}
+
+	updated, err := UpdateJobApplicationStatus(id, status)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to update application")
+	}
+	if !updated {
+		return responses.SendError(ctx, 404, "Application not found")
+	}
+	return responses.SendOK(ctx, nil, "Application "+status)
 }
 
 func HandleAcceptJobRequest(ctx echo.Context) error {
