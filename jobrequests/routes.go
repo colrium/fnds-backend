@@ -21,6 +21,7 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.GET("/job-vacancies", HandleListJobVacancies)
 	g.GET("/job-vacancy", HandleGetJobVacancy)
 	g.POST("/job-vacancies/update", HandleUpdateJobVacancy)
+	g.POST("/job-vacancies/delete", HandleDeleteJobVacancy)
 	g.POST("/job-applications", HandleCreateJobApplication)
 	g.GET("/job-applications", HandleListVacancyApplications)
 	g.POST("/job-applications/decision", HandleDecideJobApplication)
@@ -395,6 +396,26 @@ func HandleUpdateJobVacancy(ctx echo.Context) error {
 		return responses.SendError(ctx, 404, "Job vacancy not found")
 	}
 	return responses.SendOK(ctx, nil, "Job vacancy updated successfully")
+}
+
+func HandleDeleteJobVacancy(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+	id := ctx.QueryParam("id")
+	if id == "" {
+		return responses.SendError(ctx, 400, "id is required")
+	}
+
+	deleted, err := DeleteJobVacancyForOwner(id, userID)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to delete job vacancy")
+	}
+	if !deleted {
+		return responses.SendError(ctx, 404, "Job vacancy not found")
+	}
+	return responses.SendOK(ctx, nil, "Job vacancy deleted successfully")
 }
 
 func HandleCreateJobApplication(ctx echo.Context) error {

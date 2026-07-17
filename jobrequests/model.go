@@ -279,6 +279,19 @@ func UpdateJobVacancyForOwner(id, ownerID string, updates bson.M) (bool, error) 
 	return res.MatchedCount > 0, nil
 }
 
+// DeleteJobVacancyForOwner removes a vacancy only when it belongs to ownerID.
+// Returns false when no matching vacancy exists (wrong owner or missing).
+func DeleteJobVacancyForOwner(id, ownerID string) (bool, error) {
+	res, err := configs.MI.DB.Collection("job_vacancies").DeleteOne(
+		context.TODO(),
+		bson.M{"_id": id, "owner_id": ownerID},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.DeletedCount > 0, nil
+}
+
 func CreateJobApplication(a *JobApplication) error {
 	a.ID = uuid.New().String()
 	a.CreatedAt = time.Now()
