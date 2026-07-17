@@ -38,15 +38,22 @@ type JobRequest struct {
 }
 
 type JobVacancy struct {
-	ID          string `json:"id" bson:"_id"`
-	OwnerID     string `json:"owner_id" bson:"owner_id"`
-	CompanyID   string `json:"company_id" bson:"company_id"`
-	Title       string `json:"title" bson:"title"`
-	Description string `json:"description" bson:"description"`
-	Skill       string `json:"skill" bson:"skill"`
-	Location    string `json:"location" bson:"location"`
-	Salary      string `json:"salary" bson:"salary"`
-	Status      string `json:"status" bson:"status"`
+	ID                   string `json:"id" bson:"_id"`
+	OwnerID              string `json:"owner_id" bson:"owner_id"`
+	CompanyID            string `json:"company_id" bson:"company_id"`
+	Title                string `json:"title" bson:"title"`
+	Level                string `json:"level" bson:"level"`
+	Positions            int    `json:"positions" bson:"positions"`
+	EmploymentType       string `json:"employment_type" bson:"employment_type"`
+	Experience           string `json:"experience" bson:"experience"`
+	SalaryRange          string `json:"salary_range" bson:"salary_range"`
+	Skill                string `json:"skill" bson:"skill"`
+	Location             string `json:"location" bson:"location"`
+	Description          string `json:"description" bson:"description"`
+	Responsibilities     string `json:"responsibilities" bson:"responsibilities"`
+	ApplicationStartDate string `json:"application_start_date" bson:"application_start_date"`
+	ApplicationEndDate   string `json:"application_end_date" bson:"application_end_date"`
+	Status               string `json:"status" bson:"status"`
 	// Company snapshot — captured at creation so listings render without a join.
 	CompanyName        string    `json:"company_name" bson:"company_name"`
 	CompanyWebsite     string    `json:"company_website" bson:"company_website"`

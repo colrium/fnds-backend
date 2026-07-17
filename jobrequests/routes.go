@@ -345,18 +345,25 @@ func HandleUpdateJobVacancy(ctx echo.Context) error {
 	}
 
 	updates := bson.M{
-		"title":                v.Title,
-		"description":          v.Description,
-		"skill":                v.Skill,
-		"location":             v.Location,
-		"salary":               v.Salary,
-		"company_id":           company.ID,
-		"company_name":         company.Name,
-		"company_website":      company.Website,
-		"company_location":     company.Location,
-		"contact_person":       company.ContactPerson,
-		"contact_person_phone": company.ContactPersonPhone,
-		"contact_person_email": company.ContactPersonEmail,
+		"title":                  v.Title,
+		"level":                  v.Level,
+		"positions":              v.Positions,
+		"employment_type":        v.EmploymentType,
+		"experience":             v.Experience,
+		"salary_range":           v.SalaryRange,
+		"skill":                  v.Skill,
+		"location":               v.Location,
+		"description":            v.Description,
+		"responsibilities":       v.Responsibilities,
+		"application_start_date": v.ApplicationStartDate,
+		"application_end_date":   v.ApplicationEndDate,
+		"company_id":             company.ID,
+		"company_name":           company.Name,
+		"company_website":        company.Website,
+		"company_location":       company.Location,
+		"contact_person":         company.ContactPerson,
+		"contact_person_phone":   company.ContactPersonPhone,
+		"contact_person_email":   company.ContactPersonEmail,
 	}
 	updated, err := UpdateJobVacancyForOwner(id, userID, updates)
 	if err != nil {
