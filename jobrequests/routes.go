@@ -2,6 +2,7 @@ package jobrequests
 
 import (
 	"fmt"
+	"strings"
 
 	"backend/contextutil"
 	"backend/responses"
@@ -17,6 +18,8 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.PATCH("/job-requests/:id", HandleUpdateJobRequest)
 	g.POST("/job-vacancies", HandleCreateJobVacancy)
 	g.GET("/job-vacancies", HandleListJobVacancies)
+	g.GET("/job-vacancy", HandleGetJobVacancy)
+	g.POST("/job-vacancies/update", HandleUpdateJobVacancy)
 	g.POST("/job-applications", HandleCreateJobApplication)
 	g.GET("/companies", HandleListCompanies)
 	g.POST("/companies", HandleCreateCompany)
@@ -161,9 +164,19 @@ func resolveVacancyCompany(userID string, v *JobVacancy) (*Company, error) {
 		return nil, err
 	}
 
+	// Reuse an existing company with the same name (case-insensitive) instead of
+	// creating a duplicate for this owner.
+	existing, err := GetCompanyByName(userID, v.CompanyName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to look up company")
+	}
+	if existing != nil {
+		return existing, nil
+	}
+
 	company := &Company{
 		OwnerID:            userID,
-		Name:               v.CompanyName,
+		Name:               strings.TrimSpace(v.CompanyName),
 		Website:            v.CompanyWebsite,
 		Location:           v.CompanyLocation,
 		ContactPerson:      v.ContactPerson,
@@ -202,7 +215,16 @@ func HandleCreateCompany(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, err.Error())
 	}
 
+	existing, err := GetCompanyByName(userID, c.Name)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to look up company")
+	}
+	if existing != nil {
+		return responses.SendError(ctx, 409, "A company with this name already exists")
+	}
+
 	c.OwnerID = userID
+	c.Name = strings.TrimSpace(c.Name)
 	if err := CreateCompany(&c); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create company")
 	}
@@ -227,8 +249,17 @@ func HandleUpdateCompany(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, err.Error())
 	}
 
+	// Prevent renaming into a name already used by a different company.
+	existing, err := GetCompanyByName(userID, c.Name)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to look up company")
+	}
+	if existing != nil && existing.ID != id {
+		return responses.SendError(ctx, 409, "A company with this name already exists")
+	}
+
 	updates := bson.M{
-		"name":                 c.Name,
+		"name":                 strings.TrimSpace(c.Name),
 		"website":              c.Website,
 		"location":             c.Location,
 		"contact_person":       c.ContactPerson,
@@ -276,6 +307,65 @@ func HandleListJobVacancies(ctx echo.Context) error {
 		"data":  vacancies,
 		"total": total,
 	}, "Job vacancies retrieved successfully")
+}
+
+func HandleGetJobVacancy(ctx echo.Context) error {
+	id := ctx.QueryParam("id")
+	if id == "" {
+		return responses.SendError(ctx, 400, "id is required")
+	}
+	v, err := GetJobVacancyByID(id)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Job vacancy not found")
+	}
+	return responses.SendOK(ctx, v, "Job vacancy retrieved successfully")
+}
+
+func HandleUpdateJobVacancy(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+	id := ctx.QueryParam("id")
+	if id == "" {
+		return responses.SendError(ctx, 400, "id is required")
+	}
+
+	var v JobVacancy
+	if err := ctx.Bind(&v); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+	if err := ValidateCreateJobVacancy(v.Title, v.Description, v.Location, v.Skill); err != nil {
+		return responses.SendError(ctx, 400, err.Error())
+	}
+
+	company, err := resolveVacancyCompany(userID, &v)
+	if err != nil {
+		return responses.SendError(ctx, 400, err.Error())
+	}
+
+	updates := bson.M{
+		"title":                v.Title,
+		"description":          v.Description,
+		"skill":                v.Skill,
+		"location":             v.Location,
+		"salary":               v.Salary,
+		"company_id":           company.ID,
+		"company_name":         company.Name,
+		"company_website":      company.Website,
+		"company_location":     company.Location,
+		"contact_person":       company.ContactPerson,
+		"contact_person_phone": company.ContactPersonPhone,
+		"contact_person_email": company.ContactPersonEmail,
+	}
+	updated, err := UpdateJobVacancyForOwner(id, userID, updates)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to update job vacancy")
+	}
+	if !updated {
+		return responses.SendError(ctx, 404, "Job vacancy not found")
+	}
+	return responses.SendOK(ctx, nil, "Job vacancy updated successfully")
 }
 
 func HandleCreateJobApplication(ctx echo.Context) error {

@@ -2,12 +2,15 @@ package jobrequests
 
 import (
 	"context"
+	"regexp"
+	"strings"
 	"time"
 
 	"backend/configs"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -180,6 +183,30 @@ func CreateJobVacancy(v *JobVacancy) error {
 	return err
 }
 
+func GetJobVacancyByID(id string) (*JobVacancy, error) {
+	var v JobVacancy
+	err := configs.MI.DB.Collection("job_vacancies").FindOne(context.TODO(), bson.M{"_id": id}).Decode(&v)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// UpdateJobVacancyForOwner applies updates only when the vacancy belongs to ownerID.
+// Returns false when no matching vacancy exists (wrong owner or missing).
+func UpdateJobVacancyForOwner(id, ownerID string, updates bson.M) (bool, error) {
+	updates["updated_at"] = time.Now()
+	res, err := configs.MI.DB.Collection("job_vacancies").UpdateOne(
+		context.TODO(),
+		bson.M{"_id": id, "owner_id": ownerID},
+		bson.M{"$set": updates},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount > 0, nil
+}
+
 func CreateJobApplication(a *JobApplication) error {
 	a.ID = uuid.New().String()
 	a.CreatedAt = time.Now()
@@ -194,6 +221,26 @@ func CreateCompany(c *Company) error {
 	c.UpdatedAt = time.Now()
 	_, err := configs.MI.DB.Collection("companies").InsertOne(context.TODO(), c)
 	return err
+}
+
+// GetCompanyByName finds an owner's company by case-insensitive exact name.
+// Returns (nil, nil) when none exists so callers can distinguish "not found"
+// from a real error.
+func GetCompanyByName(ownerID, name string) (*Company, error) {
+	trimmed := strings.TrimSpace(name)
+	pattern := "^" + regexp.QuoteMeta(trimmed) + "$"
+	var c Company
+	err := configs.MI.DB.Collection("companies").FindOne(
+		context.TODO(),
+		bson.M{"owner_id": ownerID, "name": bson.M{"$regex": pattern, "$options": "i"}},
+	).Decode(&c)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 func ListCompaniesByOwner(ownerID string) ([]Company, error) {
