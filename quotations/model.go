@@ -57,6 +57,11 @@ type ExternalQuotationItem struct {
 	Description string  `json:"description" bson:"description"`
 }
 
+const (
+	InvoiceStatusUnpaid = "unpaid"
+	InvoiceStatusPaid   = "paid"
+)
+
 type ExternalInvoice struct {
 	ID          string    `json:"id" bson:"_id"`
 	QuotationID string    `json:"quotation_id" bson:"quotation_id"`
@@ -165,6 +170,12 @@ func GetExternalInvoiceByID(id string) (*ExternalInvoice, error) {
 		return nil, err
 	}
 	return &inv, nil
+}
+
+func UpdateExternalInvoice(id string, updates bson.M) error {
+	updates["updated_at"] = time.Now()
+	_, err := configs.MI.DB.Collection("external_invoices").UpdateOne(context.TODO(), bson.M{"_id": id}, bson.M{"$set": updates})
+	return err
 }
 
 func ListExternalInvoicesByArtisan(artisanID string) ([]ExternalInvoice, error) {

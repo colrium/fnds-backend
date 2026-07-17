@@ -8,6 +8,12 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
+// OnChargeCompleted is invoked when a Flutterwave charge completes successfully.
+// It receives the tx_ref and provider status. Other packages (e.g. quotations)
+// register a handler here to reconcile domain records without creating an
+// import cycle. It may be nil if no handler is registered.
+var OnChargeCompleted func(txRef, status string)
+
 func RegisterRoutes(e *echo.Group) {
 	e.POST("/flutterwave/webhook", HandleFlutterwaveWebhook)
 	e.POST("/cellulant/webhook", HandleCellulantWebhook)
@@ -29,6 +35,9 @@ func HandleFlutterwaveWebhook(ctx echo.Context) error {
 			ref, _ := data["tx_ref"].(string)
 			status, _ := data["status"].(string)
 			_ = transactions.UpdateFlutterwaveTransaction(ref, bson.M{"status": status})
+			if OnChargeCompleted != nil {
+				OnChargeCompleted(ref, status)
+			}
 		}
 	}
 

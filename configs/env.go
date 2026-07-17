@@ -47,3 +47,19 @@ func AdvantaShortcode() string {
 func TurnstileSecretKey() string {
 	return os.Getenv("TURNSTILE_SECRET_KEY")
 }
+
+func FlutterwaveSecretKey() string {
+	return os.Getenv("FLUTTERWAVE_SECRET_KEY")
+}
+
+// APIPublicURL is the public base URL of this backend, used to build links
+// (e.g. quotation accept/reject) that customers open from email/SMS.
+func APIPublicURL() string {
+	return os.Getenv("API_PUBLIC_URL")
+}
+
+// AppPublicURL is the public base URL of the customer-facing frontend, used as
+// the redirect target after a customer acts on a link.
+func AppPublicURL() string {
+	return os.Getenv("APP_PUBLIC_URL")
+}

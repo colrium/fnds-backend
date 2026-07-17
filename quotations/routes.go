@@ -1,6 +1,11 @@
 package quotations
 
 import (
+	"log/slog"
+	"net/http"
+	"strings"
+
+	"backend/configs"
 	"backend/contextutil"
 	"backend/responses"
 
@@ -21,6 +26,7 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/external-invoices", HandleCreateExternalInvoice)
 	g.GET("/external-invoices", HandleListExternalInvoices)
 	g.GET("/external-invoices/:id", HandleGetExternalInvoice)
+	g.POST("/external-invoices/:id/resend-link", HandleResendInvoicePaymentLink)
 
 	g.POST("/external-payment-bills", HandleCreateExternalPaymentBill)
 	g.GET("/external-payment-bills", HandleListExternalPaymentBills)
@@ -124,6 +130,9 @@ func HandleCreateExternalQuotation(ctx echo.Context) error {
 	if err := CreateExternalQuotation(&eq); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create external quotation")
 	}
+
+	notifyCustomerQuotation(&eq)
+
 	return responses.SendCreated(ctx, eq, "External quotation created successfully")
 }
 
@@ -164,6 +173,15 @@ func HandleUpdateExternalQuotationStatus(ctx echo.Context) error {
 
 	if err := UpdateExternalQuotation(id, map[string]interface{}{"status": action}); err != nil {
 		return responses.SendError(ctx, 500, "Failed to update quotation status")
+	}
+
+	// A customer opening the link from email/SMS uses GET; send them to the
+	// frontend confirmation page instead of returning raw JSON.
+	if ctx.Request().Method == http.MethodGet {
+		appURL := strings.TrimRight(configs.AppPublicURL(), "/")
+		if appURL != "" {
+			return ctx.Redirect(http.StatusFound, appURL+"/quotation-updated")
+		}
 	}
 
 	return responses.SendOK(ctx, nil, "Quotation status updated to "+action)
@@ -218,11 +236,20 @@ func HandleCreateExternalInvoice(ctx echo.Context) error {
 	invoice := ExternalInvoice{
 		QuotationID: eq.ID,
 		ArtisanID:   userID,
-		Status:      "UNPAID",
+		Status:      InvoiceStatusUnpaid,
 		TotalAmount: eq.TotalAmount,
 	}
 	if err := CreateExternalInvoice(&invoice); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create invoice")
+	}
+
+	// Generate a payment link and notify the customer. If the payment provider
+	// is not configured, the invoice is still created (unpaid) and the artisan
+	// can resend the link later once payments are enabled.
+	if link, err := createInvoicePaymentLink(&invoice, &eq); err != nil {
+		slog.Warn("failed to create invoice payment link", "invoice_id", invoice.ID, "error", err)
+	} else {
+		notifyCustomerInvoice(&eq, link)
 	}
 
 	return responses.SendCreated(ctx, invoice, "Invoice created successfully")
@@ -244,6 +271,38 @@ func HandleGetExternalInvoice(ctx echo.Context) error {
 		return responses.SendError(ctx, 404, "Invoice not found")
 	}
 	return responses.SendOK(ctx, invoice, "Invoice retrieved successfully")
+}
+
+func HandleResendInvoicePaymentLink(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+
+	id := ctx.Param("id")
+	invoice, err := GetExternalInvoiceByID(id)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Invoice not found")
+	}
+	if invoice.ArtisanID != userID {
+		return responses.SendError(ctx, 404, "Invoice not found")
+	}
+	if invoice.Status == InvoiceStatusPaid {
+		return responses.SendError(ctx, 400, "Invoice has already been paid")
+	}
+
+	eq, err := GetExternalQuotationByID(invoice.QuotationID)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Associated quotation not found")
+	}
+
+	link, err := createInvoicePaymentLink(invoice, eq)
+	if err != nil {
+		return responses.SendError(ctx, 502, "Failed to generate payment link: "+err.Error())
+	}
+	notifyCustomerInvoice(eq, link)
+
+	return responses.SendOK(ctx, map[string]string{"payment_link": link}, "Payment link sent to customer")
 }
 
 func HandleCreateExternalPaymentBill(ctx echo.Context) error {

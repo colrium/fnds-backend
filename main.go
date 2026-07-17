@@ -77,6 +77,7 @@ func main() {
 	banks.RegisterRoutes(api)
 	institutions.RegisterRoutes(api)
 	payments.RegisterRoutes(api)
+	quotations.RegisterPaymentHooks()
 	notifications.RegisterPublicRoutes(api)
 	reviews.RegisterPublicRoutes(api)
 	quotations.RegisterPublicRoutes(api)
