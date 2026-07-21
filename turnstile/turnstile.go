@@ -34,12 +34,15 @@ type siteVerifyResponse struct {
 	Action     string   `json:"action"`
 }
 
-// Verify validates a Turnstile token against Cloudflare's siteverify API. When
-// TURNSTILE_SECRET_KEY is empty, verification is skipped and nil is returned so
-// local dev and tests run without keys.
+// Verify validates a Turnstile token against Cloudflare's siteverify API.
+// Unconfigured non-production environments skip verification for local
+// development, while production fails closed.
 func Verify(ctx context.Context, token, remoteIP, expectedAction string) error {
 	secret := strings.TrimSpace(configs.TurnstileSecretKey())
 	if secret == "" {
+		if configs.EnvIsProd() {
+			return fmt.Errorf("%w: secret key is not configured", ErrUnavailable)
+		}
 		return nil
 	}
 

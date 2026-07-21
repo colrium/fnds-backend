@@ -11,6 +11,7 @@ import (
 )
 
 func TestVerifySkipsWhenSecretEmpty(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
 	t.Setenv("TURNSTILE_SECRET_KEY", "")
 	called := false
 	withSiteVerifyServer(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -22,6 +23,16 @@ func TestVerifySkipsWhenSecretEmpty(t *testing.T) {
 	}
 	if called {
 		t.Fatal("siteverify was called without a configured secret")
+	}
+}
+
+func TestVerifyFailsClosedInProductionWithoutSecret(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("TURNSTILE_SECRET_KEY", "")
+
+	err := Verify(context.Background(), "any-token", "1.2.3.4", "login")
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Verify() error = %v, want ErrUnavailable", err)
 	}
 }
 
