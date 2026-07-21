@@ -73,6 +73,14 @@ func TestTurnstileSecretKey(t *testing.T) {
 	}
 }
 
+func TestTurnstileHostname(t *testing.T) {
+	t.Setenv("TURNSTILE_HOSTNAME", "app.example.com")
+
+	if got := TurnstileHostname(); got != "app.example.com" {
+		t.Errorf("TurnstileHostname() = %q, want %q", got, "app.example.com")
+	}
+}
+
 func TestEnvVarsReturnEmptyWhenUnset(t *testing.T) {
 	vars := []struct {
 		name string

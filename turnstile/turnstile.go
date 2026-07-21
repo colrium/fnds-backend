@@ -1,11 +1,11 @@
 package turnstile
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,21 +18,34 @@ import (
 // package var so tests can point it at a stub server.
 var SiteVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
+var (
+	ErrInvalid     = errors.New("turnstile: invalid verification")
+	ErrUnavailable = errors.New("turnstile: verification unavailable")
+)
+
+const maxTokenLength = 2048
+
+var httpClient = &http.Client{Timeout: 10 * time.Second}
+
 type siteVerifyResponse struct {
 	Success    bool     `json:"success"`
 	ErrorCodes []string `json:"error-codes"`
+	Hostname   string   `json:"hostname"`
+	Action     string   `json:"action"`
 }
 
 // Verify validates a Turnstile token against Cloudflare's siteverify API. When
 // TURNSTILE_SECRET_KEY is empty, verification is skipped and nil is returned so
 // local dev and tests run without keys.
-func Verify(token, remoteIP string) error {
-	secret := configs.TurnstileSecretKey()
+func Verify(ctx context.Context, token, remoteIP, expectedAction string) error {
+	secret := strings.TrimSpace(configs.TurnstileSecretKey())
 	if secret == "" {
 		return nil
 	}
-	if token == "" {
-		return errors.New("turnstile: missing token")
+
+	token = strings.TrimSpace(token)
+	if token == "" || len(token) > maxTokenLength {
+		return ErrInvalid
 	}
 
 	form := url.Values{}
@@ -42,27 +55,54 @@ func Verify(token, remoteIP string) error {
 		form.Set("remoteip", remoteIP)
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Post(SiteVerifyURL, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		SiteVerifyURL,
+		strings.NewReader(form.Encode()),
+	)
 	if err != nil {
-		log.Printf("turnstile: siteverify request failed: %v", err)
-		return fmt.Errorf("turnstile: siteverify request failed: %w", err)
+		return fmt.Errorf("%w: create request: %v", ErrUnavailable, err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("%w: siteverify request: %v", ErrUnavailable, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("turnstile: siteverify returned status %d", resp.StatusCode)
-		return fmt.Errorf("turnstile: siteverify returned status %d", resp.StatusCode)
+		return fmt.Errorf("%w: siteverify status %d", ErrUnavailable, resp.StatusCode)
 	}
 
 	var result siteVerifyResponse
 	limitedBody := io.LimitReader(resp.Body, 1<<16)
 	if err := json.NewDecoder(limitedBody).Decode(&result); err != nil {
-		log.Printf("turnstile: decode response failed: %v", err)
-		return fmt.Errorf("turnstile: decode response failed: %w", err)
+		return fmt.Errorf("%w: decode response: %v", ErrUnavailable, err)
 	}
 	if !result.Success {
-		return fmt.Errorf("turnstile: verification failed: %v", result.ErrorCodes)
+		if hasConfigurationOrServiceError(result.ErrorCodes) {
+			return fmt.Errorf("%w: error codes %v", ErrUnavailable, result.ErrorCodes)
+		}
+		return fmt.Errorf("%w: error codes %v", ErrInvalid, result.ErrorCodes)
+	}
+	if expectedAction != "" && result.Action != expectedAction {
+		return fmt.Errorf("%w: action mismatch", ErrInvalid)
+	}
+	if expectedHostname := strings.TrimSpace(configs.TurnstileHostname()); expectedHostname != "" &&
+		!strings.EqualFold(result.Hostname, expectedHostname) {
+		return fmt.Errorf("%w: hostname mismatch", ErrInvalid)
 	}
 	return nil
+}
+
+func hasConfigurationOrServiceError(errorCodes []string) bool {
+	for _, code := range errorCodes {
+		switch code {
+		case "internal-error", "missing-input-secret", "invalid-input-secret", "bad-request":
+			return true
+		}
+	}
+	return false
 }

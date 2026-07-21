@@ -48,6 +48,10 @@ func TurnstileSecretKey() string {
 	return os.Getenv("TURNSTILE_SECRET_KEY")
 }
 
+func TurnstileHostname() string {
+	return os.Getenv("TURNSTILE_HOSTNAME")
+}
+
 func FlutterwaveSecretKey() string {
 	return os.Getenv("FLUTTERWAVE_SECRET_KEY")
 }

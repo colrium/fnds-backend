@@ -2,6 +2,8 @@ package auth
 
 import (
 	"errors"
+	"log/slog"
+	"net/http"
 	"net/mail"
 	"strings"
 
@@ -45,15 +47,15 @@ type LoginRequest struct {
 }
 
 type SocialLoginRequest struct {
-	FirstName  string `json:"first_name"`
-	LastName   string `json:"last_name"`
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
 	AccessToken string `json:"access_token"`
-	Phone      string `json:"phone"`
-	UserType   string `json:"user_type"`
-	IDNumber   string `json:"id_number"`
-	Email      string `json:"email"`
-	Avatar     string `json:"avatar"`
-	ProviderID string `json:"provider_id"`
+	Phone       string `json:"phone"`
+	UserType    string `json:"user_type"`
+	IDNumber    string `json:"id_number"`
+	Email       string `json:"email"`
+	Avatar      string `json:"avatar"`
+	ProviderID  string `json:"provider_id"`
 }
 
 func HandleUserLogin(ctx echo.Context) error {
@@ -62,8 +64,8 @@ func HandleUserLogin(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
 
-	if err := turnstile.Verify(req.TurnstileToken, ctx.RealIP()); err != nil {
-		return responses.SendError(ctx, 400, "captcha verification failed")
+	if err := turnstile.Verify(ctx.Request().Context(), req.TurnstileToken, ctx.RealIP(), "login"); err != nil {
+		return sendTurnstileError(ctx, err)
 	}
 
 	if req.Username == "" || req.Password == "" {
@@ -107,8 +109,8 @@ func HandleUserRegistration(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
 
-	if err := turnstile.Verify(req.TurnstileToken, ctx.RealIP()); err != nil {
-		return responses.SendError(ctx, 400, "captcha verification failed")
+	if err := turnstile.Verify(ctx.Request().Context(), req.TurnstileToken, ctx.RealIP(), "register"); err != nil {
+		return sendTurnstileError(ctx, err)
 	}
 
 	if req.FirstName == "" || req.LastName == "" || req.Phone == "" || req.Password == "" {
@@ -119,7 +121,7 @@ func HandleUserRegistration(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "user_type is required")
 	}
 
-_validTypes := map[string]bool{"customer": true, "artisan": true}
+	_validTypes := map[string]bool{"customer": true, "artisan": true}
 	if !_validTypes[req.UserType] {
 		return responses.SendError(ctx, 400, "invalid user_type")
 	}
@@ -149,6 +151,20 @@ _validTypes := map[string]bool{"customer": true, "artisan": true}
 		},
 		"user": user,
 	}, "User registered successfully.")
+}
+
+func sendTurnstileError(ctx echo.Context, err error) error {
+	if errors.Is(err, turnstile.ErrUnavailable) {
+		slog.Error("turnstile verification unavailable", "error", err)
+		return responses.SendError(
+			ctx,
+			http.StatusServiceUnavailable,
+			"verification service is temporarily unavailable",
+		)
+	}
+
+	slog.Warn("turnstile verification rejected", "error", err)
+	return responses.SendError(ctx, http.StatusBadRequest, "captcha verification failed")
 }
 
 func HandleLogout(ctx echo.Context) error {
@@ -259,7 +275,7 @@ func HandleCreateUserViaAdmin(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "user_type is required")
 	}
 
-_validTypes := map[string]bool{"customer": true, "artisan": true, "assessor": true}
+	_validTypes := map[string]bool{"customer": true, "artisan": true, "assessor": true}
 	if !_validTypes[req.UserType] {
 		return responses.SendError(ctx, 400, "invalid user_type")
 	}

@@ -1,8 +1,11 @@
 package users
 
 import (
+	"errors"
 	"fmt"
 	"log"
+	"log/slog"
+	"net/http"
 	"time"
 
 	"backend/contextutil"
@@ -167,8 +170,22 @@ func HandleForgotPassword(ctx echo.Context) error {
 	if err := ctx.Bind(&req); err != nil {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
-	if err := turnstile.Verify(req.TurnstileToken, ctx.RealIP()); err != nil {
-		return responses.SendError(ctx, 400, "captcha verification failed")
+	if err := turnstile.Verify(
+		ctx.Request().Context(),
+		req.TurnstileToken,
+		ctx.RealIP(),
+		"forgot_password",
+	); err != nil {
+		if errors.Is(err, turnstile.ErrUnavailable) {
+			slog.Error("turnstile verification unavailable", "error", err)
+			return responses.SendError(
+				ctx,
+				http.StatusServiceUnavailable,
+				"verification service is temporarily unavailable",
+			)
+		}
+		slog.Warn("turnstile verification rejected", "error", err)
+		return responses.SendError(ctx, http.StatusBadRequest, "captcha verification failed")
 	}
 	phone := req.Phone
 	userType := req.UserType
