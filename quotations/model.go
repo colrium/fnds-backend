@@ -33,18 +33,18 @@ type QuotationItem struct {
 }
 
 type ExternalQuotation struct {
-	ID            string                  `json:"id" bson:"_id"`
-	ArtisanID     string                  `json:"artisan_id" bson:"artisan_id"`
-	CustomerName  string                  `json:"customer_name" bson:"customer_name"`
-	CustomerEmail string                  `json:"customer_email" bson:"customer_email"`
-	CustomerPhone string                  `json:"customer_phone" bson:"customer_phone"`
-	JobTitle      string                  `json:"job_title" bson:"job_title"`
-	JobDescription string                 `json:"job_description" bson:"job_description"`
-	Status        string                  `json:"status" bson:"status"`
-	TotalAmount   float64                 `json:"total_amount" bson:"total_amount"`
-	Items         []ExternalQuotationItem `json:"items" bson:"items"`
-	CreatedAt     time.Time               `json:"created_at" bson:"created_at"`
-	UpdatedAt     time.Time               `json:"updated_at" bson:"updated_at"`
+	ID             string                  `json:"id" bson:"_id"`
+	ArtisanID      string                  `json:"artisan_id" bson:"artisan_id"`
+	CustomerName   string                  `json:"customer_name" bson:"customer_name"`
+	CustomerEmail  string                  `json:"customer_email" bson:"customer_email"`
+	CustomerPhone  string                  `json:"customer_phone" bson:"customer_phone"`
+	JobTitle       string                  `json:"job_title" bson:"job_title"`
+	JobDescription string                  `json:"job_description" bson:"job_description"`
+	Status         string                  `json:"status" bson:"status"`
+	TotalAmount    float64                 `json:"total_amount" bson:"total_amount"`
+	Items          []ExternalQuotationItem `json:"items" bson:"items"`
+	CreatedAt      time.Time               `json:"created_at" bson:"created_at"`
+	UpdatedAt      time.Time               `json:"updated_at" bson:"updated_at"`
 }
 
 type ExternalQuotationItem struct {
@@ -100,10 +100,36 @@ func GetQuotationByID(id string) (*Quotation, error) {
 	return &q, nil
 }
 
+func GetQuotationForUser(id, userID string) (*Quotation, error) {
+	filter := relatedQuotationFilter(userID)
+	filter["_id"] = id
+	var q Quotation
+	err := configs.MI.DB.Collection("quotations").FindOne(context.TODO(), filter).Decode(&q)
+	if err != nil {
+		return nil, err
+	}
+	return &q, nil
+}
+
 func UpdateQuotation(id string, updates bson.M) error {
 	updates["updated_at"] = time.Now()
 	_, err := configs.MI.DB.Collection("quotations").UpdateOne(context.TODO(), bson.M{"_id": id}, bson.M{"$set": updates})
 	return err
+}
+
+func UpdateQuotationForUser(id, userID string, updates bson.M) (bool, error) {
+	updates["updated_at"] = time.Now()
+	filter := relatedQuotationFilter(userID)
+	filter["_id"] = id
+	result, err := configs.MI.DB.Collection("quotations").UpdateOne(
+		context.TODO(),
+		filter,
+		bson.M{"$set": updates},
+	)
+	if err != nil {
+		return false, err
+	}
+	return result.MatchedCount > 0, nil
 }
 
 func ListQuotations(filter bson.M) ([]Quotation, error) {

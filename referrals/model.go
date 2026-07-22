@@ -303,5 +303,34 @@ func Stats(ctx context.Context, referrerID string) (map[string]int64, error) {
 	if err != nil {
 		return nil, fmt.Errorf("counting pending referrals: %w", err)
 	}
-	return map[string]int64{"qualified": qualified, "pending": pending}, nil
+	var credits struct {
+		Available int64 `bson:"available"`
+	}
+	cursor, err := configs.MI.DB.Collection("referrals").Aggregate(ctx, mongo.Pipeline{
+		bson.D{{Key: "$match", Value: bson.M{
+			"referrer_id": referrerID,
+			"status":      StatusQualified,
+		}}},
+		bson.D{{Key: "$group", Value: bson.M{
+			"_id": nil,
+			"available": bson.M{"$sum": bson.M{"$subtract": bson.A{
+				"$application_credits",
+				"$application_credits_used",
+			}}},
+		}}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("counting referral credits: %w", err)
+	}
+	defer cursor.Close(ctx)
+	if cursor.Next(ctx) {
+		if err := cursor.Decode(&credits); err != nil {
+			return nil, fmt.Errorf("decoding referral credits: %w", err)
+		}
+	}
+	return map[string]int64{
+		"qualified":                     qualified,
+		"pending":                       pending,
+		"application_credits_available": credits.Available,
+	}, nil
 }

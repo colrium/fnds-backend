@@ -197,6 +197,11 @@ func ListArtisans(page, limit int64) ([]User, int64, error) {
 	if err := cursor.All(context.TODO(), &users); err != nil {
 		return nil, 0, err
 	}
+	for i := range users {
+		users[i].IsVerified = users[i].IsVerified &&
+			users[i].VerifiedUntil != nil &&
+			users[i].VerifiedUntil.After(now)
+	}
 
 	total, err := configs.MI.DB.Collection("users").CountDocuments(context.TODO(), filter)
 	if err != nil {

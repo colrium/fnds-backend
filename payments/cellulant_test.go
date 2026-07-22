@@ -50,3 +50,32 @@ func TestCellulantCheckoutURL(t *testing.T) {
 		t.Fatal("encrypted_payload is empty")
 	}
 }
+
+func TestStatusFromCellulantCode(t *testing.T) {
+	tests := []struct {
+		code int
+		want string
+	}{
+		{178, "successful"},
+		{188, "successful"},
+		{130, "pending"},
+		{177, "pending"},
+		{183, "pending"},
+		{129, "expired"},
+		{180, "failed"},
+	}
+	for _, tt := range tests {
+		if got := StatusFromCellulantCode(tt.code); got != tt.want {
+			t.Errorf("StatusFromCellulantCode(%d) = %q, want %q", tt.code, got, tt.want)
+		}
+	}
+}
+
+func TestCellulantNumericFieldsAcceptStrings(t *testing.T) {
+	if got := firstInt("188", float64(0)); got != 188 {
+		t.Fatalf("firstInt() = %d, want 188", got)
+	}
+	if got := firstFloat("350.00", float64(0)); got != 350 {
+		t.Fatalf("firstFloat() = %f, want 350", got)
+	}
+}

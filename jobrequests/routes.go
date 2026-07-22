@@ -318,10 +318,28 @@ func HandleDeleteCompany(ctx echo.Context) error {
 }
 
 func HandleListJobVacancies(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
 	page := int64(1)
 	limit := int64(20)
 
-	vacancies, total, err := ListJobVacancies(bson.M{}, page, limit)
+	vacancies, total, err := ListJobVacancies(employerVacancyFilter(userID), page, limit)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to fetch job vacancies")
+	}
+	return responses.SendOK(ctx, map[string]interface{}{
+		"data":  vacancies,
+		"total": total,
+	}, "Job vacancies retrieved successfully")
+}
+
+func HandleListAvailableJobVacancies(ctx echo.Context) error {
+	page := int64(1)
+	limit := int64(20)
+
+	vacancies, total, err := ListJobVacancies(publicVacancyFilter(), page, limit)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to fetch job vacancies")
 	}
@@ -332,15 +350,27 @@ func HandleListJobVacancies(ctx echo.Context) error {
 }
 
 func HandleGetJobVacancy(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
 	id := ctx.QueryParam("id")
 	if id == "" {
 		return responses.SendError(ctx, 400, "id is required")
 	}
-	v, err := GetJobVacancyByID(id)
+	v, err := GetJobVacancyForOwner(id, userID)
 	if err != nil {
 		return responses.SendError(ctx, 404, "Job vacancy not found")
 	}
 	return responses.SendOK(ctx, v, "Job vacancy retrieved successfully")
+}
+
+func employerVacancyFilter(ownerID string) bson.M {
+	return bson.M{"owner_id": ownerID}
+}
+
+func publicVacancyFilter() bson.M {
+	return bson.M{"status": "open"}
 }
 
 // HandleGetPublicJobVacancy serves a single vacancy without authentication so it
@@ -699,6 +729,7 @@ func HandleCompleteJobRequest(ctx echo.Context) error {
 }
 
 func RegisterArtisanRoutes(g *echo.Group) {
+	g.GET("/job-vacancies/available", HandleListAvailableJobVacancies)
 	g.POST("/job-requests/:id/accept", HandleAcceptJobRequest)
 	g.POST("/job-requests/:id/complete", HandleCompleteJobRequest)
 }

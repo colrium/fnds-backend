@@ -28,8 +28,12 @@ func HandleListTransactions(ctx echo.Context) error {
 }
 
 func HandleGetTransaction(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
 	id := ctx.Param("id")
-	txn, err := GetTransactionByID(id)
+	txn, err := GetTransactionForUser(id, userID)
 	if err != nil {
 		return responses.SendError(ctx, 404, "Transaction not found")
 	}

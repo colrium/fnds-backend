@@ -3,6 +3,8 @@ package subscriptions
 import (
 	"testing"
 	"time"
+
+	"backend/payments"
 )
 
 func TestPlanCatalogMatchesPublishedPricing(t *testing.T) {
@@ -124,6 +126,50 @@ func TestIsSubscriptionActive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := IsSubscriptionActiveAt(tt.sub, now); got != tt.want {
 				t.Errorf("IsSubscriptionActiveAt() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateCellulantPayment(t *testing.T) {
+	purchase := UserSubscription{
+		PaymentReference: "CEL-SUB-123",
+		AmountKES:        350,
+		Currency:         "KES",
+	}
+	valid := payments.CellulantPaymentEvent{
+		MerchantTransactionID: "CEL-SUB-123",
+		AccountNumber:         "CEL-SUB-123",
+		AmountPaid:            350,
+		CurrencyCode:          "kes",
+		ServiceCode:           "FUNDIS",
+	}
+	if err := validateCellulantPayment(purchase, valid, "FUNDIS"); err != nil {
+		t.Fatalf("valid Cellulant payment rejected: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*payments.CellulantPaymentEvent)
+	}{
+		{"merchant reference", func(event *payments.CellulantPaymentEvent) {
+			event.MerchantTransactionID = "CEL-SUB-other"
+		}},
+		{"account reference", func(event *payments.CellulantPaymentEvent) {
+			event.AccountNumber = "CEL-SUB-other"
+		}},
+		{"amount", func(event *payments.CellulantPaymentEvent) { event.AmountPaid = 100 }},
+		{"currency", func(event *payments.CellulantPaymentEvent) { event.CurrencyCode = "USD" }},
+		{"service code", func(event *payments.CellulantPaymentEvent) {
+			event.ServiceCode = "OTHER"
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := valid
+			tt.mutate(&event)
+			if err := validateCellulantPayment(purchase, event, "FUNDIS"); err == nil {
+				t.Fatal("mismatched Cellulant payment accepted")
 			}
 		})
 	}

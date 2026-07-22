@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Seeder struct {
@@ -49,9 +50,7 @@ func collectionEmpty(name string) (bool, error) {
 
 func SeedSubscriptionPlans() error {
 	ctx := context.TODO()
-	planIDs := make([]string, 0, len(subscriptions.Plans()))
 	for _, plan := range subscriptions.Plans() {
-		planIDs = append(planIDs, plan.ID)
 		_, err := configs.MI.DB.Collection("subscription_plans").UpdateOne(
 			ctx,
 			bson.M{"_id": plan.ID},
@@ -76,11 +75,7 @@ func SeedSubscriptionPlans() error {
 			return err
 		}
 	}
-	_, err := configs.MI.DB.Collection("subscription_plans").DeleteMany(
-		ctx,
-		bson.M{"_id": bson.M{"$nin": planIDs}},
-	)
-	return err
+	return nil
 }
 
 func SeedLocations() error {

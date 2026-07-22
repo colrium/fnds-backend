@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	StatusPending = "pending"
-	StatusActive  = "active"
-	StatusFailed  = "failed"
-	StatusExpired = "expired"
+	StatusPending               = "pending"
+	StatusActive                = "active"
+	StatusFailed                = "failed"
+	StatusExpired               = "expired"
+	FreeMonthlyApplicationLimit = 3
 )
 
 var ErrApplicationLimitReached = errors.New("monthly application limit reached")
@@ -182,10 +183,12 @@ func ActivatePurchase(ctx context.Context, event payments.CellulantPaymentEvent)
 	if purchase.Status != StatusPending {
 		return fmt.Errorf("subscription purchase is not pending")
 	}
-	if event.AmountPaid != float64(purchase.AmountKES) ||
-		!strings.EqualFold(event.CurrencyCode, purchase.Currency) ||
-		event.ServiceCode != configs.CellulantServiceCode() {
-		return fmt.Errorf("subscription payment amount or currency mismatch")
+	if err := validateCellulantPayment(
+		purchase,
+		event,
+		configs.CellulantServiceCode(),
+	); err != nil {
+		return err
 	}
 
 	plan, ok := FindPlan(purchase.SubscriptionPlanID)
@@ -287,7 +290,7 @@ func ReserveApplication(
 		bson.M{
 			"_id": usageID,
 			"$or": bson.A{
-				bson.M{"count": bson.M{"$lt": 3}},
+				bson.M{"count": bson.M{"$lt": FreeMonthlyApplicationLimit}},
 				bson.M{"count": bson.M{"$exists": false}},
 			},
 		},
@@ -318,6 +321,21 @@ func ReserveApplication(
 		return nil, err
 	}
 	return &ApplicationReservation{kind: "referral", referralID: referralID}, nil
+}
+
+func validateCellulantPayment(
+	purchase UserSubscription,
+	event payments.CellulantPaymentEvent,
+	serviceCode string,
+) error {
+	if event.MerchantTransactionID != purchase.PaymentReference ||
+		event.AccountNumber != purchase.PaymentReference ||
+		event.AmountPaid != float64(purchase.AmountKES) ||
+		!strings.EqualFold(event.CurrencyCode, purchase.Currency) ||
+		event.ServiceCode != serviceCode {
+		return fmt.Errorf("Cellulant payment does not match subscription purchase")
+	}
+	return nil
 }
 
 func (r *ApplicationReservation) Rollback(ctx context.Context) error {

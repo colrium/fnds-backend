@@ -2,8 +2,10 @@ package payments
 
 import (
 	"crypto/subtle"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"backend/configs"
 	"backend/responses"
@@ -96,12 +98,12 @@ func HandleCellulantWebhook(ctx echo.Context) error {
 		MerchantTransactionIDSnake string      `json:"merchant_transaction_id"`
 		AccountNumber              string      `json:"accountNumber"`
 		AccountNumberSnake         string      `json:"account_number"`
-		RequestStatusCode          int         `json:"requestStatusCode"`
-		RequestStatusCodeSnake     int         `json:"request_status_code"`
-		RequestStatusDescription  string      `json:"requestStatusDescription"`
+		RequestStatusCode          interface{} `json:"requestStatusCode"`
+		RequestStatusCodeSnake     interface{} `json:"request_status_code"`
+		RequestStatusDescription   string      `json:"requestStatusDescription"`
 		RequestStatusDescSnake     string      `json:"request_status_description"`
-		AmountPaid                 float64     `json:"amountPaid"`
-		AmountPaidSnake            float64     `json:"amount_paid"`
+		AmountPaid                 interface{} `json:"amountPaid"`
+		AmountPaidSnake            interface{} `json:"amount_paid"`
 		CurrencyCode               string      `json:"currencyCode"`
 		CurrencyCodeSnake          string      `json:"currency_code"`
 		ServiceCode                string      `json:"serviceCode"`
@@ -121,7 +123,7 @@ func HandleCellulantWebhook(ctx echo.Context) error {
 			payload.MerchantTransactionIDSnake,
 		),
 		AccountNumber: firstNonEmpty(payload.AccountNumber, payload.AccountNumberSnake),
-		RequestStatusCode: firstNonZero(
+		RequestStatusCode: firstInt(
 			payload.RequestStatusCode,
 			payload.RequestStatusCodeSnake,
 		),
@@ -129,7 +131,7 @@ func HandleCellulantWebhook(ctx echo.Context) error {
 			payload.RequestStatusDescription,
 			payload.RequestStatusDescSnake,
 		),
-		AmountPaid:   firstNonZeroFloat(payload.AmountPaid, payload.AmountPaidSnake),
+		AmountPaid:   firstFloat(payload.AmountPaid, payload.AmountPaidSnake),
 		CurrencyCode: firstNonEmpty(payload.CurrencyCode, payload.CurrencyCodeSnake),
 		ServiceCode:  firstNonEmpty(payload.ServiceCode, payload.ServiceCodeSnake),
 	}
@@ -156,10 +158,14 @@ func HandleCellulantWebhook(ctx echo.Context) error {
 		}
 	}
 
+	acknowledgementCode := 180
+	if status == "successful" || status == "pending" {
+		acknowledgementCode = 183
+	}
 	return ctx.JSON(http.StatusOK, map[string]interface{}{
 		"checkoutRequestID":     event.CheckoutRequestID,
 		"merchantTransactionID": event.MerchantTransactionID,
-		"statusCode":            "183",
+		"statusCode":            acknowledgementCode,
 		"statusDescription":     "Payment processed successfully",
 		"receiptNumber":         event.AccountNumber,
 	})
@@ -212,19 +218,49 @@ func firstString(values ...interface{}) string {
 	return ""
 }
 
-func firstNonZero(values ...int) int {
+func firstInt(values ...interface{}) int {
 	for _, value := range values {
-		if value != 0 {
-			return value
+		switch typed := value.(type) {
+		case int:
+			if typed != 0 {
+				return typed
+			}
+		case float64:
+			if typed != 0 {
+				return int(typed)
+			}
+		case json.Number:
+			parsed, err := strconv.Atoi(typed.String())
+			if err == nil && parsed != 0 {
+				return parsed
+			}
+		case string:
+			parsed, err := strconv.Atoi(typed)
+			if err == nil && parsed != 0 {
+				return parsed
+			}
 		}
 	}
 	return 0
 }
 
-func firstNonZeroFloat(values ...float64) float64 {
+func firstFloat(values ...interface{}) float64 {
 	for _, value := range values {
-		if value != 0 {
-			return value
+		switch typed := value.(type) {
+		case float64:
+			if typed != 0 {
+				return typed
+			}
+		case json.Number:
+			parsed, err := typed.Float64()
+			if err == nil && parsed != 0 {
+				return parsed
+			}
+		case string:
+			parsed, err := strconv.ParseFloat(typed, 64)
+			if err == nil && parsed != 0 {
+				return parsed
+			}
 		}
 	}
 	return 0

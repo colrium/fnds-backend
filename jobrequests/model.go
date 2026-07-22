@@ -298,6 +298,17 @@ func GetJobVacancyByID(id string) (*JobVacancy, error) {
 	return &v, nil
 }
 
+func GetJobVacancyForOwner(id, ownerID string) (*JobVacancy, error) {
+	var v JobVacancy
+	err := configs.MI.DB.Collection("job_vacancies").
+		FindOne(context.TODO(), bson.M{"_id": id, "owner_id": ownerID}).
+		Decode(&v)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
 // UpdateJobVacancyForOwner applies updates only when the vacancy belongs to ownerID.
 // Returns false when no matching vacancy exists (wrong owner or missing).
 func UpdateJobVacancyForOwner(id, ownerID string, updates bson.M) (bool, error) {

@@ -110,6 +110,9 @@ func HandleSendOtp(ctx echo.Context) error {
 	}
 
 	if user.PhoneVerified {
+		if err := qualifyReferral(ctx, user); err != nil {
+			return responses.SendError(ctx, 500, "failed to qualify referral")
+		}
 		return responses.SendError(ctx, 400, "OTP already verified")
 	}
 
@@ -157,17 +160,26 @@ func HandleVerifyOtp(ctx echo.Context) error {
 	if err != nil {
 		return responses.SendError(ctx, 500, "failed to verify OTP")
 	}
-	if user.ReferralCodeUsed != "" {
-		if err := referrals.EnsureQualified(
-			ctx.Request().Context(),
-			user.ReferralCodeUsed,
-			user.ID,
-		); err != nil {
-			slog.Error("failed to qualify referral", "referred_user_id", user.ID, "error", err)
-		}
+	if err := qualifyReferral(ctx, user); err != nil {
+		return responses.SendError(ctx, 500, "phone verified but referral qualification failed")
 	}
 
 	return responses.SendOK(ctx, nil, "OTP verified successfully")
+}
+
+func qualifyReferral(ctx echo.Context, user *User) error {
+	if user.ReferralCodeUsed == "" {
+		return nil
+	}
+	if err := referrals.EnsureQualified(
+		ctx.Request().Context(),
+		user.ReferralCodeUsed,
+		user.ID,
+	); err != nil {
+		slog.Error("failed to qualify referral", "referred_user_id", user.ID, "error", err)
+		return err
+	}
+	return nil
 }
 
 func HandleResendOtp(ctx echo.Context) error {

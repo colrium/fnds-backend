@@ -45,14 +45,14 @@ type CellulantCheckoutRequest struct {
 }
 
 type CellulantPaymentEvent struct {
-	CheckoutRequestID     string
-	MerchantTransactionID string
-	AccountNumber         string
-	RequestStatusCode     int
+	CheckoutRequestID        string
+	MerchantTransactionID    string
+	AccountNumber            string
+	RequestStatusCode        int
 	RequestStatusDescription string
-	AmountPaid            float64
-	CurrencyCode          string
-	ServiceCode           string
+	AmountPaid               float64
+	CurrencyCode             string
+	ServiceCode              string
 }
 
 var cellulantPaymentHandlers []func(CellulantPaymentEvent) error

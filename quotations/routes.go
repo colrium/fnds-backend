@@ -10,6 +10,7 @@ import (
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func RegisterAuthRoutes(g *echo.Group) {
@@ -57,7 +58,11 @@ func HandleCreateQuotation(ctx echo.Context) error {
 }
 
 func HandleListQuotations(ctx echo.Context) error {
-	quotations, err := ListQuotations(map[string]interface{}{})
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+	quotations, err := ListQuotations(relatedQuotationFilter(userID))
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to fetch quotations")
 	}
@@ -65,8 +70,12 @@ func HandleListQuotations(ctx echo.Context) error {
 }
 
 func HandleGetQuotation(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
 	id := ctx.Param("id")
-	q, err := GetQuotationByID(id)
+	q, err := GetQuotationForUser(id, userID)
 	if err != nil {
 		return responses.SendError(ctx, 404, "Quotation not found")
 	}
@@ -74,15 +83,30 @@ func HandleGetQuotation(ctx echo.Context) error {
 }
 
 func HandleUpdateQuotation(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
 	id := ctx.Param("id")
 	var updates map[string]interface{}
 	if err := ctx.Bind(&updates); err != nil {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
-	if err := UpdateQuotation(id, updates); err != nil {
+	updated, err := UpdateQuotationForUser(id, userID, updates)
+	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to update quotation")
 	}
+	if !updated {
+		return responses.SendError(ctx, 404, "Quotation not found")
+	}
 	return responses.SendOK(ctx, nil, "Quotation updated successfully")
+}
+
+func relatedQuotationFilter(userID string) bson.M {
+	return bson.M{"$or": bson.A{
+		bson.M{"customer_id": userID},
+		bson.M{"artisan_id": userID},
+	}}
 }
 
 func HandleCreateExternalQuotation(ctx echo.Context) error {
@@ -92,11 +116,11 @@ func HandleCreateExternalQuotation(ctx echo.Context) error {
 	}
 
 	var req struct {
-		CustomerEmail  string                      `json:"customer_email"`
-		CustomerPhone  string                      `json:"customer_phone"`
-		CustomerName   string                      `json:"customer_name"`
-		JobTitle       string                      `json:"job_title"`
-		JobDescription string                      `json:"job_description"`
+		CustomerEmail  string                       `json:"customer_email"`
+		CustomerPhone  string                       `json:"customer_phone"`
+		CustomerName   string                       `json:"customer_name"`
+		JobTitle       string                       `json:"job_title"`
+		JobDescription string                       `json:"job_description"`
 		Items          []ExternalQuotationItemInput `json:"items"`
 	}
 	if err := ctx.Bind(&req); err != nil {
@@ -194,12 +218,12 @@ func HandleCreateExternalInvoice(ctx echo.Context) error {
 	}
 
 	var req struct {
-		CustomerEmail   string                      `json:"customer_email"`
-		CustomerPhone   string                      `json:"customer_phone"`
-		CustomerName    string                      `json:"customer_name"`
-		JobTitle        string                      `json:"job_title"`
-		JobDescription  string                      `json:"job_description"`
-		Items           []ExternalQuotationItemInput `json:"items"`
+		CustomerEmail  string                       `json:"customer_email"`
+		CustomerPhone  string                       `json:"customer_phone"`
+		CustomerName   string                       `json:"customer_name"`
+		JobTitle       string                       `json:"job_title"`
+		JobDescription string                       `json:"job_description"`
+		Items          []ExternalQuotationItemInput `json:"items"`
 	}
 	if err := ctx.Bind(&req); err != nil {
 		return responses.SendError(ctx, 400, "Invalid request body")

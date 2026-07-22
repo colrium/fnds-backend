@@ -84,6 +84,21 @@ func GetTransactionByID(id string) (*Transaction, error) {
 	return &t, nil
 }
 
+func GetTransactionForUser(id, userID string) (*Transaction, error) {
+	var t Transaction
+	err := configs.MI.DB.Collection("transactions").
+		FindOne(context.TODO(), userTransactionFilter(id, userID)).
+		Decode(&t)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+func userTransactionFilter(id, userID string) bson.M {
+	return bson.M{"_id": id, "user_id": userID}
+}
+
 func UpdateTransaction(id string, updates bson.M) error {
 	updates["updated_at"] = time.Now()
 	_, err := configs.MI.DB.Collection("transactions").UpdateOne(context.TODO(), bson.M{"_id": id}, bson.M{"$set": updates})
