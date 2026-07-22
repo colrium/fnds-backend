@@ -31,8 +31,7 @@ func newCORSMiddleware(appEnv string) echo.MiddlewareFunc {
 			echo.HeaderAccept,
 			echo.HeaderAuthorization,
 		},
-		AllowCredentials: true,
-		MaxAge:           86400,
+		MaxAge: 86400,
 	})
 }
 

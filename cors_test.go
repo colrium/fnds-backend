@@ -110,4 +110,10 @@ func TestCORSPreflightAllowsAuthorization(t *testing.T) {
 	if got := recorder.Header().Get(echo.HeaderAccessControlAllowHeaders); !strings.Contains(got, echo.HeaderAuthorization) {
 		t.Fatalf("Access-Control-Allow-Headers = %q, want it to include %q", got, echo.HeaderAuthorization)
 	}
+	if got := recorder.Header().Get(echo.HeaderAccessControlAllowCredentials); got != "" {
+		t.Fatalf("Access-Control-Allow-Credentials = %q, want empty", got)
+	}
+	if got := recorder.Header().Get(echo.HeaderAccessControlMaxAge); got != "86400" {
+		t.Fatalf("Access-Control-Max-Age = %q, want 86400", got)
+	}
 }
