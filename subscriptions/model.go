@@ -89,7 +89,7 @@ func CreateUserSubscription(ctx context.Context, sub *UserSubscription) error {
 	sub.IsActive = false
 	sub.CreatedAt = now
 	sub.UpdatedAt = now
-	sub.PaymentReference = "subscription:" + sub.ID
+	sub.PaymentReference = "CEL-SUB-" + sub.ID
 	_, err := configs.MI.DB.Collection("user_subscriptions").InsertOne(ctx, sub)
 	if err != nil {
 		return fmt.Errorf("creating subscription purchase: %w", err)
@@ -161,14 +161,14 @@ func HasEntitlement(
 	return false, nil
 }
 
-func ActivatePurchase(ctx context.Context, event payments.ChargeCompletedEvent) error {
-	if event.Status != "successful" && event.Status != "completed" {
+func ActivatePurchase(ctx context.Context, event payments.CellulantPaymentEvent) error {
+	if event.RequestStatusCode != 178 && event.RequestStatusCode != 188 {
 		return nil
 	}
 
 	var purchase UserSubscription
 	err := configs.MI.DB.Collection("user_subscriptions").
-		FindOne(ctx, bson.M{"payment_reference": event.TxRef}).
+		FindOne(ctx, bson.M{"payment_reference": event.MerchantTransactionID}).
 		Decode(&purchase)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return nil
@@ -182,8 +182,9 @@ func ActivatePurchase(ctx context.Context, event payments.ChargeCompletedEvent) 
 	if purchase.Status != StatusPending {
 		return fmt.Errorf("subscription purchase is not pending")
 	}
-	if event.Amount != float64(purchase.AmountKES) ||
-		!strings.EqualFold(event.Currency, purchase.Currency) {
+	if event.AmountPaid != float64(purchase.AmountKES) ||
+		!strings.EqualFold(event.CurrencyCode, purchase.Currency) ||
+		event.ServiceCode != configs.CellulantServiceCode() {
 		return fmt.Errorf("subscription payment amount or currency mismatch")
 	}
 

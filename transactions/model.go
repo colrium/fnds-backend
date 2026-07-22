@@ -121,7 +121,11 @@ func CreateCellulantTransaction(ct *CellulantTransaction) error {
 
 func UpdateCellulantTransaction(id string, updates bson.M) error {
 	updates["updated_at"] = time.Now()
-	_, err := configs.MI.DB.Collection("cellulant_transactions").UpdateOne(context.TODO(), bson.M{"_id": id}, bson.M{"$set": updates})
+	_, err := configs.MI.DB.Collection("cellulant_transactions").UpdateOne(
+		context.TODO(),
+		bson.M{"transaction_id": id},
+		bson.M{"$set": updates},
+	)
 	return err
 }
 

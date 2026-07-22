@@ -61,6 +61,26 @@ func FlutterwaveWebhookSecretHash() string {
 	return os.Getenv("FLUTTERWAVE_WEBHOOK_SECRET_HASH")
 }
 
+func CellulantAccessKey() string {
+	return os.Getenv("CELLULANT_ACCESS_KEY")
+}
+
+func CellulantSecretKey() string {
+	return os.Getenv("CELLULANT_SECRET_KEY")
+}
+
+func CellulantIVKey() string {
+	return os.Getenv("CELLULANT_IV_KEY")
+}
+
+func CellulantServiceCode() string {
+	return os.Getenv("CELLULANT_SERVICE_CODE")
+}
+
+func CellulantCheckoutURL() string {
+	return os.Getenv("CELLULANT_CHECKOUT_URL")
+}
+
 func AWSRegion() string {
 	return os.Getenv("AWS_REGION")
 }
