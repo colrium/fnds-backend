@@ -23,21 +23,32 @@ presigned URLs.
 
 ## Bucket CORS
 
-Replace the example origins with the deployed frontend origins:
+The staging bucket accepts the Fundis apex domain and all HTTPS subdomains:
 
 ```json
-[
-  {
-    "AllowedOrigins": [
-      "https://app.fundis.co.ke",
-      "https://staging.fundis.co.ke"
-    ],
-    "AllowedMethods": ["PUT"],
-    "AllowedHeaders": ["*"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": [
+        "https://fundis.co.ke",
+        "https://*.fundis.co.ke"
+      ],
+      "AllowedMethods": ["GET", "PUT", "HEAD"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}
+```
+
+Apply the versioned policy with:
+
+```bash
+aws s3api put-bucket-cors \
+  --bucket fundis-bucket-staging \
+  --region eu-west-1 \
+  --cors-configuration file://s3-cors.json
 ```
 
 Keep S3 Block Public Access enabled. The backend IAM principal needs only

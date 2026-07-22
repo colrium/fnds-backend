@@ -45,7 +45,7 @@ func main() {
 	app.IPExtractor = echo.ExtractIPDirect()
 	app.Use(echomiddleware.Logger())
 	app.Use(echomiddleware.Recover())
-	app.Use(echomiddleware.CORS())
+	app.Use(newCORSMiddleware(configs.AppEnv()))
 
 	configs.ConnectDB()
 	slog.Info("database connected", "env", configs.AppEnv())
