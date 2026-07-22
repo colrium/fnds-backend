@@ -37,9 +37,20 @@ type User struct {
 	FCMToken         string    `json:"fcm_token,omitempty" bson:"fcm_token,omitempty"`
 	IsAvailable      bool      `json:"is_available" bson:"is_available"`
 	IsVerified       bool      `json:"is_verified" bson:"is_verified"`
+	VerifiedUntil    *time.Time `json:"verified_until,omitempty" bson:"verified_until,omitempty"`
 	ReferralCodeUsed string    `json:"-" bson:"referral_code_used,omitempty"`
 	CreatedAt        time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at" bson:"updated_at"`
+}
+
+type ArtisanSummary struct {
+	ID           string `json:"id"`
+	FirstName    string `json:"first_name"`
+	LastName     string `json:"last_name"`
+	FundisID     string `json:"fundis_id,omitempty"`
+	AvatarID     string `json:"avatar_id,omitempty"`
+	IsAvailable  bool   `json:"is_available"`
+	IsVerified   bool   `json:"is_verified"`
 }
 
 func CreateNewUser(user *User) error {
@@ -141,6 +152,15 @@ func GetUserByFundisID(fundisID string) (*User, error) {
 	return &user, nil
 }
 
+func GetArtisanSummaryByFundisID(fundisID string) (*ArtisanSummary, error) {
+	user, err := GetUserByFundisID(fundisID)
+	if err != nil {
+		return nil, err
+	}
+	summary := artisanSummary(*user, time.Now().UTC())
+	return &summary, nil
+}
+
 func UpdateUser(id string, update bson.M) error {
 	update["updated_at"] = time.Now()
 	_, err := configs.MI.DB.Collection("users").UpdateOne(context.TODO(), bson.M{"_id": id}, bson.M{"$set": update})
@@ -155,8 +175,18 @@ func IncrementOtpAttempts(id string) error {
 }
 
 func ListArtisans(page, limit int64) ([]User, int64, error) {
-	filter := bson.M{"user_type": "artisan"}
-	opts := options.Find().SetSkip((page - 1) * limit).SetLimit(limit)
+	now := time.Now().UTC()
+	filter := bson.M{
+		"user_type": "artisan",
+		"$or": bson.A{
+			bson.M{"is_available": true},
+			bson.M{"verified_until": bson.M{"$gt": now}},
+		},
+	}
+	opts := options.Find().
+		SetSkip((page - 1) * limit).
+		SetLimit(limit).
+		SetSort(bson.D{{Key: "verified_until", Value: -1}, {Key: "created_at", Value: -1}})
 	cursor, err := configs.MI.DB.Collection("users").Find(context.TODO(), filter, opts)
 	if err != nil {
 		return nil, 0, err
@@ -174,6 +204,32 @@ func ListArtisans(page, limit int64) ([]User, int64, error) {
 	}
 
 	return users, total, nil
+}
+
+func ListArtisanSummaries(page, limit int64) ([]ArtisanSummary, int64, error) {
+	artisans, total, err := ListArtisans(page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	now := time.Now().UTC()
+	summaries := make([]ArtisanSummary, 0, len(artisans))
+	for _, artisan := range artisans {
+		summaries = append(summaries, artisanSummary(artisan, now))
+	}
+	return summaries, total, nil
+}
+
+func artisanSummary(user User, at time.Time) ArtisanSummary {
+	verified := user.IsVerified && user.VerifiedUntil != nil && user.VerifiedUntil.After(at)
+	return ArtisanSummary{
+		ID:          user.ID,
+		FirstName:   user.FirstName,
+		LastName:    user.LastName,
+		FundisID:    user.FundisID,
+		AvatarID:    user.AvatarID,
+		IsAvailable: user.IsAvailable,
+		IsVerified:  verified,
+	}
 }
 
 func ListAllUsers(filter bson.M, page, limit int64) ([]User, int64, error) {

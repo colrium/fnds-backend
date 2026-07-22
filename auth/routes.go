@@ -268,7 +268,7 @@ func HandleSocialLogin(ctx echo.Context) error {
 
 func HandleShareUserRecord(ctx echo.Context) error {
 	fundisID := ctx.Param("fundis_id")
-	user, err := users.GetUserByFundisID(fundisID)
+	user, err := users.GetArtisanSummaryByFundisID(fundisID)
 	if err != nil {
 		return responses.SendError(ctx, 404, "Invalid Id! Kindly ensure that user is an Artisan")
 	}
@@ -279,7 +279,7 @@ func HandleAllArtisans(ctx echo.Context) error {
 	page := int64(1)
 	limit := int64(50)
 
-	artisans, total, err := users.ListArtisans(page, limit)
+	artisans, total, err := users.ListArtisanSummaries(page, limit)
 	if err != nil {
 		return responses.SendError(ctx, 500, "failed to fetch artisans")
 	}

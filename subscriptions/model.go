@@ -193,6 +193,7 @@ func ActivatePurchase(ctx context.Context, event payments.ChargeCompletedEvent) 
 	}
 
 	now := time.Now().UTC()
+	end := SubscriptionEnd(now, plan.DurationDays)
 	switch {
 	case plan.HasEntitlement(EntitlementFeaturedJob):
 		result, err := configs.MI.DB.Collection("job_vacancies").UpdateOne(
@@ -218,13 +219,16 @@ func ActivatePurchase(ctx context.Context, event payments.ChargeCompletedEvent) 
 		if _, err := configs.MI.DB.Collection("users").UpdateOne(
 			ctx,
 			bson.M{"_id": purchase.UserID, "user_type": "artisan"},
-			bson.M{"$set": bson.M{"is_verified": true, "updated_at": now}},
+			bson.M{"$set": bson.M{
+				"is_verified":    true,
+				"verified_until": end,
+				"updated_at":     now,
+			}},
 		); err != nil {
 			return fmt.Errorf("verifying worker: %w", err)
 		}
 	}
 
-	end := SubscriptionEnd(now, plan.DurationDays)
 	result, err := configs.MI.DB.Collection("user_subscriptions").UpdateOne(
 		ctx,
 		bson.M{"_id": purchase.ID, "status": StatusPending},
