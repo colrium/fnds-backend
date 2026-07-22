@@ -70,17 +70,25 @@ func StartCheckout(
 	}
 
 	cellulantConfig := payments.CellulantConfig{
-		AccessKey:   configs.CellulantAccessKey(),
-		IVKey:       configs.CellulantIVKey(),
-		SecretKey:   configs.CellulantSecretKey(),
-		ServiceCode: configs.CellulantServiceCode(),
-		CheckoutURL: configs.CellulantCheckoutURL(),
+		AccessKey:    configs.CellulantAccessKey(),
+		IVKey:        configs.CellulantIVKey(),
+		SecretKey:    configs.CellulantSecretKey(),
+		ServiceCode:  configs.CellulantServiceCode(),
+		CheckoutURL:  configs.CellulantCheckoutURL(),
+		BaseURL:      configs.CellulantBaseURL(),
+		ClientID:     configs.CellulantClientID(),
+		ClientSecret: configs.CellulantClientSecret(),
+		APIKey:       configs.CellulantAPIKey(),
 	}
 	if cellulantConfig.AccessKey == "" ||
 		cellulantConfig.IVKey == "" ||
 		cellulantConfig.SecretKey == "" ||
 		cellulantConfig.ServiceCode == "" ||
-		cellulantConfig.CheckoutURL == "" {
+		cellulantConfig.CheckoutURL == "" ||
+		cellulantConfig.BaseURL == "" ||
+		cellulantConfig.ClientID == "" ||
+		cellulantConfig.ClientSecret == "" ||
+		cellulantConfig.APIKey == "" {
 		return nil, ErrPaymentUnavailable
 	}
 

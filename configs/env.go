@@ -81,6 +81,22 @@ func CellulantCheckoutURL() string {
 	return os.Getenv("CELLULANT_CHECKOUT_URL")
 }
 
+func CellulantBaseURL() string {
+	return os.Getenv("CELLULANT_BASE_URL")
+}
+
+func CellulantClientID() string {
+	return os.Getenv("CELLULANT_CLIENT_ID")
+}
+
+func CellulantClientSecret() string {
+	return os.Getenv("CELLULANT_CLIENT_SECRET")
+}
+
+func CellulantAPIKey() string {
+	return os.Getenv("CELLULANT_API_KEY")
+}
+
 func AWSRegion() string {
 	return os.Getenv("AWS_REGION")
 }

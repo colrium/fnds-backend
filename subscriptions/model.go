@@ -177,10 +177,7 @@ func ActivatePurchase(ctx context.Context, event payments.CellulantPaymentEvent)
 	if err != nil {
 		return fmt.Errorf("finding subscription purchase: %w", err)
 	}
-	if purchase.Status == StatusActive {
-		return nil
-	}
-	if purchase.Status != StatusPending {
+	if purchase.Status != StatusPending && purchase.Status != StatusActive {
 		return fmt.Errorf("subscription purchase is not pending")
 	}
 	if err := validateCellulantPayment(
@@ -197,7 +194,33 @@ func ActivatePurchase(ctx context.Context, event payments.CellulantPaymentEvent)
 	}
 
 	now := time.Now().UTC()
-	end := SubscriptionEnd(now, plan.DurationDays)
+	end := purchase.EndDate
+	if purchase.Status == StatusPending {
+		end = SubscriptionEnd(now, plan.DurationDays)
+		result, err := configs.MI.DB.Collection("user_subscriptions").UpdateOne(
+			ctx,
+			bson.M{"_id": purchase.ID, "status": StatusPending},
+			bson.M{"$set": bson.M{
+				"status":     StatusActive,
+				"is_active":  true,
+				"start_date": now,
+				"end_date":   end,
+				"updated_at": now,
+			}},
+		)
+		if err != nil {
+			return fmt.Errorf("activating subscription: %w", err)
+		}
+		if result.MatchedCount == 0 {
+			if err := configs.MI.DB.Collection("user_subscriptions").
+				FindOne(ctx, bson.M{"_id": purchase.ID, "status": StatusActive}).
+				Decode(&purchase); err != nil {
+				return fmt.Errorf("subscription purchase changed during activation")
+			}
+			end = purchase.EndDate
+		}
+	}
+
 	switch {
 	case plan.HasEntitlement(EntitlementFeaturedJob):
 		result, err := configs.MI.DB.Collection("job_vacancies").UpdateOne(
@@ -233,23 +256,6 @@ func ActivatePurchase(ctx context.Context, event payments.CellulantPaymentEvent)
 		}
 	}
 
-	result, err := configs.MI.DB.Collection("user_subscriptions").UpdateOne(
-		ctx,
-		bson.M{"_id": purchase.ID, "status": StatusPending},
-		bson.M{"$set": bson.M{
-			"status":     StatusActive,
-			"is_active":  true,
-			"start_date": now,
-			"end_date":   end,
-			"updated_at": now,
-		}},
-	)
-	if err != nil {
-		return fmt.Errorf("activating subscription: %w", err)
-	}
-	if result.MatchedCount == 0 {
-		return fmt.Errorf("subscription purchase changed during activation")
-	}
 	return nil
 }
 

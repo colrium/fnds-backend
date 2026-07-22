@@ -1,6 +1,8 @@
 package payments
 
 import (
+	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/sha256"
@@ -8,15 +10,23 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
+	"strings"
+	"time"
 )
 
 type CellulantConfig struct {
-	AccessKey   string
-	IVKey       string
-	SecretKey   string
-	ServiceCode string
-	CheckoutURL string
+	AccessKey    string
+	IVKey        string
+	SecretKey    string
+	ServiceCode  string
+	CheckoutURL  string
+	BaseURL      string
+	ClientID     string
+	ClientSecret string
+	APIKey       string
+	HTTPClient   *http.Client
 }
 
 type CellulantService struct {
@@ -112,6 +122,86 @@ func (s *CellulantService) CheckoutURL(request CellulantCheckoutRequest) (string
 	query.Set("access_key", s.config.AccessKey)
 	checkoutURL.RawQuery = query.Encode()
 	return checkoutURL.String(), nil
+}
+
+func (s *CellulantService) VerifyPayment(
+	ctx context.Context,
+	merchantTransactionID string,
+) (map[string]interface{}, error) {
+	if s.config.BaseURL == "" ||
+		s.config.ClientID == "" ||
+		s.config.ClientSecret == "" ||
+		s.config.APIKey == "" ||
+		s.config.ServiceCode == "" {
+		return nil, fmt.Errorf("Cellulant transaction verification is not configured")
+	}
+
+	authBody, err := json.Marshal(map[string]string{
+		"client_id":     s.config.ClientID,
+		"client_secret": s.config.ClientSecret,
+		"grant_type":    "client_credentials",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encoding Cellulant auth request: %w", err)
+	}
+	authURL := strings.TrimRight(s.config.BaseURL, "/") + "/v1/oauth/token/request"
+	authRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL, bytes.NewReader(authBody))
+	if err != nil {
+		return nil, fmt.Errorf("creating Cellulant auth request: %w", err)
+	}
+	authRequest.Header.Set("Content-Type", "application/json")
+	authRequest.Header.Set("Accept", "application/json")
+	authRequest.Header.Set("apiKey", s.config.APIKey)
+
+	client := s.config.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: 15 * time.Second}
+	}
+	authResponse, err := client.Do(authRequest)
+	if err != nil {
+		return nil, fmt.Errorf("authenticating with Cellulant: %w", err)
+	}
+	defer authResponse.Body.Close()
+	if authResponse.StatusCode < http.StatusOK || authResponse.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("Cellulant auth returned status %d", authResponse.StatusCode)
+	}
+	var authPayload struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(authResponse.Body).Decode(&authPayload); err != nil {
+		return nil, fmt.Errorf("decoding Cellulant auth response: %w", err)
+	}
+	if authPayload.AccessToken == "" {
+		return nil, fmt.Errorf("Cellulant auth response did not include an access token")
+	}
+
+	queryURL := fmt.Sprintf(
+		"%s/v3/checkout-api/query/%s/%s",
+		strings.TrimRight(s.config.BaseURL, "/"),
+		url.PathEscape(s.config.ServiceCode),
+		url.PathEscape(merchantTransactionID),
+	)
+	queryRequest, err := http.NewRequestWithContext(ctx, http.MethodGet, queryURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating Cellulant query request: %w", err)
+	}
+	queryRequest.Header.Set("Accept", "application/json")
+	queryRequest.Header.Set("Authorization", "Bearer "+authPayload.AccessToken)
+	queryRequest.Header.Set("apiKey", s.config.APIKey)
+
+	queryResponse, err := client.Do(queryRequest)
+	if err != nil {
+		return nil, fmt.Errorf("querying Cellulant transaction: %w", err)
+	}
+	defer queryResponse.Body.Close()
+	if queryResponse.StatusCode < http.StatusOK || queryResponse.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("Cellulant query returned status %d", queryResponse.StatusCode)
+	}
+	var payload map[string]interface{}
+	if err := json.NewDecoder(queryResponse.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decoding Cellulant query response: %w", err)
+	}
+	return payload, nil
 }
 
 func pkcs7Pad(payload []byte, blockSize int) []byte {

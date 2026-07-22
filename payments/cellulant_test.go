@@ -1,9 +1,18 @@
 package payments
 
 import (
+	"io"
+	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return fn(request)
+}
 
 func TestCellulantEncryptMatchesLegacyPHP(t *testing.T) {
 	service := NewCellulantService(CellulantConfig{
@@ -77,5 +86,58 @@ func TestCellulantNumericFieldsAcceptStrings(t *testing.T) {
 	}
 	if got := firstFloat("350.00", float64(0)); got != 350 {
 		t.Fatalf("firstFloat() = %f, want 350", got)
+	}
+	if got := firstInt(188.5); got != 0 {
+		t.Fatalf("firstInt() accepted fractional status as %d", got)
+	}
+}
+
+func TestParseCellulantEventSupportsLegacySnakeCase(t *testing.T) {
+	event := parseCellulantEvent(map[string]interface{}{
+		"results": map[string]interface{}{
+			"checkout_request_id":     "checkout-1",
+			"merchant_transaction_id": "CEL-SUB-123",
+			"account_number":          "CEL-SUB-123",
+			"request_status_code":     "188",
+			"amount_paid":             "350.00",
+			"request_currency_code":   "KES",
+			"service_code":            "FUNDIS",
+		},
+	})
+	if event.RequestStatusCode != 188 || event.AmountPaid != 350 {
+		t.Fatalf("parseCellulantEvent() = %#v", event)
+	}
+}
+
+func TestVerifyCellulantPaymentRequeriesProvider(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		body := `{"access_token":"token"}`
+		if strings.Contains(request.URL.Path, "/checkout-api/query/") {
+			if request.Header.Get("Authorization") != "Bearer token" {
+				t.Fatalf("Authorization = %q", request.Header.Get("Authorization"))
+			}
+			body = `{"results":{"merchant_transaction_id":"CEL-SUB-123","request_status_code":"188"}}`
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     make(http.Header),
+		}, nil
+	})}
+	service := NewCellulantService(CellulantConfig{
+		BaseURL:      "https://cellulant.example",
+		ClientID:     "client",
+		ClientSecret: "secret",
+		APIKey:       "api-key",
+		ServiceCode:  "FUNDIS",
+		HTTPClient:   client,
+	})
+	payload, err := service.VerifyPayment(t.Context(), "CEL-SUB-123")
+	if err != nil {
+		t.Fatalf("VerifyPayment() error = %v", err)
+	}
+	event := parseCellulantEvent(payload)
+	if event.MerchantTransactionID != "CEL-SUB-123" || event.RequestStatusCode != 188 {
+		t.Fatalf("verified event = %#v", event)
 	}
 }

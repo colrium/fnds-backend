@@ -245,6 +245,17 @@ func EnsureQualified(ctx context.Context, codeValue, referredUserID string) erro
 		QualifiedAt:            &now,
 	}
 	if _, err := configs.MI.DB.Collection("referrals").InsertOne(ctx, referral); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			var duplicate Referral
+			findErr := configs.MI.DB.Collection("referrals").
+				FindOne(ctx, bson.M{"referred_user_id": referredUserID}).
+				Decode(&duplicate)
+			if findErr == nil &&
+				duplicate.ReferrerID == code.UserID &&
+				duplicate.Status == StatusQualified {
+				return nil
+			}
+		}
 		return fmt.Errorf("creating qualified referral: %w", err)
 	}
 	return nil

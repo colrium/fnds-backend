@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -548,7 +549,12 @@ func HandleEmployerBrowseArtisans(ctx echo.Context) error {
 		)
 	}
 
-	artisans, total, err := users.ListArtisans(1, 50)
+	page := positiveQueryInt(ctx.QueryParam("page"), 1)
+	limit := positiveQueryInt(ctx.QueryParam("limit"), 50)
+	if limit > 100 {
+		limit = 100
+	}
+	artisans, total, err := users.ListArtisans(page, limit)
 	if err != nil {
 		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to fetch workers")
 	}
@@ -556,6 +562,14 @@ func HandleEmployerBrowseArtisans(ctx echo.Context) error {
 		"data":  artisans,
 		"total": total,
 	}, "Workers retrieved successfully")
+}
+
+func positiveQueryInt(value string, fallback int64) int64 {
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed < 1 {
+		return fallback
+	}
+	return parsed
 }
 
 // HandleEmployerDashboard returns vacancy + application analytics and recent

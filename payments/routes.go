@@ -4,8 +4,10 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"backend/configs"
 	"backend/responses"
@@ -91,50 +93,12 @@ func HandleFlutterwaveWebhook(ctx echo.Context) error {
 }
 
 func HandleCellulantWebhook(ctx echo.Context) error {
-	var payload struct {
-		CheckoutRequestID          interface{} `json:"checkoutRequestID"`
-		CheckoutRequestIDSnake     interface{} `json:"checkout_request_id"`
-		MerchantTransactionID      string      `json:"merchantTransactionID"`
-		MerchantTransactionIDSnake string      `json:"merchant_transaction_id"`
-		AccountNumber              string      `json:"accountNumber"`
-		AccountNumberSnake         string      `json:"account_number"`
-		RequestStatusCode          interface{} `json:"requestStatusCode"`
-		RequestStatusCodeSnake     interface{} `json:"request_status_code"`
-		RequestStatusDescription   string      `json:"requestStatusDescription"`
-		RequestStatusDescSnake     string      `json:"request_status_description"`
-		AmountPaid                 interface{} `json:"amountPaid"`
-		AmountPaidSnake            interface{} `json:"amount_paid"`
-		CurrencyCode               string      `json:"currencyCode"`
-		CurrencyCodeSnake          string      `json:"currency_code"`
-		ServiceCode                string      `json:"serviceCode"`
-		ServiceCodeSnake           string      `json:"service_code"`
-	}
+	var payload map[string]interface{}
 	if err := ctx.Bind(&payload); err != nil {
 		return responses.SendError(ctx, 400, "Invalid payload")
 	}
 
-	event := CellulantPaymentEvent{
-		CheckoutRequestID: firstString(
-			payload.CheckoutRequestID,
-			payload.CheckoutRequestIDSnake,
-		),
-		MerchantTransactionID: firstNonEmpty(
-			payload.MerchantTransactionID,
-			payload.MerchantTransactionIDSnake,
-		),
-		AccountNumber: firstNonEmpty(payload.AccountNumber, payload.AccountNumberSnake),
-		RequestStatusCode: firstInt(
-			payload.RequestStatusCode,
-			payload.RequestStatusCodeSnake,
-		),
-		RequestStatusDescription: firstNonEmpty(
-			payload.RequestStatusDescription,
-			payload.RequestStatusDescSnake,
-		),
-		AmountPaid:   firstFloat(payload.AmountPaid, payload.AmountPaidSnake),
-		CurrencyCode: firstNonEmpty(payload.CurrencyCode, payload.CurrencyCodeSnake),
-		ServiceCode:  firstNonEmpty(payload.ServiceCode, payload.ServiceCodeSnake),
-	}
+	event := parseCellulantEvent(payload)
 	if event.MerchantTransactionID == "" {
 		event.MerchantTransactionID = event.AccountNumber
 	}
@@ -143,6 +107,32 @@ func HandleCellulantWebhook(ctx echo.Context) error {
 	}
 
 	status := StatusFromCellulantCode(event.RequestStatusCode)
+	if status == "successful" {
+		verifiedPayload, err := NewCellulantService(CellulantConfig{
+			BaseURL:      configs.CellulantBaseURL(),
+			ClientID:     configs.CellulantClientID(),
+			ClientSecret: configs.CellulantClientSecret(),
+			APIKey:       configs.CellulantAPIKey(),
+			ServiceCode:  configs.CellulantServiceCode(),
+		}).VerifyPayment(ctx.Request().Context(), event.MerchantTransactionID)
+		if err != nil {
+			return responses.SendError(
+				ctx,
+				http.StatusBadGateway,
+				"Unable to verify Cellulant payment",
+			)
+		}
+		verifiedEvent := parseCellulantEvent(verifiedPayload)
+		if verifiedEvent.MerchantTransactionID == "" {
+			verifiedEvent.MerchantTransactionID = verifiedEvent.AccountNumber
+		}
+		if verifiedEvent.MerchantTransactionID != event.MerchantTransactionID ||
+			StatusFromCellulantCode(verifiedEvent.RequestStatusCode) != "successful" {
+			return responses.SendError(ctx, http.StatusBadRequest, "Cellulant payment is not successful")
+		}
+		event = verifiedEvent
+		status = "successful"
+	}
 	if err := transactions.UpdateCellulantTransaction(
 		event.MerchantTransactionID,
 		bson.M{
@@ -166,9 +156,50 @@ func HandleCellulantWebhook(ctx echo.Context) error {
 		"checkoutRequestID":     event.CheckoutRequestID,
 		"merchantTransactionID": event.MerchantTransactionID,
 		"statusCode":            acknowledgementCode,
-		"statusDescription":     "Payment processed successfully",
+		"statusDescription":     "Response was received",
 		"receiptNumber":         event.AccountNumber,
 	})
+}
+
+func parseCellulantEvent(payload map[string]interface{}) CellulantPaymentEvent {
+	result := payload
+	if nested, ok := payload["results"].(map[string]interface{}); ok {
+		result = nested
+	}
+	return CellulantPaymentEvent{
+		CheckoutRequestID: firstString(
+			result["checkoutRequestID"],
+			result["checkout_request_id"],
+		),
+		MerchantTransactionID: firstString(
+			result["merchantTransactionID"],
+			result["merchant_transaction_id"],
+		),
+		AccountNumber: firstString(result["accountNumber"], result["account_number"]),
+		RequestStatusCode: firstInt(
+			result["requestStatusCode"],
+			result["request_status_code"],
+			result["overallStatus"],
+			result["overall_status"],
+		),
+		RequestStatusDescription: firstString(
+			result["requestStatusDescription"],
+			result["request_status_description"],
+		),
+		AmountPaid: firstFloat(
+			result["amountPaid"],
+			result["amount_paid"],
+			result["requestAmount"],
+			result["request_amount"],
+		),
+		CurrencyCode: firstString(
+			result["currencyCode"],
+			result["currency_code"],
+			result["requestCurrencyCode"],
+			result["request_currency_code"],
+		),
+		ServiceCode: firstString(result["serviceCode"], result["service_code"]),
+	}
 }
 
 func HandleCellulantPaymentLinkWebhook(ctx echo.Context) error {
@@ -200,19 +231,13 @@ func StatusFromCellulantCode(code int) string {
 	}
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
 func firstString(values ...interface{}) string {
 	for _, value := range values {
 		if value != nil {
-			return fmt.Sprint(value)
+			asString := fmt.Sprint(value)
+			if asString != "" {
+				return asString
+			}
 		}
 	}
 	return ""
@@ -226,7 +251,7 @@ func firstInt(values ...interface{}) int {
 				return typed
 			}
 		case float64:
-			if typed != 0 {
+			if typed != 0 && math.Trunc(typed) == typed {
 				return int(typed)
 			}
 		case json.Number:
@@ -235,7 +260,7 @@ func firstInt(values ...interface{}) int {
 				return parsed
 			}
 		case string:
-			parsed, err := strconv.Atoi(typed)
+			parsed, err := strconv.Atoi(strings.TrimSpace(typed))
 			if err == nil && parsed != 0 {
 				return parsed
 			}
@@ -257,7 +282,7 @@ func firstFloat(values ...interface{}) float64 {
 				return parsed
 			}
 		case string:
-			parsed, err := strconv.ParseFloat(typed, 64)
+			parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
 			if err == nil && parsed != 0 {
 				return parsed
 			}
