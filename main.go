@@ -23,7 +23,6 @@ import (
 	"backend/payments"
 	"backend/profiles"
 	"backend/quotations"
-	"backend/referrals"
 	"backend/reviews"
 	"backend/seeders"
 	"backend/skills"
@@ -78,14 +77,6 @@ func main() {
 		slog.Error("failed to ensure file indexes", "error", err)
 		os.Exit(1)
 	}
-	if err := subscriptions.EnsureIndexes(context.Background()); err != nil {
-		slog.Error("failed to ensure subscription indexes", "error", err)
-		os.Exit(1)
-	}
-	if err := referrals.EnsureIndexes(context.Background()); err != nil {
-		slog.Error("failed to ensure referral indexes", "error", err)
-		os.Exit(1)
-	}
 
 	api := app.Group("/api/v1")
 
@@ -117,7 +108,6 @@ func main() {
 	institutions.RegisterRoutes(api)
 	payments.RegisterRoutes(api)
 	quotations.RegisterPaymentHooks()
-	subscriptions.RegisterPaymentHooks()
 	notifications.RegisterPublicRoutes(api)
 	reviews.RegisterPublicRoutes(api)
 	quotations.RegisterPublicRoutes(api)
@@ -142,7 +132,6 @@ func main() {
 	quotations.RegisterAuthRoutes(authGroup)
 	transactions.RegisterAuthRoutes(authGroup)
 	subscriptions.RegisterAuthRoutes(authGroup)
-	referrals.RegisterAuthRoutes(authGroup)
 	chat.RegisterAuthRoutes(authGroup)
 	banks.RegisterAuthRoutes(authGroup)
 	documenttypes.RegisterAuthRoutes(authGroup)

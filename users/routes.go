@@ -10,7 +10,6 @@ import (
 
 	"backend/contextutil"
 	"backend/notifications"
-	"backend/referrals"
 	"backend/responses"
 	"backend/turnstile"
 
@@ -156,15 +155,6 @@ func HandleVerifyOtp(ctx echo.Context) error {
 	})
 	if err != nil {
 		return responses.SendError(ctx, 500, "failed to verify OTP")
-	}
-	if user.ReferralCodeUsed != "" {
-		if err := referrals.EnsureQualified(
-			ctx.Request().Context(),
-			user.ReferralCodeUsed,
-			user.ID,
-		); err != nil {
-			slog.Error("failed to qualify referral", "referred_user_id", user.ID, "error", err)
-		}
 	}
 
 	return responses.SendOK(ctx, nil, "OTP verified successfully")
