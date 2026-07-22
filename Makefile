@@ -5,11 +5,11 @@ all: build
 
 build:
 	@echo "Building..."
-	@go build -o main main.go
+	@go build -o main .
 
 # Run the application
 run:
-	@go run main.go
+	@go run .
 
 # Create DB container
 docker-run:

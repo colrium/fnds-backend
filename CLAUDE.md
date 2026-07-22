@@ -11,11 +11,11 @@ This is a Go backend API for **Fundis** - a platform connecting artisans (skille
 ```bash
 # Build the application
 make build
-# Or: go build -o main main.go
+# Or: go build -o main .
 
 # Run the application
 make run
-# Or: go run main.go
+# Or: go run .
 
 # Run with live reload (development)
 make dev
