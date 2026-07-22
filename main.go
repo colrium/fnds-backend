@@ -133,13 +133,13 @@ func main() {
 	chat.RegisterAuthRoutes(authGroup)
 	banks.RegisterAuthRoutes(authGroup)
 	documenttypes.RegisterAuthRoutes(authGroup)
-	files.RegisterAuthRoutes(authGroup, fileHandler)
 
 	// Artisan-only routes
 	artisanGroup := api.Group("")
 	artisanGroup.Use(middleware.JWTAuth, middleware.IsArtisan)
 	users.RegisterArtisanRoutes(artisanGroup)
 	jobrequests.RegisterArtisanRoutes(artisanGroup)
+	files.RegisterArtisanRoutes(artisanGroup, fileHandler)
 
 	authGroup.GET("/email/resend", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"message": "Verification email sent"})

@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 const defaultPresignTTL = 15 * time.Minute
@@ -19,6 +20,7 @@ type Storage interface {
 	PresignUpload(ctx context.Context, objectKey, contentType, userID string, size int64) (*UploadIntent, error)
 	PresignDownload(ctx context.Context, objectKey string) (string, error)
 	Stat(ctx context.Context, objectKey string) (*ObjectInfo, error)
+	MarkComplete(ctx context.Context, objectKey string) error
 	Delete(ctx context.Context, objectKey string) error
 	PublicURL(objectKey string) string
 	KeyFromURL(fileURL string) (string, error)
@@ -104,6 +106,7 @@ func (s *S3Store) PresignUpload(
 		Metadata: map[string]string{
 			"user-id": userID,
 		},
+		Tagging: aws.String("status=pending"),
 	}, s3.WithPresignExpires(s.presignTTL))
 	if err != nil {
 		return nil, fmt.Errorf("presigning S3 upload: %w", err)
@@ -141,6 +144,22 @@ func (s *S3Store) Stat(ctx context.Context, objectKey string) (*ObjectInfo, erro
 		ContentType: aws.ToString(result.ContentType),
 		UserID:      result.Metadata["user-id"],
 	}, nil
+}
+
+func (s *S3Store) MarkComplete(ctx context.Context, objectKey string) error {
+	_, err := s.client.PutObjectTagging(ctx, &s3.PutObjectTaggingInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(objectKey),
+		Tagging: &types.Tagging{
+			TagSet: []types.Tag{
+				{Key: aws.String("status"), Value: aws.String("complete")},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("marking S3 upload complete: %w", err)
+	}
+	return nil
 }
 
 func (s *S3Store) Delete(ctx context.Context, objectKey string) error {

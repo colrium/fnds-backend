@@ -57,6 +57,10 @@ func (s *storageStub) Stat(context.Context, string) (*ObjectInfo, error) {
 	return s.object, s.err
 }
 
+func (s *storageStub) MarkComplete(context.Context, string) error {
+	return s.err
+}
+
 func (s *storageStub) Delete(_ context.Context, objectKey string) error {
 	s.deletedKey = objectKey
 	return s.err

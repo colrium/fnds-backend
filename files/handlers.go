@@ -45,6 +45,9 @@ func (h *Handler) List(ctx echo.Context) error {
 	}
 	response := make([]FileResponse, 0, len(fileList))
 	for _, file := range fileList {
+		if file.FileURL == "" {
+			continue
+		}
 		objectKey, err := h.storage.KeyFromURL(file.FileURL)
 		if err != nil || !objectBelongsToUser(objectKey, userID) {
 			return responses.SendError(ctx, http.StatusInternalServerError, "Stored file URL is invalid")
@@ -124,10 +127,10 @@ func (h *Handler) Complete(ctx echo.Context) error {
 		MimeType:       req.MimeType,
 		Size:           req.Size,
 	}
+	if err := h.storage.MarkComplete(ctx.Request().Context(), req.ObjectKey); err != nil {
+		return responses.SendError(ctx, http.StatusBadGateway, "Upload could not be finalized")
+	}
 	if err := h.repository.Create(ctx.Request().Context(), file); err != nil {
-		if cleanupErr := h.storage.Delete(ctx.Request().Context(), req.ObjectKey); cleanupErr != nil {
-			return responses.SendError(ctx, http.StatusBadGateway, "Failed to save or clean up uploaded file")
-		}
 		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to save file")
 	}
 	downloadURL, err := h.storage.PresignDownload(ctx.Request().Context(), req.ObjectKey)
