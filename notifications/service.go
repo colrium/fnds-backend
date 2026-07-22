@@ -41,6 +41,25 @@ type NewVacancyEvent struct {
 	Skill        string
 }
 
+type QuotationReceivedEvent struct {
+	CustomerID    string
+	CustomerEmail string
+	ArtisanName   string
+	QuotationID   string
+	JobRequestID  string
+	JobTitle      string
+	TotalAmount   float64
+}
+
+type QuotationDecisionEvent struct {
+	ArtisanID    string
+	ArtisanEmail string
+	CustomerName string
+	QuotationID  string
+	JobTitle     string
+	Status       string
+}
+
 func NewService(store notificationCreator) *Service {
 	return &Service{store: store}
 }
@@ -106,4 +125,54 @@ func (s *Service) NotifyMatchingWorkers(ctx context.Context, event NewVacancyEve
 		})
 	}
 	return s.store.CreateMany(ctx, notifications)
+}
+
+func (s *Service) NotifyQuotationReceived(ctx context.Context, event QuotationReceivedEvent) error {
+	notification := Notification{
+		UserID:    event.CustomerID,
+		Type:      TypeQuotationReceived,
+		Title:     "New quotation",
+		Message:   event.ArtisanName + " sent you a quotation for " + event.JobTitle + ".",
+		ActionURL: "/jobs/" + event.JobRequestID,
+	}
+	if strings.TrimSpace(event.CustomerEmail) != "" {
+		notification.Delivery = &Delivery{
+			Channel: DeliveryChannelEmail,
+			To:      event.CustomerEmail,
+			Subject: "New quotation from " + event.ArtisanName,
+			Body: fmt.Sprintf(
+				"<p>%s sent you a quotation for <strong>%s</strong> totalling KES %.2f.</p><p><a href=\"%s\">Review quotation</a></p>",
+				html.EscapeString(event.ArtisanName),
+				html.EscapeString(event.JobTitle),
+				event.TotalAmount,
+				html.EscapeString(strings.TrimRight(configs.AppPublicURL(), "/")+notification.ActionURL),
+			),
+		}
+	}
+	return s.store.Create(ctx, notification)
+}
+
+func (s *Service) NotifyQuotationDecision(ctx context.Context, event QuotationDecisionEvent) error {
+	notification := Notification{
+		UserID:    event.ArtisanID,
+		Type:      TypeQuotationDecision,
+		Title:     "Quotation " + event.Status,
+		Message:   event.CustomerName + " " + event.Status + " your quotation for " + event.JobTitle + ".",
+		ActionURL: "/quotations",
+	}
+	if strings.TrimSpace(event.ArtisanEmail) != "" {
+		notification.Delivery = &Delivery{
+			Channel: DeliveryChannelEmail,
+			To:      event.ArtisanEmail,
+			Subject: "Quotation " + event.Status,
+			Body: fmt.Sprintf(
+				"<p>%s %s your quotation for <strong>%s</strong>.</p><p><a href=\"%s\">Open quotations</a></p>",
+				html.EscapeString(event.CustomerName),
+				html.EscapeString(event.Status),
+				html.EscapeString(event.JobTitle),
+				html.EscapeString(strings.TrimRight(configs.AppPublicURL(), "/")+notification.ActionURL),
+			),
+		}
+	}
+	return s.store.Create(ctx, notification)
 }

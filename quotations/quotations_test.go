@@ -6,11 +6,11 @@ import (
 
 func TestValidateCreateQuotation(t *testing.T) {
 	tests := []struct {
-		name          string
-		jobRequestID  string
-		totalAmount   float64
-		wantErr       bool
-		errMsg        string
+		name         string
+		jobRequestID string
+		totalAmount  float64
+		wantErr      bool
+		errMsg       string
 	}{
 		{"valid quotation", "jr-123", 50000, false, ""},
 		{"empty job request ID", "", 50000, true, "job request ID is required"},

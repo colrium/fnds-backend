@@ -8,7 +8,24 @@ import (
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+func EnsureIndexes(ctx context.Context) error {
+	_, err := configs.MI.DB.Collection("external_invoices").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "quotation_id", Value: 1}},
+		Options: options.Index().SetName("external_invoices_quotation_unique").SetUnique(true),
+	})
+	if err != nil {
+		return err
+	}
+	_, err = configs.MI.DB.Collection("quotation_attachments").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "quotation_id", Value: 1}, {Key: "created_at", Value: -1}},
+		Options: options.Index().SetName("quotation_attachments_quotation_created"),
+	})
+	return err
+}
 
 type Quotation struct {
 	ID           string          `json:"id" bson:"_id"`

@@ -9,10 +9,10 @@ import (
 )
 
 type PushNotificationRequest struct {
-	Token   string            `json:"token"`
-	Title   string            `json:"title"`
-	Body    string            `json:"body"`
-	Data    map[string]string `json:"data,omitempty"`
+	Token string            `json:"token"`
+	Title string            `json:"title"`
+	Body  string            `json:"body"`
+	Data  map[string]string `json:"data,omitempty"`
 }
 
 type FCMService struct {
@@ -24,9 +24,9 @@ func NewFCMService(serverKey string) *FCMService {
 }
 
 type fcmMessage struct {
-	To                       string            `json:"to"`
-	Notification             fcmNotification   `json:"notification,omitempty"`
-	Data                     map[string]string  `json:"data,omitempty"`
+	To           string            `json:"to"`
+	Notification fcmNotification   `json:"notification,omitempty"`
+	Data         map[string]string `json:"data,omitempty"`
 }
 
 type fcmNotification struct {

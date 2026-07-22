@@ -82,6 +82,10 @@ func main() {
 		slog.Error("failed to ensure subscription indexes", "error", err)
 		os.Exit(1)
 	}
+	if err := quotations.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to ensure quotation indexes", "error", err)
+		os.Exit(1)
+	}
 	if err := referrals.EnsureIndexes(context.Background()); err != nil {
 		slog.Error("failed to ensure referral indexes", "error", err)
 		os.Exit(1)
@@ -145,6 +149,7 @@ func main() {
 	reviews.RegisterAuthRoutes(authGroup)
 	jobrequests.RegisterAuthRoutes(authGroup)
 	quotations.RegisterAuthRoutes(authGroup)
+	quotations.RegisterAttachmentRoutes(authGroup, s3Store, maxUploadBytes)
 	transactions.RegisterAuthRoutes(authGroup)
 	subscriptions.RegisterAuthRoutes(authGroup)
 	referrals.RegisterAuthRoutes(authGroup)

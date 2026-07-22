@@ -17,6 +17,8 @@ const (
 	TypeNewApplication    = "new_application"
 	TypeApplicationStatus = "application_status"
 	TypeSkillMatch        = "skill_match"
+	TypeQuotationReceived = "quotation_received"
+	TypeQuotationDecision = "quotation_decision"
 )
 
 type DeliveryChannel string
