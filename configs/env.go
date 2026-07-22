@@ -2,6 +2,7 @@ package configs
 
 import (
 	"os"
+	"strconv"
 )
 
 func AppEnv() string {
@@ -54,6 +55,26 @@ func TurnstileHostname() string {
 
 func FlutterwaveSecretKey() string {
 	return os.Getenv("FLUTTERWAVE_SECRET_KEY")
+}
+
+func AWSRegion() string {
+	return os.Getenv("AWS_REGION")
+}
+
+func AWSS3Bucket() string {
+	return os.Getenv("AWS_S3_BUCKET")
+}
+
+func AWSS3PublicBaseURL() string {
+	return os.Getenv("AWS_S3_PUBLIC_BASE_URL")
+}
+
+func AWSS3MaxUploadBytes() (int64, error) {
+	value := os.Getenv("AWS_S3_MAX_UPLOAD_BYTES")
+	if value == "" {
+		return 0, nil
+	}
+	return strconv.ParseInt(value, 10, 64)
 }
 
 // APIPublicURL is the public base URL of this backend, used to build links

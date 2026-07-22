@@ -14,6 +14,7 @@ import (
 	"backend/chat"
 	"backend/configs"
 	"backend/documenttypes"
+	"backend/files"
 	"backend/institutions"
 	"backend/jobrequests"
 	"backend/locations"
@@ -47,6 +48,22 @@ func main() {
 
 	configs.ConnectDB()
 	slog.Info("database connected", "env", configs.AppEnv())
+
+	maxUploadBytes, err := configs.AWSS3MaxUploadBytes()
+	if err != nil {
+		slog.Error("invalid AWS_S3_MAX_UPLOAD_BYTES", "error", err)
+		os.Exit(1)
+	}
+	s3Store, err := files.NewS3Store(context.Background(), files.S3Config{
+		Region:        configs.AWSRegion(),
+		Bucket:        configs.AWSS3Bucket(),
+		PublicBaseURL: configs.AWSS3PublicBaseURL(),
+	})
+	if err != nil {
+		slog.Error("failed to configure S3 storage", "error", err)
+		os.Exit(1)
+	}
+	fileHandler := files.NewHandler(files.NewMongoRepository(), s3Store, maxUploadBytes)
 
 	// Idempotent: each seeder skips when its collection is already populated.
 	seeders.RunAll()
@@ -112,6 +129,7 @@ func main() {
 	chat.RegisterAuthRoutes(authGroup)
 	banks.RegisterAuthRoutes(authGroup)
 	documenttypes.RegisterAuthRoutes(authGroup)
+	files.RegisterAuthRoutes(authGroup, fileHandler)
 
 	// Artisan-only routes
 	artisanGroup := api.Group("")
