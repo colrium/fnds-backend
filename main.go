@@ -86,6 +86,11 @@ func main() {
 		slog.Error("failed to ensure referral indexes", "error", err)
 		os.Exit(1)
 	}
+	if err := notifications.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to ensure notification indexes", "error", err)
+		os.Exit(1)
+	}
+	go notifications.NewDefaultDispatcher().Run(context.Background())
 	// Restore job request index creation after the MongoDB volume is expanded.
 
 	api := app.Group("/api/v1")

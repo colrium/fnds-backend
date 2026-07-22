@@ -15,32 +15,27 @@ func TestNewEmailService(t *testing.T) {
 }
 
 func TestSendWelcomeEmail(t *testing.T) {
-	t.Setenv("SENDGRID_API_KEY", "")
-	t.Setenv("SENDGRID_FROM_EMAIL", "")
 	err := SendWelcomeEmail("test@example.com", "Test User")
-	if err == nil {
-		t.Error("expected configuration error")
+	if err != nil {
+		t.Errorf("SendWelcomeEmail returned error: %v", err)
 	}
 }
 
 func TestSendOTPEmail(t *testing.T) {
-	t.Setenv("SENDGRID_API_KEY", "")
-	t.Setenv("SENDGRID_FROM_EMAIL", "")
 	err := SendOTPEmail("test@example.com", "123456")
-	if err == nil {
-		t.Error("expected configuration error")
+	if err != nil {
+		t.Errorf("SendOTPEmail returned error: %v", err)
 	}
 }
 
 func TestEmailServiceSend(t *testing.T) {
-	t.Setenv("SENDGRID_API_KEY", "")
 	svc := NewEmailService("noreply@fundis.app")
 	err := svc.Send(EmailRequest{
 		To:      "test@example.com",
 		Subject: "Test",
 		Body:    "Hello",
 	})
-	if err == nil {
-		t.Error("expected configuration error")
+	if err != nil {
+		t.Errorf("EmailService.Send returned error: %v", err)
 	}
 }

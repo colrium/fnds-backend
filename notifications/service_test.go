@@ -50,8 +50,7 @@ func (s *smsSenderStub) Send(to, message string) error {
 
 func TestServiceNotifyNewApplication(t *testing.T) {
 	store := &notificationCreatorStub{}
-	email := &emailSenderStub{}
-	service := NewService(store, email, &smsSenderStub{})
+	service := NewService(store)
 
 	err := service.NotifyNewApplication(context.Background(), NewApplicationEvent{
 		EmployerID:    "employer-1",
@@ -74,8 +73,10 @@ func TestServiceNotifyNewApplication(t *testing.T) {
 	if got.ActionURL != "/vacancies/vacancy-1/applications" {
 		t.Fatalf("action URL = %q", got.ActionURL)
 	}
-	if len(email.messages) != 1 || email.messages[0].to != "employer@example.com" {
-		t.Fatalf("unexpected email messages: %#v", email.messages)
+	if got.Delivery == nil ||
+		got.Delivery.Channel != DeliveryChannelEmail ||
+		got.Delivery.To != "employer@example.com" {
+		t.Fatalf("unexpected delivery: %#v", got.Delivery)
 	}
 }
 
@@ -83,17 +84,16 @@ func TestServiceNotifyApplicationDecision(t *testing.T) {
 	tests := []struct {
 		name         string
 		status       string
-		wantSMSCount int
+		wantDelivery bool
 	}{
-		{name: "accepted sends sms", status: "accepted", wantSMSCount: 1},
-		{name: "rejected does not send sms", status: "rejected", wantSMSCount: 0},
+		{name: "accepted queues sms", status: "accepted", wantDelivery: true},
+		{name: "rejected does not queue sms", status: "rejected", wantDelivery: false},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			store := &notificationCreatorStub{}
-			sms := &smsSenderStub{}
-			service := NewService(store, &emailSenderStub{}, sms)
+			service := NewService(store)
 
 			err := service.NotifyApplicationDecision(context.Background(), ApplicationDecisionEvent{
 				WorkerID:     "worker-1",
@@ -111,8 +111,12 @@ func TestServiceNotifyApplicationDecision(t *testing.T) {
 			if store.created[0].Type != TypeApplicationStatus {
 				t.Fatalf("notification type = %q", store.created[0].Type)
 			}
-			if len(sms.messages) != test.wantSMSCount {
-				t.Fatalf("sms messages = %d, want %d", len(sms.messages), test.wantSMSCount)
+			hasDelivery := store.created[0].Delivery != nil
+			if hasDelivery != test.wantDelivery {
+				t.Fatalf("has delivery = %v, want %v", hasDelivery, test.wantDelivery)
+			}
+			if hasDelivery && store.created[0].Delivery.Channel != DeliveryChannelSMS {
+				t.Fatalf("delivery channel = %q", store.created[0].Delivery.Channel)
 			}
 		})
 	}
@@ -120,7 +124,7 @@ func TestServiceNotifyApplicationDecision(t *testing.T) {
 
 func TestServiceNotifyMatchingWorkers(t *testing.T) {
 	store := &notificationCreatorStub{}
-	service := NewService(store, &emailSenderStub{}, &smsSenderStub{})
+	service := NewService(store)
 
 	err := service.NotifyMatchingWorkers(context.Background(), NewVacancyEvent{
 		WorkerIDs:    []string{"worker-1", "worker-2"},

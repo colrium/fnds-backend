@@ -2,13 +2,11 @@ package notifications
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"html"
 	"strings"
 
 	"backend/configs"
-	"backend/integrations"
 )
 
 type notificationCreator interface {
@@ -16,18 +14,8 @@ type notificationCreator interface {
 	CreateMany(context.Context, []Notification) error
 }
 
-type emailSender interface {
-	Send(context.Context, string, string, string) error
-}
-
-type smsSender interface {
-	Send(string, string) error
-}
-
 type Service struct {
 	store notificationCreator
-	email emailSender
-	sms   smsSender
 }
 
 type NewApplicationEvent struct {
@@ -53,65 +41,57 @@ type NewVacancyEvent struct {
 	Skill        string
 }
 
-func NewService(store notificationCreator, email emailSender, sms smsSender) *Service {
-	return &Service{store: store, email: email, sms: sms}
+func NewService(store notificationCreator) *Service {
+	return &Service{store: store}
 }
 
 func NewDefaultService() *Service {
-	return NewService(
-		NewMongoStore(),
-		integrations.NewSendGridClient(
-			configs.SendGridAPIKey(),
-			configs.SendGridFromEmail(),
-			configs.SendGridFromName(),
-		),
-		&AdvantaSMS{},
-	)
+	return NewService(NewMongoStore())
 }
 
 func (s *Service) NotifyNewApplication(ctx context.Context, event NewApplicationEvent) error {
 	actionURL := "/vacancies/" + event.VacancyID + "/applications"
-	notificationErr := s.store.Create(ctx, Notification{
+	reviewURL := strings.TrimRight(configs.AppPublicURL(), "/") + actionURL
+	notification := Notification{
 		UserID:    event.EmployerID,
 		Type:      TypeNewApplication,
 		Title:     "New application",
 		Message:   event.ApplicantName + " applied for " + event.VacancyTitle + ".",
 		ActionURL: actionURL,
-	})
-
-	reviewURL := strings.TrimRight(configs.AppPublicURL(), "/") + actionURL
-	emailErr := s.email.Send(
-		ctx,
-		event.EmployerEmail,
-		"New application for "+event.VacancyTitle,
-		fmt.Sprintf(
-			"<p>%s applied for <strong>%s</strong>.</p><p><a href=\"%s\">Review the application</a></p>",
-			html.EscapeString(event.ApplicantName),
-			html.EscapeString(event.VacancyTitle),
-			html.EscapeString(reviewURL),
-		),
-	)
-	return errors.Join(notificationErr, emailErr)
+	}
+	if strings.TrimSpace(event.EmployerEmail) != "" {
+		notification.Delivery = &Delivery{
+			Channel: DeliveryChannelEmail,
+			To:      event.EmployerEmail,
+			Subject: "New application for " + event.VacancyTitle,
+			Body: fmt.Sprintf(
+				"<p>%s applied for <strong>%s</strong>.</p><p><a href=\"%s\">Review the application</a></p>",
+				html.EscapeString(event.ApplicantName),
+				html.EscapeString(event.VacancyTitle),
+				html.EscapeString(reviewURL),
+			),
+		}
+	}
+	return s.store.Create(ctx, notification)
 }
 
 func (s *Service) NotifyApplicationDecision(ctx context.Context, event ApplicationDecisionEvent) error {
-	notificationErr := s.store.Create(ctx, Notification{
+	notification := Notification{
 		UserID:    event.WorkerID,
 		Type:      TypeApplicationStatus,
 		Title:     "Application " + event.Status,
 		Message:   "Your application for " + event.VacancyTitle + " was " + event.Status + ".",
 		ActionURL: "/vacancies",
-	})
-	if event.Status != "accepted" {
-		return notificationErr
 	}
-
-	smsErr := s.sms.Send(
-		event.WorkerPhone,
-		"Congratulations! You have been hired for "+event.VacancyTitle+
-			". Sign in to Fundis for the vacancy details.",
-	)
-	return errors.Join(notificationErr, smsErr)
+	if event.Status == "accepted" && strings.TrimSpace(event.WorkerPhone) != "" {
+		notification.Delivery = &Delivery{
+			Channel: DeliveryChannelSMS,
+			To:      event.WorkerPhone,
+			Body: "Congratulations! You have been hired for " + event.VacancyTitle +
+				". Sign in to Fundis for the vacancy details.",
+		}
+	}
+	return s.store.Create(ctx, notification)
 }
 
 func (s *Service) NotifyMatchingWorkers(ctx context.Context, event NewVacancyEvent) error {
