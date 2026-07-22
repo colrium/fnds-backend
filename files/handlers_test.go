@@ -49,6 +49,10 @@ func (s *storageStub) PresignUpload(context.Context, string, string, string, int
 	return s.intent, s.err
 }
 
+func (s *storageStub) PresignDownload(_ context.Context, objectKey string) (string, error) {
+	return "https://signed.example.com/" + objectKey, s.err
+}
+
 func (s *storageStub) Stat(context.Context, string) (*ObjectInfo, error) {
 	return s.object, s.err
 }

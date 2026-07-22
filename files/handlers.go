@@ -17,6 +17,11 @@ type Handler struct {
 	maxUploadBytes int64
 }
 
+type FileResponse struct {
+	File
+	DownloadURL string `json:"download_url"`
+}
+
 func NewHandler(repository Repository, storage Storage, maxUploadBytes int64) *Handler {
 	if maxUploadBytes <= 0 {
 		maxUploadBytes = defaultMaxUploadBytes
@@ -38,7 +43,19 @@ func (h *Handler) List(ctx echo.Context) error {
 	if err != nil {
 		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to load files")
 	}
-	return responses.SendOK(ctx, fileList, "Files retrieved successfully")
+	response := make([]FileResponse, 0, len(fileList))
+	for _, file := range fileList {
+		objectKey, err := h.storage.KeyFromURL(file.FileURL)
+		if err != nil || !objectBelongsToUser(objectKey, userID) {
+			return responses.SendError(ctx, http.StatusInternalServerError, "Stored file URL is invalid")
+		}
+		downloadURL, err := h.storage.PresignDownload(ctx.Request().Context(), objectKey)
+		if err != nil {
+			return responses.SendError(ctx, http.StatusBadGateway, "Failed to prepare file download")
+		}
+		response = append(response, FileResponse{File: file, DownloadURL: downloadURL})
+	}
+	return responses.SendOK(ctx, response, "Files retrieved successfully")
 }
 
 func (h *Handler) Presign(ctx echo.Context) error {
@@ -107,10 +124,18 @@ func (h *Handler) Complete(ctx echo.Context) error {
 		MimeType:       req.MimeType,
 		Size:           req.Size,
 	}
+	downloadURL, err := h.storage.PresignDownload(ctx.Request().Context(), req.ObjectKey)
+	if err != nil {
+		return responses.SendError(ctx, http.StatusBadGateway, "Failed to prepare file download")
+	}
 	if err := h.repository.Create(ctx.Request().Context(), file); err != nil {
 		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to save file")
 	}
-	return responses.SendCreated(ctx, file, "File uploaded successfully")
+	return responses.SendCreated(
+		ctx,
+		FileResponse{File: *file, DownloadURL: downloadURL},
+		"File uploaded successfully",
+	)
 }
 
 func (h *Handler) Delete(ctx echo.Context) error {

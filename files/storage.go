@@ -17,6 +17,7 @@ const defaultPresignTTL = 15 * time.Minute
 
 type Storage interface {
 	PresignUpload(ctx context.Context, objectKey, contentType, userID string, size int64) (*UploadIntent, error)
+	PresignDownload(ctx context.Context, objectKey string) (string, error)
 	Stat(ctx context.Context, objectKey string) (*ObjectInfo, error)
 	Delete(ctx context.Context, objectKey string) error
 	PublicURL(objectKey string) string
@@ -111,6 +112,17 @@ func (s *S3Store) PresignUpload(
 	}, nil
 }
 
+func (s *S3Store) PresignDownload(ctx context.Context, objectKey string) (string, error) {
+	result, err := s.presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(objectKey),
+	}, s3.WithPresignExpires(s.presignTTL))
+	if err != nil {
+		return "", fmt.Errorf("presigning S3 download: %w", err)
+	}
+	return result.URL, nil
+}
+
 func (s *S3Store) Stat(ctx context.Context, objectKey string) (*ObjectInfo, error) {
 	result, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),
@@ -163,6 +175,9 @@ func (s *S3Store) KeyFromURL(fileURL string) (string, error) {
 func flattenHeaders(headers http.Header) map[string]string {
 	result := make(map[string]string, len(headers))
 	for key, values := range headers {
+		if strings.EqualFold(key, "host") || strings.EqualFold(key, "content-length") {
+			continue
+		}
 		result[key] = strings.Join(values, ",")
 	}
 	return result
