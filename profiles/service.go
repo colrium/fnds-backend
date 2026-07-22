@@ -2,8 +2,10 @@ package profiles
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"backend/configs"
@@ -55,6 +57,8 @@ type ProfileUpdateRequest struct {
 	LanguageProficiencies          []LanguageProficiencyInput `json:"language_proficiencies"`
 	References                     []ReferenceInput           `json:"references"`
 }
+
+var ErrInvalidSkillSelection = errors.New("select exactly one valid skill")
 
 type WorkingHourInput struct {
 	Day         string `json:"day" bson:"day"`
@@ -283,6 +287,10 @@ func buildProfileUpdates(req ProfileUpdateRequest) bson.M {
 }
 
 func UpdateProfile(userID string, req ProfileUpdateRequest) error {
+	if err := validateProfileUpdate(req); err != nil {
+		return err
+	}
+
 	user, err := users.GetUserByID(userID)
 	if err != nil {
 		return fmt.Errorf("user not found")
@@ -306,6 +314,16 @@ func UpdateProfile(userID string, req ProfileUpdateRequest) error {
 	}
 
 	return updateSubResources(user.ID, req)
+}
+
+func validateProfileUpdate(req ProfileUpdateRequest) error {
+	if len(req.Skills) > 1 {
+		return ErrInvalidSkillSelection
+	}
+	if len(req.Skills) == 1 && strings.TrimSpace(req.Skills[0]) == "" {
+		return ErrInvalidSkillSelection
+	}
+	return nil
 }
 
 func updateSubResources(userID string, req ProfileUpdateRequest) error {

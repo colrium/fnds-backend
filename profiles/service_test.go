@@ -33,3 +33,34 @@ func TestBuildProfileUpdates_MapsAllScalarFields(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateProfileUpdate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		skills  []string
+		wantErr bool
+	}{
+		{name: "omitted skill is valid for draft", skills: nil},
+		{name: "empty skill list is valid for draft", skills: []string{}},
+		{name: "one skill is valid", skills: []string{"skill-1"}},
+		{name: "blank skill is invalid", skills: []string{" "}, wantErr: true},
+		{
+			name:    "multiple skills are invalid",
+			skills:  []string{"skill-1", "skill-2"},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateProfileUpdate(ProfileUpdateRequest{Skills: tt.skills})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateProfileUpdate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
