@@ -49,7 +49,7 @@ func StartCheckout(
 	if plan.PriceKES == 0 {
 		return nil, ErrFreePlan
 	}
-	if plan.HasEntitlement(EntitlementFeaturedJob) {
+	if plan.RequiresResource {
 		if strings.TrimSpace(request.ResourceID) == "" {
 			return nil, ErrResourceRequired
 		}
@@ -115,7 +115,7 @@ func StartCheckout(
 		return nil, fmt.Errorf("recording subscription transaction: %w", err)
 	}
 
-	redirectURL := strings.TrimRight(configs.AppPublicURL(), "/") + "/subscriptions"
+	redirectURL := strings.TrimRight(configs.AppPublicURL(), "/") + "/settings/billing"
 	callbackURL := strings.TrimRight(configs.APIPublicURL(), "/") + "/api/v1/cellulant/webhook"
 	checkoutURL, err := payments.NewCellulantService(cellulantConfig).CheckoutURL(
 		payments.CellulantCheckoutRequest{
@@ -155,17 +155,54 @@ func RegisterPaymentHooks() {
 
 type AccountSummary struct {
 	Subscriptions []UserSubscription `json:"subscriptions"`
+	History       []UserSubscription `json:"history"`
 	Entitlements  []Entitlement      `json:"entitlements"`
 }
+
+type activeSubscriptionsLookup func(
+	context.Context,
+	string,
+	time.Time,
+) ([]UserSubscription, error)
+
+type subscriptionHistoryLookup func(context.Context, string) ([]UserSubscription, error)
 
 func GetAccountSummary(
 	ctx context.Context,
 	userID string,
 	at time.Time,
 ) (*AccountSummary, error) {
-	active, err := GetActiveSubscriptions(ctx, userID, at)
+	return getAccountSummary(
+		ctx,
+		userID,
+		at,
+		GetActiveSubscriptions,
+		GetSubscriptionHistory,
+	)
+}
+
+func getAccountSummary(
+	ctx context.Context,
+	userID string,
+	at time.Time,
+	getActive activeSubscriptionsLookup,
+	getHistory subscriptionHistoryLookup,
+) (*AccountSummary, error) {
+	active, err := getActive(ctx, userID, at)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting active subscriptions: %w", err)
+	}
+	history, err := getHistory(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("getting subscription history: %w", err)
+	}
+	for i := range history {
+		if history[i].Status == StatusActive &&
+			history[i].EndDate != nil &&
+			!history[i].EndDate.After(at) {
+			history[i].Status = StatusExpired
+			history[i].IsActive = false
+		}
 	}
 	seen := map[Entitlement]bool{}
 	entitlements := []Entitlement{}
@@ -183,6 +220,7 @@ func GetAccountSummary(
 	}
 	return &AccountSummary{
 		Subscriptions: active,
+		History:       history,
 		Entitlements:  entitlements,
 	}, nil
 }

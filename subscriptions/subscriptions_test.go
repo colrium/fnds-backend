@@ -1,6 +1,7 @@
 package subscriptions
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -48,6 +49,50 @@ func TestPlanCatalogMatchesPublishedPricing(t *testing.T) {
 	}
 }
 
+func TestPlanCatalogIdentifiesResourceScopedPlans(t *testing.T) {
+	featured, ok := FindPlan("employer_featured_job")
+	if !ok {
+		t.Fatal("employer_featured_job not found")
+	}
+	if !featured.RequiresResource {
+		t.Error("employer_featured_job should require a resource")
+	}
+
+	for _, code := range []string{
+		"employer_browse_day",
+		"employer_hiring_month",
+		"worker_unlimited_day",
+		"worker_unlimited_week",
+		"worker_unlimited_month",
+	} {
+		plan, ok := FindPlan(code)
+		if !ok {
+			t.Fatalf("FindPlan(%q) not found", code)
+		}
+		if plan.RequiresResource {
+			t.Errorf("%s should be an account plan", code)
+		}
+	}
+}
+
+func TestPlanIDsInGroup(t *testing.T) {
+	got := PlanIDsInGroup(GroupWorkerApplications)
+	want := map[string]bool{
+		"worker_free":            true,
+		"worker_unlimited_day":   true,
+		"worker_unlimited_week":  true,
+		"worker_unlimited_month": true,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("PlanIDsInGroup() = %v, want %v", got, want)
+	}
+	for _, id := range got {
+		if !want[id] {
+			t.Errorf("unexpected plan ID %q", id)
+		}
+	}
+}
+
 func TestPlanSupportsUserType(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -70,6 +115,47 @@ func TestPlanSupportsUserType(t *testing.T) {
 			}
 			if got := plan.SupportsUserType(tt.userType); got != tt.want {
 				t.Errorf("SupportsUserType(%q) = %v, want %v", tt.userType, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPlansForUserType(t *testing.T) {
+	tests := []struct {
+		name         string
+		userType     string
+		wantAudience Audience
+		wantCount    int
+	}{
+		{
+			name:         "artisan receives worker plans",
+			userType:     "artisan",
+			wantAudience: AudienceWorker,
+			wantCount:    5,
+		},
+		{
+			name:         "customer receives employer plans",
+			userType:     "customer",
+			wantAudience: AudienceEmployer,
+			wantCount:    4,
+		},
+		{
+			name:      "unknown role receives no plans",
+			userType:  "admin",
+			wantCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plans := PlansForUserType(tt.userType)
+			if len(plans) != tt.wantCount {
+				t.Fatalf("PlansForUserType(%q) returned %d plans, want %d", tt.userType, len(plans), tt.wantCount)
+			}
+			for _, plan := range plans {
+				if plan.Audience != tt.wantAudience {
+					t.Errorf("plan %q audience = %q, want %q", plan.ID, plan.Audience, tt.wantAudience)
+				}
 			}
 		})
 	}
@@ -128,6 +214,56 @@ func TestIsSubscriptionActive(t *testing.T) {
 				t.Errorf("IsSubscriptionActiveAt() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGetAccountSummaryIncludesSubscriptionHistory(t *testing.T) {
+	now := time.Date(2026, time.July, 22, 10, 0, 0, 0, time.UTC)
+	active := []UserSubscription{
+		{
+			ID:                 "active-1",
+			SubscriptionPlanID: "worker_unlimited_month",
+			Status:             StatusActive,
+			IsActive:           true,
+		},
+	}
+	history := []UserSubscription{
+		active[0],
+		{
+			ID:                 "expired-1",
+			SubscriptionPlanID: "worker_unlimited_week",
+			Status:             StatusActive,
+			IsActive:           true,
+			EndDate:            timePointer(now.Add(-time.Hour)),
+		},
+	}
+
+	summary, err := getAccountSummary(
+		context.Background(),
+		"user-1",
+		now,
+		func(context.Context, string, time.Time) ([]UserSubscription, error) {
+			return active, nil
+		},
+		func(context.Context, string) ([]UserSubscription, error) {
+			return history, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("getAccountSummary() error = %v", err)
+	}
+	if len(summary.Subscriptions) != 1 {
+		t.Fatalf("active subscriptions = %d, want 1", len(summary.Subscriptions))
+	}
+	if len(summary.History) != 2 {
+		t.Fatalf("subscription history = %d, want 2", len(summary.History))
+	}
+	if summary.History[1].Status != StatusExpired || summary.History[1].IsActive {
+		t.Fatalf("elapsed history item = %+v, want expired and inactive", summary.History[1])
+	}
+	if len(summary.Entitlements) != 1 ||
+		summary.Entitlements[0] != EntitlementUnlimitedApplications {
+		t.Fatalf("entitlements = %v, want [%s]", summary.Entitlements, EntitlementUnlimitedApplications)
 	}
 }
 

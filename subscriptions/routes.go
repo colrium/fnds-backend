@@ -1,6 +1,7 @@
 package subscriptions
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -10,7 +11,15 @@ import (
 	"backend/users"
 
 	"github.com/labstack/echo/v4"
+	"go.mongodb.org/mongo-driver/mongo"
 )
+
+type userLookup func(string) (*users.User, error)
+type accountSummaryLookup func(
+	context.Context,
+	string,
+	time.Time,
+) (*AccountSummary, error)
 
 func RegisterAuthRoutes(g *echo.Group) {
 	g.GET("/subscriptions/plans", HandleGetPlans)
@@ -19,7 +28,27 @@ func RegisterAuthRoutes(g *echo.Group) {
 }
 
 func HandleGetPlans(ctx echo.Context) error {
-	return responses.SendOK(ctx, Plans(), "Plans retrieved successfully")
+	return handleGetPlans(users.GetUserByID)(ctx)
+}
+
+func handleGetPlans(getUserByID userLookup) echo.HandlerFunc {
+	return func(ctx echo.Context) error {
+		userID := contextutil.GetUserID(ctx)
+		if userID == "" {
+			return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
+		}
+		user, err := getUserByID(userID)
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
+		}
+		if err != nil {
+			return responses.SendError(ctx, http.StatusInternalServerError, "Failed to fetch subscription plans")
+		}
+		if user == nil {
+			return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
+		}
+		return responses.SendOK(ctx, PlansForUserType(user.UserType), "Plans retrieved successfully")
+	}
 }
 
 func HandleCreateSubscription(ctx echo.Context) error {
@@ -57,13 +86,23 @@ func HandleCreateSubscription(ctx echo.Context) error {
 }
 
 func HandleGetUserSubscription(ctx echo.Context) error {
-	userID := contextutil.GetUserID(ctx)
-	if userID == "" {
-		return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
+	return handleGetUserSubscription(GetAccountSummary)(ctx)
+}
+
+func handleGetUserSubscription(getSummary accountSummaryLookup) echo.HandlerFunc {
+	return func(ctx echo.Context) error {
+		userID := contextutil.GetUserID(ctx)
+		if userID == "" {
+			return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
+		}
+		summary, err := getSummary(
+			ctx.Request().Context(),
+			userID,
+			time.Now().UTC(),
+		)
+		if err != nil {
+			return responses.SendError(ctx, http.StatusInternalServerError, "Failed to fetch subscriptions")
+		}
+		return responses.SendOK(ctx, summary, "Subscriptions retrieved successfully")
 	}
-	summary, err := GetAccountSummary(ctx.Request().Context(), userID, time.Now().UTC())
-	if err != nil {
-		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to fetch subscriptions")
-	}
-	return responses.SendOK(ctx, summary, "Subscriptions retrieved successfully")
 }

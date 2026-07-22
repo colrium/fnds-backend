@@ -9,6 +9,16 @@ const (
 	AudienceWorker   Audience = "worker"
 )
 
+type PlanGroup string
+
+const (
+	GroupEmployerBase       PlanGroup = "employer_base"
+	GroupEmployerBrowsing   PlanGroup = "employer_browsing"
+	GroupEmployerJobFeature PlanGroup = "employer_job_feature"
+	GroupWorkerApplications PlanGroup = "worker_applications"
+	GroupWorkerDiscoverable PlanGroup = "worker_discoverable"
+)
+
 type Entitlement string
 
 const (
@@ -21,44 +31,50 @@ const (
 )
 
 type SubscriptionPlan struct {
-	ID           string        `json:"id" bson:"_id"`
-	Name         string        `json:"name" bson:"name"`
-	Description  string        `json:"description" bson:"description"`
-	Audience     Audience      `json:"audience" bson:"audience"`
-	PriceKES     int64         `json:"price" bson:"price"`
-	Currency     string        `json:"currency" bson:"currency"`
-	DurationDays int           `json:"duration" bson:"duration"`
-	Features     []string      `json:"features" bson:"features"`
-	Entitlements []Entitlement `json:"entitlements" bson:"entitlements"`
-	IsDefault    bool          `json:"is_default" bson:"is_default"`
+	ID               string        `json:"id" bson:"_id"`
+	Name             string        `json:"name" bson:"name"`
+	Description      string        `json:"description" bson:"description"`
+	Audience         Audience      `json:"audience" bson:"audience"`
+	Group            PlanGroup     `json:"group" bson:"group"`
+	PriceKES         int64         `json:"price" bson:"price"`
+	Currency         string        `json:"currency" bson:"currency"`
+	DurationDays     int           `json:"duration" bson:"duration"`
+	Features         []string      `json:"features" bson:"features"`
+	Entitlements     []Entitlement `json:"entitlements" bson:"entitlements"`
+	IsDefault        bool          `json:"is_default" bson:"is_default"`
+	RequiresResource bool          `json:"requires_resource" bson:"requires_resource"`
 }
 
 var planCatalog = []SubscriptionPlan{
 	{
 		ID:           "employer_free",
-		Name:         "Employer Free",
+		Name:         "Free",
 		Description:  "Post standard jobs and vacancies at no cost.",
 		Audience:     AudienceEmployer,
+		Group:        GroupEmployerBase,
 		Currency:     "KES",
 		Features:     []string{"Free basic jobs and vacancy posting"},
 		Entitlements: []Entitlement{EntitlementBasicJobPosting},
 		IsDefault:    true,
 	},
 	{
-		ID:           "employer_featured_job",
-		Name:         "Featured Job",
-		Description:  "Feature one job above standard listings until it closes.",
-		Audience:     AudienceEmployer,
-		PriceKES:     1000,
-		Currency:     "KES",
-		Features:     []string{"Feature one job at the top of vacancy listings"},
-		Entitlements: []Entitlement{EntitlementFeaturedJob},
+		ID:               "employer_featured_job",
+		Name:             "Featured Job",
+		Description:      "Feature one job above standard listings until it closes.",
+		Audience:         AudienceEmployer,
+		Group:            GroupEmployerJobFeature,
+		PriceKES:         1000,
+		Currency:         "KES",
+		Features:         []string{"Feature one job at the top of vacancy listings"},
+		Entitlements:     []Entitlement{EntitlementFeaturedJob},
+		RequiresResource: true,
 	},
 	{
 		ID:           "employer_browse_day",
-		Name:         "Employer Daily Access",
+		Name:         "Daily Access",
 		Description:  "Browse and contact unlimited worker profiles for one day.",
 		Audience:     AudienceEmployer,
+		Group:        GroupEmployerBrowsing,
 		PriceKES:     1000,
 		Currency:     "KES",
 		DurationDays: 1,
@@ -70,6 +86,7 @@ var planCatalog = []SubscriptionPlan{
 		Name:         "Monthly Hiring",
 		Description:  "Browse and contact unlimited worker profiles for 30 days.",
 		Audience:     AudienceEmployer,
+		Group:        GroupEmployerBrowsing,
 		PriceKES:     2000,
 		Currency:     "KES",
 		DurationDays: 30,
@@ -78,9 +95,10 @@ var planCatalog = []SubscriptionPlan{
 	},
 	{
 		ID:           "worker_free",
-		Name:         "Worker Free",
+		Name:         "Free",
 		Description:  "Apply to up to three vacancies every calendar month.",
 		Audience:     AudienceWorker,
+		Group:        GroupWorkerApplications,
 		Currency:     "KES",
 		Features:     []string{"Three job applications every calendar month"},
 		Entitlements: []Entitlement{EntitlementBasicApplications},
@@ -91,6 +109,7 @@ var planCatalog = []SubscriptionPlan{
 		Name:         "Unlimited Jobs Daily",
 		Description:  "Unlimited job applications for one day.",
 		Audience:     AudienceWorker,
+		Group:        GroupWorkerApplications,
 		PriceKES:     100,
 		Currency:     "KES",
 		DurationDays: 1,
@@ -102,6 +121,7 @@ var planCatalog = []SubscriptionPlan{
 		Name:         "Unlimited Jobs Weekly",
 		Description:  "Unlimited job applications for seven days.",
 		Audience:     AudienceWorker,
+		Group:        GroupWorkerApplications,
 		PriceKES:     350,
 		Currency:     "KES",
 		DurationDays: 7,
@@ -113,6 +133,7 @@ var planCatalog = []SubscriptionPlan{
 		Name:         "Unlimited Jobs Monthly",
 		Description:  "Unlimited job applications for 30 days.",
 		Audience:     AudienceWorker,
+		Group:        GroupWorkerApplications,
 		PriceKES:     700,
 		Currency:     "KES",
 		DurationDays: 30,
@@ -124,6 +145,7 @@ var planCatalog = []SubscriptionPlan{
 		Name:         "Verified and Discoverable",
 		Description:  "Get verified and remain discoverable to employers for 30 days.",
 		Audience:     AudienceWorker,
+		Group:        GroupWorkerDiscoverable,
 		PriceKES:     1000,
 		Currency:     "KES",
 		DurationDays: 30,
@@ -136,6 +158,26 @@ func Plans() []SubscriptionPlan {
 	plans := make([]SubscriptionPlan, len(planCatalog))
 	copy(plans, planCatalog)
 	return plans
+}
+
+func PlansForUserType(userType string) []SubscriptionPlan {
+	plans := make([]SubscriptionPlan, 0, len(planCatalog))
+	for _, plan := range planCatalog {
+		if plan.SupportsUserType(userType) {
+			plans = append(plans, plan)
+		}
+	}
+	return plans
+}
+
+func PlanIDsInGroup(group PlanGroup) []string {
+	ids := []string{}
+	for _, plan := range planCatalog {
+		if plan.Group == group {
+			ids = append(ids, plan.ID)
+		}
+	}
+	return ids
 }
 
 func FindPlan(code string) (SubscriptionPlan, bool) {

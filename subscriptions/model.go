@@ -143,6 +143,24 @@ func GetActiveSubscriptions(
 	return subscriptions, nil
 }
 
+func GetSubscriptionHistory(ctx context.Context, userID string) ([]UserSubscription, error) {
+	cursor, err := configs.MI.DB.Collection("user_subscriptions").Find(
+		ctx,
+		bson.M{"user_id": userID},
+		options.Find().SetSort(bson.D{{Key: "created_at", Value: -1}}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("finding subscription history: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	history := []UserSubscription{}
+	if err := cursor.All(ctx, &history); err != nil {
+		return nil, fmt.Errorf("decoding subscription history: %w", err)
+	}
+	return history, nil
+}
+
 func HasEntitlement(
 	ctx context.Context,
 	userID string,
@@ -218,6 +236,31 @@ func ActivatePurchase(ctx context.Context, event payments.CellulantPaymentEvent)
 				return fmt.Errorf("subscription purchase changed during activation")
 			}
 			end = purchase.EndDate
+		}
+	}
+
+	if !plan.RequiresResource {
+		planIDs := PlanIDsInGroup(plan.Group)
+		if len(planIDs) > 0 {
+			_, err := configs.MI.DB.Collection("user_subscriptions").UpdateMany(
+				ctx,
+				bson.M{
+					"_id":                  bson.M{"$ne": purchase.ID},
+					"user_id":              purchase.UserID,
+					"subscription_plan_id": bson.M{"$in": planIDs},
+					"status":               StatusActive,
+					"is_active":            true,
+				},
+				bson.M{"$set": bson.M{
+					"status":     StatusExpired,
+					"is_active":  false,
+					"end_date":   now,
+					"updated_at": now,
+				}},
+			)
+			if err != nil {
+				return fmt.Errorf("expiring superseded subscriptions: %w", err)
+			}
 		}
 	}
 
