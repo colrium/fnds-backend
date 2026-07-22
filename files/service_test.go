@@ -80,6 +80,16 @@ func TestBuildObjectKeyScopesAndSanitizes(t *testing.T) {
 	}
 }
 
+func TestBuildObjectKeyHandlesLongExtension(t *testing.T) {
+	t.Parallel()
+
+	key := buildObjectKey("user-1", "a."+strings.Repeat("x", 200))
+	name := key[strings.LastIndex(key, "/")+1:]
+	if len(name) > 120 {
+		t.Fatalf("buildObjectKey() name length = %d, want at most 120", len(name))
+	}
+}
+
 func TestS3StorePublicURLRoundTrip(t *testing.T) {
 	t.Parallel()
 

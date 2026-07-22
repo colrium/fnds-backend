@@ -72,6 +72,10 @@ func main() {
 		slog.Error("failed to ensure user indexes", "error", err)
 		os.Exit(1)
 	}
+	if err := files.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to ensure file indexes", "error", err)
+		os.Exit(1)
+	}
 
 	api := app.Group("/api/v1")
 

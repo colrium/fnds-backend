@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type File struct {
@@ -38,13 +39,42 @@ func NewMongoRepository() *MongoRepository {
 	return &MongoRepository{}
 }
 
+func EnsureIndexes(ctx context.Context) error {
+	_, err := configs.MI.DB.Collection("files").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "user_id", Value: 1},
+			{Key: "file_url", Value: 1},
+		},
+		Options: options.Index().
+			SetName("files_user_url_unique").
+			SetUnique(true).
+			SetPartialFilterExpression(bson.M{
+				"file_url": bson.M{"$type": "string"},
+			}),
+	})
+	if err != nil {
+		return fmt.Errorf("creating file indexes: %w", err)
+	}
+	return nil
+}
+
 func (r *MongoRepository) Create(ctx context.Context, file *File) error {
 	now := time.Now().UTC()
 	file.ID = uuid.New().String()
 	file.CreatedAt = now
 	file.UpdatedAt = now
 
-	if _, err := configs.MI.DB.Collection("files").InsertOne(ctx, file); err != nil {
+	filter := bson.M{"user_id": file.UserID, "file_url": file.FileURL}
+	update := bson.M{"$setOnInsert": file}
+	result := configs.MI.DB.Collection("files").FindOneAndUpdate(
+		ctx,
+		filter,
+		update,
+		options.FindOneAndUpdate().
+			SetUpsert(true).
+			SetReturnDocument(options.After),
+	)
+	if err := result.Decode(file); err != nil {
 		return fmt.Errorf("creating file record: %w", err)
 	}
 	return nil

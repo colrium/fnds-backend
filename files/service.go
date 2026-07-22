@@ -80,12 +80,15 @@ func buildObjectKey(userID, fileName string) string {
 	if len(name) > 120 {
 		ext := filepath.Ext(name)
 		base := strings.TrimSuffix(name, ext)
-		maxBase := 120 - len(ext)
-		if maxBase < 1 {
-			maxBase = 120
-			ext = ""
+		if len(ext) >= 120 {
+			name = name[:120]
+		} else {
+			maxBase := 120 - len(ext)
+			if len(base) > maxBase {
+				base = base[:maxBase]
+			}
+			name = base + ext
 		}
-		name = base[:maxBase] + ext
 	}
 	return fmt.Sprintf("users/%s/%s/%s", userID, uuid.New().String(), name)
 }

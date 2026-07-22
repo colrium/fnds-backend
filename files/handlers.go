@@ -124,12 +124,15 @@ func (h *Handler) Complete(ctx echo.Context) error {
 		MimeType:       req.MimeType,
 		Size:           req.Size,
 	}
+	if err := h.repository.Create(ctx.Request().Context(), file); err != nil {
+		if cleanupErr := h.storage.Delete(ctx.Request().Context(), req.ObjectKey); cleanupErr != nil {
+			return responses.SendError(ctx, http.StatusBadGateway, "Failed to save or clean up uploaded file")
+		}
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to save file")
+	}
 	downloadURL, err := h.storage.PresignDownload(ctx.Request().Context(), req.ObjectKey)
 	if err != nil {
-		return responses.SendError(ctx, http.StatusBadGateway, "Failed to prepare file download")
-	}
-	if err := h.repository.Create(ctx.Request().Context(), file); err != nil {
-		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to save file")
+		return responses.SendError(ctx, http.StatusBadGateway, "File saved but download could not be prepared")
 	}
 	return responses.SendCreated(
 		ctx,

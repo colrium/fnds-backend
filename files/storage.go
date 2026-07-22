@@ -74,7 +74,11 @@ func NewS3Store(ctx context.Context, cfg S3Config) (*S3Store, error) {
 	if publicBaseURL == "" {
 		publicBaseURL = fmt.Sprintf("https://%s.s3.%s.amazonaws.com", cfg.Bucket, cfg.Region)
 	}
-	if _, err := url.ParseRequestURI(publicBaseURL); err != nil {
+	parsedBaseURL, err := url.ParseRequestURI(publicBaseURL)
+	if err != nil || parsedBaseURL.Scheme != "https" || parsedBaseURL.Host == "" {
+		if err == nil {
+			err = fmt.Errorf("URL must be an absolute HTTPS URL")
+		}
 		return nil, fmt.Errorf("invalid AWS_S3_PUBLIC_BASE_URL: %w", err)
 	}
 
