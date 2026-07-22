@@ -3,6 +3,7 @@ package profiles
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 
 	"backend/configs"
@@ -61,6 +62,58 @@ func GetProfileByUserID(userID string) (*Profile, error) {
 		return nil, err
 	}
 	return &profile, nil
+}
+
+func ListUserIDsBySkill(
+	ctx context.Context,
+	skillID string,
+	skillName string,
+) ([]string, error) {
+	cursor, err := configs.MI.DB.Collection("profiles").Find(
+		ctx,
+		skillMatchFilter(skillID, skillName),
+		options.Find().SetProjection(bson.M{"user_id": 1}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("finding profiles by skill: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var matches []struct {
+		UserID string `bson:"user_id"`
+	}
+	if err := cursor.All(ctx, &matches); err != nil {
+		return nil, fmt.Errorf("decoding profiles by skill: %w", err)
+	}
+	userIDs := make([]string, 0, len(matches))
+	seen := make(map[string]struct{}, len(matches))
+	for _, match := range matches {
+		if match.UserID == "" {
+			continue
+		}
+		if _, exists := seen[match.UserID]; exists {
+			continue
+		}
+		seen[match.UserID] = struct{}{}
+		userIDs = append(userIDs, match.UserID)
+	}
+	return userIDs, nil
+}
+
+func skillMatchFilter(skillID, skillName string) bson.M {
+	matches := bson.A{}
+	if skillID != "" {
+		matches = append(matches, bson.M{"skills": skillID})
+	}
+	if skillName != "" {
+		matches = append(matches, bson.M{
+			"skills": bson.M{
+				"$regex":   "^" + regexp.QuoteMeta(skillName) + "$",
+				"$options": "i",
+			},
+		})
+	}
+	return bson.M{"$or": matches}
 }
 
 func CreateOrUpdateProfile(userID string, updates bson.M) error {

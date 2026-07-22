@@ -369,7 +369,7 @@ func ListJobApplicationsByVacancy(vacancyID string) ([]JobApplication, error) {
 func UpdateJobApplicationStatus(id, status string) (bool, error) {
 	res, err := configs.MI.DB.Collection("job_applications").UpdateOne(
 		context.TODO(),
-		bson.M{"_id": id},
+		bson.M{"_id": id, "status": ApplicationStatusPending},
 		bson.M{"$set": bson.M{"status": status, "updated_at": time.Now()}},
 	)
 	if err != nil {

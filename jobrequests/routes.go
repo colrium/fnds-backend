@@ -1,6 +1,7 @@
 package jobrequests
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"backend/contextutil"
 	"backend/institutions"
 	"backend/locations"
+	"backend/notifications"
 	"backend/profiles"
 	"backend/responses"
 	"backend/skills"
@@ -174,7 +176,50 @@ func HandleCreateJobVacancy(ctx echo.Context) error {
 	if err := CreateJobVacancy(&v); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create job vacancy")
 	}
+	notifyWorkersAboutVacancy(ctx.Request().Context(), v)
 	return responses.SendCreated(ctx, v, "Job vacancy created successfully")
+}
+
+func notifyWorkersAboutVacancy(ctx context.Context, vacancy JobVacancy) {
+	skillID := ""
+	skillList, err := skills.GetAllSkills()
+	if err != nil {
+		slog.Error("failed to resolve vacancy skill for notifications", "error", err)
+		return
+	}
+	for _, skill := range skillList {
+		if strings.EqualFold(strings.TrimSpace(skill.Name), strings.TrimSpace(vacancy.Skill)) {
+			skillID = skill.ID
+			break
+		}
+	}
+	profileUserIDs, err := profiles.ListUserIDsBySkill(ctx, skillID, vacancy.Skill)
+	if err != nil {
+		slog.Error("failed to find workers for vacancy notification", "error", err)
+		return
+	}
+	matchedUsers, err := users.GetUsersByIDs(profileUserIDs)
+	if err != nil {
+		slog.Error("failed to load workers for vacancy notification", "error", err)
+		return
+	}
+	workerIDs := make([]string, 0, len(matchedUsers))
+	for _, user := range matchedUsers {
+		if user.UserType == "artisan" {
+			workerIDs = append(workerIDs, user.ID)
+		}
+	}
+	if err := notifications.NewDefaultService().NotifyMatchingWorkers(
+		ctx,
+		notifications.NewVacancyEvent{
+			WorkerIDs:    workerIDs,
+			VacancyID:    vacancy.ID,
+			VacancyTitle: vacancy.Title,
+			Skill:        vacancy.Skill,
+		},
+	); err != nil {
+		slog.Error("failed to create vacancy notifications", "vacancy_id", vacancy.ID, "error", err)
+	}
 }
 
 // resolveVacancyCompany returns the company to attach to a vacancy. When the
@@ -544,6 +589,33 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 		}
 		return responses.SendError(ctx, 500, "Failed to create job application")
 	}
+	employer, employerErr := users.GetUserByID(vacancy.OwnerID)
+	if employerErr != nil {
+		slog.Error(
+			"failed to load employer for application notification",
+			"employer_id",
+			vacancy.OwnerID,
+			"error",
+			employerErr,
+		)
+	} else if err := notifications.NewDefaultService().NotifyNewApplication(
+		ctx.Request().Context(),
+		notifications.NewApplicationEvent{
+			EmployerID:    employer.ID,
+			EmployerEmail: employer.Email,
+			ApplicantName: strings.TrimSpace(account.FirstName + " " + account.LastName),
+			VacancyID:     vacancy.ID,
+			VacancyTitle:  vacancy.Title,
+		},
+	); err != nil {
+		slog.Error(
+			"failed to deliver new application notification",
+			"application_id",
+			app.ID,
+			"error",
+			err,
+		)
+	}
 	return responses.SendCreated(ctx, app, "Job application created successfully")
 }
 
@@ -817,13 +889,45 @@ func HandleDecideJobApplication(ctx echo.Context) error {
 	if vacancy.OwnerID != userID {
 		return responses.SendError(ctx, 403, "You do not own this vacancy")
 	}
+	if app.Status != ApplicationStatusPending {
+		return responses.SendError(ctx, http.StatusConflict, "Application has already been decided")
+	}
 
 	updated, err := UpdateJobApplicationStatus(id, status)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to update application")
 	}
 	if !updated {
-		return responses.SendError(ctx, 404, "Application not found")
+		return responses.SendError(ctx, http.StatusConflict, "Application has already been decided")
+	}
+	worker, workerErr := users.GetUserByID(app.ApplicantID)
+	if workerErr != nil {
+		slog.Error(
+			"failed to load worker for application notification",
+			"worker_id",
+			app.ApplicantID,
+			"error",
+			workerErr,
+		)
+	} else if err := notifications.NewDefaultService().NotifyApplicationDecision(
+		ctx.Request().Context(),
+		notifications.ApplicationDecisionEvent{
+			WorkerID:     worker.ID,
+			WorkerPhone:  worker.Phone,
+			VacancyID:    vacancy.ID,
+			VacancyTitle: vacancy.Title,
+			Status:       status,
+		},
+	); err != nil {
+		slog.Error(
+			"failed to deliver application decision notification",
+			"application_id",
+			app.ID,
+			"status",
+			status,
+			"error",
+			err,
+		)
 	}
 	return responses.SendOK(ctx, nil, "Application "+status)
 }

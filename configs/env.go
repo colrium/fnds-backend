@@ -33,6 +33,22 @@ func GetPlunkKey() string {
 	return os.Getenv("USE_PLUNK")
 }
 
+func SendGridAPIKey() string {
+	return os.Getenv("SENDGRID_API_KEY")
+}
+
+func SendGridFromEmail() string {
+	return os.Getenv("SENDGRID_FROM_EMAIL")
+}
+
+func SendGridFromName() string {
+	value := os.Getenv("SENDGRID_FROM_NAME")
+	if value == "" {
+		return "Fundis"
+	}
+	return value
+}
+
 func AdvantaApiKey() string {
 	return os.Getenv("ADVANTA_API_KEY")
 }
