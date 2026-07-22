@@ -80,19 +80,8 @@ func EnsureIndexes(ctx context.Context) error {
 				SetUnique(true),
 		},
 	)
-	if err != nil {
-		return err
-	}
-	_, err = configs.MI.DB.Collection("job_vacancies").Indexes().CreateOne(
-		ctx,
-		mongo.IndexModel{
-			Keys: bson.D{
-				{Key: "is_featured", Value: -1},
-				{Key: "created_at", Value: -1},
-			},
-			Options: options.Index().SetName("featured_vacancies"),
-		},
-	)
+	// Performance-only indexes are applied operationally. Building them during
+	// startup can make the API unavailable when MongoDB is near its disk limit.
 	return err
 }
 
