@@ -1,6 +1,7 @@
 package payments
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -132,7 +133,7 @@ func TestVerifyCellulantPaymentRequeriesProvider(t *testing.T) {
 		ServiceCode:  "FUNDIS",
 		HTTPClient:   client,
 	})
-	payload, err := service.VerifyPayment(t.Context(), "CEL-SUB-123")
+	payload, err := service.VerifyPayment(context.Background(), "CEL-SUB-123")
 	if err != nil {
 		t.Fatalf("VerifyPayment() error = %v", err)
 	}
