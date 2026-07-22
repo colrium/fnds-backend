@@ -10,7 +10,11 @@ import (
 	"time"
 
 	"backend/contextutil"
+	"backend/institutions"
+	"backend/locations"
+	"backend/profiles"
 	"backend/responses"
+	"backend/skills"
 	"backend/subscriptions"
 	"backend/users"
 
@@ -31,6 +35,8 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/job-vacancies/delete", HandleDeleteJobVacancy)
 	g.POST("/job-applications", HandleCreateJobApplication)
 	g.GET("/job-applications", HandleListVacancyApplications)
+	g.GET("/job-applications/:id/review", HandleGetJobApplicationReview)
+	g.GET("/job-applications/status", HandleGetJobApplicationStatus)
 	g.POST("/job-applications/decision", HandleDecideJobApplication)
 	g.GET("/employer/dashboard", HandleEmployerDashboard)
 	g.GET("/employer/artisans", HandleEmployerBrowseArtisans)
@@ -526,6 +532,27 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 	return responses.SendCreated(ctx, app, "Job application created successfully")
 }
 
+// HandleGetJobApplicationStatus reports whether the authenticated user has
+// already applied for a vacancy so clients can disable duplicate actions.
+func HandleGetJobApplicationStatus(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
+	}
+	vacancyID := strings.TrimSpace(ctx.QueryParam("vacancy_id"))
+	if vacancyID == "" {
+		return responses.SendError(ctx, http.StatusBadRequest, "vacancy_id is required")
+	}
+
+	hasApplied, err := HasJobApplication(userID, vacancyID)
+	if err != nil {
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to check job application")
+	}
+	return responses.SendOK(ctx, map[string]bool{
+		"has_applied": hasApplied,
+	}, "Job application status retrieved successfully")
+}
+
 func HandleEmployerBrowseArtisans(ctx echo.Context) error {
 	userID := contextutil.GetUserID(ctx)
 	account, err := users.GetUserByID(userID)
@@ -671,6 +698,80 @@ func HandleListVacancyApplications(ctx echo.Context) error {
 		enriched = append(enriched, item)
 	}
 	return responses.SendOK(ctx, enriched, "Applications retrieved successfully")
+}
+
+// HandleGetJobApplicationReview returns a curated professional profile to the
+// employer that owns the application's vacancy.
+func HandleGetJobApplicationReview(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
+	}
+	applicationID := ctx.Param("id")
+	if applicationID == "" {
+		return responses.SendError(ctx, http.StatusBadRequest, "Application ID is required")
+	}
+
+	application, err := GetJobApplicationByID(applicationID)
+	if err != nil {
+		return responses.SendError(ctx, http.StatusNotFound, "Application not found")
+	}
+	vacancy, err := GetJobVacancyByID(application.VacancyID)
+	if err != nil {
+		return responses.SendError(ctx, http.StatusNotFound, "Job vacancy not found")
+	}
+	if vacancy.OwnerID != userID {
+		return responses.SendError(ctx, http.StatusForbidden, "You do not own this vacancy")
+	}
+
+	fullProfile, err := profiles.GetFullProfile(application.ApplicantID)
+	if err != nil {
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to load professional profile")
+	}
+	skillList, err := skills.GetAllSkills()
+	if err != nil {
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to load professional profile")
+	}
+	locationList, err := locations.GetAllLocations()
+	if err != nil {
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to load professional profile")
+	}
+	institutionList, err := institutions.GetAllInstitutions()
+	if err != nil {
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to load professional profile")
+	}
+
+	skillNames := make(map[string]string, len(skillList))
+	for _, skill := range skillList {
+		skillNames[skill.ID] = skill.Name
+	}
+	locationNames := make(map[string]string, len(locationList))
+	for _, location := range locationList {
+		locationNames[location.ID] = location.Name
+	}
+	institutionNames := make(map[string]string, len(institutionList))
+	for _, institution := range institutionList {
+		institutionNames[institution.ID] = institution.Name
+	}
+
+	review := JobApplicationReview{
+		Application: *application,
+		Vacancy: ApplicationReviewVacancy{
+			ID:         vacancy.ID,
+			Title:      vacancy.Title,
+			Skill:      vacancy.Skill,
+			Location:   vacancy.Location,
+			Experience: vacancy.Experience,
+		},
+		ProfessionalProfile: BuildApplicantProfessionalProfile(
+			fullProfile,
+			*vacancy,
+			skillNames,
+			locationNames,
+			institutionNames,
+		),
+	}
+	return responses.SendOK(ctx, review, "Application review retrieved successfully")
 }
 
 // HandleDecideJobApplication lets the vacancy owner accept or reject an application.
