@@ -1,18 +1,37 @@
 package payments
 
 import (
-	"backend/transactions"
+	"crypto/subtle"
+	"net/http"
+
+	"backend/configs"
 	"backend/responses"
+	"backend/transactions"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-// OnChargeCompleted is invoked when a Flutterwave charge completes successfully.
-// It receives the tx_ref and provider status. Other packages (e.g. quotations)
-// register a handler here to reconcile domain records without creating an
-// import cycle. It may be nil if no handler is registered.
-var OnChargeCompleted func(txRef, status string)
+type ChargeCompletedEvent struct {
+	TxRef         string
+	Status        string
+	Amount        float64
+	Currency      string
+	TransactionID int
+}
+
+var chargeCompletedHandlers []func(ChargeCompletedEvent) error
+
+func RegisterChargeCompletedHandler(handler func(ChargeCompletedEvent) error) {
+	chargeCompletedHandlers = append(chargeCompletedHandlers, handler)
+}
+
+func VerifyFlutterwaveWebhookSignature(configured, provided string) bool {
+	if configured == "" || provided == "" || len(configured) != len(provided) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(configured), []byte(provided)) == 1
+}
 
 func RegisterRoutes(e *echo.Group) {
 	e.POST("/flutterwave/webhook", HandleFlutterwaveWebhook)
@@ -23,20 +42,44 @@ func RegisterRoutes(e *echo.Group) {
 }
 
 func HandleFlutterwaveWebhook(ctx echo.Context) error {
-	var payload map[string]interface{}
+	if !VerifyFlutterwaveWebhookSignature(
+		configs.FlutterwaveWebhookSecretHash(),
+		ctx.Request().Header.Get("verif-hash"),
+	) {
+		return responses.SendError(ctx, http.StatusUnauthorized, "Invalid webhook signature")
+	}
+
+	var payload struct {
+		Event string `json:"event"`
+		Data  struct {
+			TxRef    string  `json:"tx_ref"`
+			Status   string  `json:"status"`
+			Amount   float64 `json:"amount"`
+			Currency string  `json:"currency"`
+			ID       int     `json:"id"`
+		} `json:"data"`
+	}
 	if err := ctx.Bind(&payload); err != nil {
 		return responses.SendError(ctx, 400, "Invalid payload")
 	}
 
-	event, _ := payload["event"].(string)
-	if event == "charge.completed" {
-		data, ok := payload["data"].(map[string]interface{})
-		if ok {
-			ref, _ := data["tx_ref"].(string)
-			status, _ := data["status"].(string)
-			_ = transactions.UpdateFlutterwaveTransaction(ref, bson.M{"status": status})
-			if OnChargeCompleted != nil {
-				OnChargeCompleted(ref, status)
+	if payload.Event == "charge.completed" {
+		event := ChargeCompletedEvent{
+			TxRef:         payload.Data.TxRef,
+			Status:        payload.Data.Status,
+			Amount:        payload.Data.Amount,
+			Currency:      payload.Data.Currency,
+			TransactionID: payload.Data.ID,
+		}
+		if err := transactions.UpdateFlutterwaveTransaction(
+			event.TxRef,
+			bson.M{"status": event.Status, "flutterwave_ref": event.TransactionID},
+		); err != nil {
+			return responses.SendError(ctx, http.StatusInternalServerError, "Failed to process webhook")
+		}
+		for _, handler := range chargeCompletedHandlers {
+			if err := handler(event); err != nil {
+				return responses.SendError(ctx, http.StatusInternalServerError, "Failed to process webhook")
 			}
 		}
 	}

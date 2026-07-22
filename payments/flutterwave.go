@@ -13,11 +13,12 @@ type FlutterwaveConfig struct {
 }
 
 type FlutterwavePaymentRequest struct {
-	TxRef     string  `json:"tx_ref"`
-	Amount    float64 `json:"amount"`
-	Currency  string  `json:"currency"`
-	RedirectURL string `json:"redirect_url"`
-	Customer  FlutterwaveCustomer `json:"customer"`
+	TxRef          string              `json:"tx_ref"`
+	Amount         float64             `json:"amount"`
+	Currency       string              `json:"currency"`
+	RedirectURL    string              `json:"redirect_url"`
+	PaymentOptions string              `json:"payment_options,omitempty"`
+	Customer       FlutterwaveCustomer `json:"customer"`
 }
 
 type FlutterwaveCustomer struct {
@@ -30,10 +31,10 @@ type FlutterwaveResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 	Data    struct {
-		Link        string `json:"link"`
-		TxRef       string `json:"tx_ref"`
-		FlwRef      string `json:"flw_ref"`
-		TransactionID int   `json:"id"`
+		Link          string `json:"link"`
+		TxRef         string `json:"tx_ref"`
+		FlwRef        string `json:"flw_ref"`
+		TransactionID int    `json:"id"`
 	} `json:"data"`
 }
 

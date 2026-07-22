@@ -13,18 +13,20 @@ import (
 // RegisterPaymentHooks wires the Flutterwave charge-completed callback so a
 // paid invoice charge flips its invoice to paid. Call once at startup.
 func RegisterPaymentHooks() {
-	payments.OnChargeCompleted = func(txRef, status string) {
-		invoiceID := InvoiceIDFromTxRef(txRef)
+	payments.RegisterChargeCompletedHandler(func(event payments.ChargeCompletedEvent) error {
+		invoiceID := InvoiceIDFromTxRef(event.TxRef)
 		if invoiceID == "" {
-			return
+			return nil
 		}
-		if status != "successful" && status != "completed" {
-			return
+		if event.Status != "successful" && event.Status != "completed" {
+			return nil
 		}
 		if err := UpdateExternalInvoice(invoiceID, map[string]interface{}{"status": InvoiceStatusPaid}); err != nil {
 			slog.Error("failed to mark invoice paid from webhook", "invoice_id", invoiceID, "error", err)
+			return err
 		}
-	}
+		return nil
+	})
 }
 
 // invoiceTxPrefix marks a Flutterwave tx_ref as belonging to an invoice so the

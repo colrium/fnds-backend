@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"strings"
 
+	"backend/referrals"
 	"backend/responses"
 	"backend/turnstile"
 	"backend/users"
@@ -38,6 +39,7 @@ type RegisterRequest struct {
 	UserType       string   `json:"user_type" form:"user_type"`
 	Skills         []string `json:"skills" form:"skills"`
 	TurnstileToken string   `json:"turnstile_token" form:"turnstile_token"`
+	ReferralCode   string   `json:"referral_code" form:"referral_code"`
 }
 
 type LoginRequest struct {
@@ -126,16 +128,43 @@ func HandleUserRegistration(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "invalid user_type")
 	}
 
+	var (
+		referralCode *referrals.Code
+		err          error
+	)
+	if strings.TrimSpace(req.ReferralCode) != "" {
+		if req.UserType != "artisan" {
+			return responses.SendError(ctx, 400, "referral codes are only valid for worker registrations")
+		}
+		referralCode, err = referrals.ResolveCode(ctx.Request().Context(), req.ReferralCode)
+		if err != nil {
+			return responses.SendError(ctx, 400, "invalid referral code")
+		}
+	}
+
 	if len(req.Password) < 8 {
 		return responses.SendError(ctx, 400, "password must be at least 8 characters")
 	}
 
-	user, err := createNewUser(req.FirstName, req.LastName, req.Email, req.Phone, req.Password, req.UserType)
+	user, err := createNewUser(
+		req.FirstName,
+		req.LastName,
+		req.Email,
+		req.Phone,
+		req.Password,
+		req.UserType,
+		referrals.NormalizeCode(req.ReferralCode),
+	)
 	if err != nil {
 		if errors.Is(err, ErrDuplicateUser) {
 			return responses.SendError(ctx, 409, ErrDuplicateUser.Error())
 		}
 		return responses.SendError(ctx, 500, "failed to create user: "+err.Error())
+	}
+	if referralCode != nil {
+		if err := referrals.CreatePending(ctx.Request().Context(), referralCode, user.ID); err != nil {
+			slog.Error("failed to record referral", "referred_user_id", user.ID, "error", err)
+		}
 	}
 
 	token, _, err := GenerateToken(user)
@@ -208,7 +237,7 @@ func HandleSocialLogin(ctx echo.Context) error {
 
 	user, err := users.GetUserByEmailAndType(req.Email, req.UserType)
 	if err != nil {
-		user, err = createNewUser(req.FirstName, req.LastName, req.Email, req.Phone, "social_login_placeholder", req.UserType)
+		user, err = createNewUser(req.FirstName, req.LastName, req.Email, req.Phone, "social_login_placeholder", req.UserType, "")
 		if err != nil {
 			if errors.Is(err, ErrDuplicateUser) {
 				return responses.SendError(ctx, 409, ErrDuplicateUser.Error())

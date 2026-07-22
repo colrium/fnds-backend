@@ -1,8 +1,13 @@
 package subscriptions
 
 import (
+	"errors"
+	"net/http"
+	"time"
+
 	"backend/contextutil"
 	"backend/responses"
+	"backend/users"
 
 	"github.com/labstack/echo/v4"
 )
@@ -14,42 +19,51 @@ func RegisterAuthRoutes(g *echo.Group) {
 }
 
 func HandleGetPlans(ctx echo.Context) error {
-	plans, err := GetAllPlans()
-	if err != nil {
-		return responses.SendError(ctx, 500, "Failed to fetch plans")
-	}
-	return responses.SendOK(ctx, plans, "Plans retrieved successfully")
+	return responses.SendOK(ctx, Plans(), "Plans retrieved successfully")
 }
 
 func HandleCreateSubscription(ctx echo.Context) error {
 	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
-		return responses.SendError(ctx, 401, "Unauthorized")
+		return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
+	}
+	user, err := users.GetUserByID(userID)
+	if err != nil {
+		return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
 	}
 
-	var sub UserSubscription
-	if err := ctx.Bind(&sub); err != nil {
-		return responses.SendError(ctx, 400, "Invalid request body")
+	var request PurchaseRequest
+	if err := ctx.Bind(&request); err != nil {
+		return responses.SendError(ctx, http.StatusBadRequest, "Invalid request body")
 	}
-
-	sub.UserID = userID
-	sub.IsActive = true
-
-	if err := CreateUserSubscription(&sub); err != nil {
-		return responses.SendError(ctx, 500, "Failed to create subscription")
+	checkout, err := StartCheckout(ctx.Request().Context(), user, request)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrPlanNotFound),
+			errors.Is(err, ErrFreePlan),
+			errors.Is(err, ErrResourceRequired):
+			return responses.SendError(ctx, http.StatusBadRequest, err.Error())
+		case errors.Is(err, ErrPlanRoleMismatch):
+			return responses.SendError(ctx, http.StatusForbidden, err.Error())
+		case errors.Is(err, ErrResourceUnavailable):
+			return responses.SendError(ctx, http.StatusNotFound, err.Error())
+		case errors.Is(err, ErrPaymentUnavailable):
+			return responses.SendError(ctx, http.StatusServiceUnavailable, err.Error())
+		default:
+			return responses.SendError(ctx, http.StatusBadGateway, "Failed to create payment checkout")
+		}
 	}
-	return responses.SendCreated(ctx, sub, "Subscription created successfully")
+	return responses.SendCreated(ctx, checkout, "Subscription checkout created successfully")
 }
 
 func HandleGetUserSubscription(ctx echo.Context) error {
 	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
-		return responses.SendError(ctx, 401, "Unauthorized")
+		return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
 	}
-
-	sub, err := GetUserSubscription(userID)
+	summary, err := GetAccountSummary(ctx.Request().Context(), userID, time.Now().UTC())
 	if err != nil {
-		return responses.SendError(ctx, 404, "No active subscription found")
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to fetch subscriptions")
 	}
-	return responses.SendOK(ctx, sub, "Subscription retrieved successfully")
+	return responses.SendOK(ctx, summary, "Subscriptions retrieved successfully")
 }

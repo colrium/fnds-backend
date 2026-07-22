@@ -64,7 +64,9 @@ func accountLoginError(user *users.User) error {
 	return nil
 }
 
-func createNewUser(firstName, lastName, email, phone, password, userType string) (*users.User, error) {
+func createNewUser(
+	firstName, lastName, email, phone, password, userType, referralCode string,
+) (*users.User, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	if err != nil {
 		return nil, err
@@ -73,17 +75,18 @@ func createNewUser(firstName, lastName, email, phone, password, userType string)
 	otp := users.GenerateOTP()
 
 	user := &users.User{
-		FirstName:     firstName,
-		LastName:      lastName,
-		Email:         email,
-		Phone:         phone,
-		Password:      hashedPassword,
-		UserType:      userType,
-		Status:        users.StatusPending,
-		IsActive:      false,
-		Otp:           otp,
-		OtpExpiresAt:  time.Now().UTC().Add(users.OTPTTL),
-		PhoneVerified: false,
+		FirstName:        firstName,
+		LastName:         lastName,
+		Email:            email,
+		Phone:            phone,
+		Password:         hashedPassword,
+		UserType:         userType,
+		Status:           users.StatusPending,
+		IsActive:         false,
+		Otp:              otp,
+		OtpExpiresAt:     time.Now().UTC().Add(users.OTPTTL),
+		PhoneVerified:    false,
+		ReferralCodeUsed: referralCode,
 	}
 
 	err = users.CreateNewUser(user)

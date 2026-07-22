@@ -19,25 +19,27 @@ const (
 )
 
 type User struct {
-	ID            string    `json:"id" bson:"_id"`
-	FirstName     string    `json:"first_name" bson:"first_name"`
-	LastName      string    `json:"last_name" bson:"last_name"`
-	Email         string    `json:"email" bson:"email"`
-	Phone         string    `json:"phone" bson:"phone"`
-	Password      []byte    `json:"-" bson:"password"`
-	UserType      string    `json:"user_type" bson:"user_type"`
-	Status        string    `json:"status" bson:"status"`
-	IsActive      bool      `json:"is_active" bson:"is_active"`
-	Otp           string    `json:"-" bson:"otp,omitempty"`
-	OtpExpiresAt  time.Time `json:"-" bson:"otp_expires_at,omitempty"`
-	OtpAttempts   int       `json:"-" bson:"otp_attempts,omitempty"`
-	PhoneVerified bool      `json:"phone_verified" bson:"phone_verified"`
-	FundisID      string    `json:"fundis_id,omitempty" bson:"fundis_id,omitempty"`
-	AvatarID      string    `json:"avatar_id,omitempty" bson:"avatar_id,omitempty"`
-	FCMToken      string    `json:"fcm_token,omitempty" bson:"fcm_token,omitempty"`
-	IsAvailable   bool      `json:"is_available" bson:"is_available"`
-	CreatedAt     time.Time `json:"created_at" bson:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at" bson:"updated_at"`
+	ID               string    `json:"id" bson:"_id"`
+	FirstName        string    `json:"first_name" bson:"first_name"`
+	LastName         string    `json:"last_name" bson:"last_name"`
+	Email            string    `json:"email" bson:"email"`
+	Phone            string    `json:"phone" bson:"phone"`
+	Password         []byte    `json:"-" bson:"password"`
+	UserType         string    `json:"user_type" bson:"user_type"`
+	Status           string    `json:"status" bson:"status"`
+	IsActive         bool      `json:"is_active" bson:"is_active"`
+	Otp              string    `json:"-" bson:"otp,omitempty"`
+	OtpExpiresAt     time.Time `json:"-" bson:"otp_expires_at,omitempty"`
+	OtpAttempts      int       `json:"-" bson:"otp_attempts,omitempty"`
+	PhoneVerified    bool      `json:"phone_verified" bson:"phone_verified"`
+	FundisID         string    `json:"fundis_id,omitempty" bson:"fundis_id,omitempty"`
+	AvatarID         string    `json:"avatar_id,omitempty" bson:"avatar_id,omitempty"`
+	FCMToken         string    `json:"fcm_token,omitempty" bson:"fcm_token,omitempty"`
+	IsAvailable      bool      `json:"is_available" bson:"is_available"`
+	IsVerified       bool      `json:"is_verified" bson:"is_verified"`
+	ReferralCodeUsed string    `json:"-" bson:"referral_code_used,omitempty"`
+	CreatedAt        time.Time `json:"created_at" bson:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at" bson:"updated_at"`
 }
 
 func CreateNewUser(user *User) error {

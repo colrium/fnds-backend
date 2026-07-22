@@ -57,6 +57,10 @@ func FlutterwaveSecretKey() string {
 	return os.Getenv("FLUTTERWAVE_SECRET_KEY")
 }
 
+func FlutterwaveWebhookSecretHash() string {
+	return os.Getenv("FLUTTERWAVE_WEBHOOK_SECRET_HASH")
+}
+
 func AWSRegion() string {
 	return os.Getenv("AWS_REGION")
 }
