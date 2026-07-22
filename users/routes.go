@@ -10,6 +10,7 @@ import (
 
 	"backend/contextutil"
 	"backend/notifications"
+	"backend/referrals"
 	"backend/responses"
 	"backend/turnstile"
 
@@ -85,7 +86,6 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/otp/verify", HandleVerifyOtp)
 	g.POST("/otp/resend", HandleResendOtp)
 	g.PATCH("/fcm-token", HandleUpdateToken)
-	g.POST("/profile/avatar", HandleUpdateAvatar)
 }
 
 // RegisterArtisanRoutes registers artisan-only authenticated routes
@@ -156,6 +156,15 @@ func HandleVerifyOtp(ctx echo.Context) error {
 	})
 	if err != nil {
 		return responses.SendError(ctx, 500, "failed to verify OTP")
+	}
+	if user.ReferralCodeUsed != "" {
+		if err := referrals.EnsureQualified(
+			ctx.Request().Context(),
+			user.ReferralCodeUsed,
+			user.ID,
+		); err != nil {
+			slog.Error("failed to qualify referral", "referred_user_id", user.ID, "error", err)
+		}
 	}
 
 	return responses.SendOK(ctx, nil, "OTP verified successfully")

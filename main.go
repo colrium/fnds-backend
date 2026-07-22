@@ -23,6 +23,7 @@ import (
 	"backend/payments"
 	"backend/profiles"
 	"backend/quotations"
+	"backend/referrals"
 	"backend/reviews"
 	"backend/seeders"
 	"backend/skills"
@@ -64,6 +65,7 @@ func main() {
 		os.Exit(1)
 	}
 	fileHandler := files.NewHandler(files.NewMongoRepository(), s3Store, maxUploadBytes)
+	avatarHandler := users.NewAvatarHandler(&users.MongoAvatarRepository{}, s3Store)
 
 	// Idempotent: each seeder skips when its collection is already populated.
 	seeders.RunAll()
@@ -74,6 +76,14 @@ func main() {
 	}
 	if err := files.EnsureIndexes(context.Background()); err != nil {
 		slog.Error("failed to ensure file indexes", "error", err)
+		os.Exit(1)
+	}
+	if err := subscriptions.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to ensure subscription indexes", "error", err)
+		os.Exit(1)
+	}
+	if err := referrals.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to ensure referral indexes", "error", err)
 		os.Exit(1)
 	}
 
@@ -107,11 +117,13 @@ func main() {
 	institutions.RegisterRoutes(api)
 	payments.RegisterRoutes(api)
 	quotations.RegisterPaymentHooks()
+	subscriptions.RegisterPaymentHooks()
 	notifications.RegisterPublicRoutes(api)
 	reviews.RegisterPublicRoutes(api)
 	quotations.RegisterPublicRoutes(api)
 	jobrequests.RegisterPublicRoutes(api)
 	documenttypes.RegisterRoutes(api)
+	users.RegisterAvatarPublicRoutes(api, avatarHandler)
 
 	api.GET("/artisans", auth.HandleAllArtisans)
 	api.GET("/profile/:fundis_id", auth.HandleShareUserRecord)
@@ -130,9 +142,11 @@ func main() {
 	quotations.RegisterAuthRoutes(authGroup)
 	transactions.RegisterAuthRoutes(authGroup)
 	subscriptions.RegisterAuthRoutes(authGroup)
+	referrals.RegisterAuthRoutes(authGroup)
 	chat.RegisterAuthRoutes(authGroup)
 	banks.RegisterAuthRoutes(authGroup)
 	documenttypes.RegisterAuthRoutes(authGroup)
+	users.RegisterAvatarAuthRoutes(authGroup, avatarHandler)
 
 	// Artisan-only routes
 	artisanGroup := api.Group("")

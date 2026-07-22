@@ -3,6 +3,7 @@ package profiles
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"backend/configs"
@@ -90,6 +91,7 @@ type ReferenceInput struct {
 // profiles collection). It renders even when no profiles row exists yet.
 type FullProfile struct {
 	*users.User
+	Avatar                         string   `json:"avatar,omitempty"`
 	IDNumber                       string   `json:"id_number"`
 	DateOfBirth                    string   `json:"date_of_birth"`
 	Gender                         string   `json:"gender"`
@@ -135,6 +137,12 @@ func GetFullProfile(userID string) (*FullProfile, error) {
 		return nil, err
 	}
 	full := &FullProfile{User: user}
+	if user.AvatarID != "" {
+		full.Avatar = users.AvatarPublicURL(
+			user.ID,
+			strconv.FormatInt(user.UpdatedAt.UnixNano(), 10),
+		)
+	}
 	if profile, err := GetProfileByUserID(userID); err == nil {
 		full.IDNumber = profile.IDNumber
 		full.DateOfBirth = profile.DateOfBirth
