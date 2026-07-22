@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"backend/configs"
+	"backend/subscriptions"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
@@ -47,36 +48,38 @@ func collectionEmpty(name string) (bool, error) {
 }
 
 func SeedSubscriptionPlans() error {
-	if empty, err := collectionEmpty("subscription_plans"); err != nil {
-		return err
-	} else if !empty {
-		log.Printf("[seeder] subscription_plans already populated, skipping")
-		return nil
+	ctx := context.TODO()
+	planIDs := make([]string, 0, len(subscriptions.Plans()))
+	for _, plan := range subscriptions.Plans() {
+		planIDs = append(planIDs, plan.ID)
+		_, err := configs.MI.DB.Collection("subscription_plans").UpdateOne(
+			ctx,
+			bson.M{"_id": plan.ID},
+			bson.M{
+				"$set": bson.M{
+					"name":         plan.Name,
+					"description":  plan.Description,
+					"audience":     plan.Audience,
+					"price":        plan.PriceKES,
+					"currency":     plan.Currency,
+					"duration":     plan.DurationDays,
+					"features":     plan.Features,
+					"entitlements": plan.Entitlements,
+					"is_default":   plan.IsDefault,
+					"updated_at":   time.Now().UTC(),
+				},
+				"$setOnInsert": bson.M{"created_at": time.Now().UTC()},
+			},
+			options.Update().SetUpsert(true),
+		)
+		if err != nil {
+			return err
+		}
 	}
-	plans := []interface{}{
-		bson.M{
-			"_id":         uuid.New().String(),
-			"name":        "Basic",
-			"description": "Basic subscription plan for artisans",
-			"price":       0,
-			"duration":    30,
-			"is_default":  true,
-			"created_at":  time.Now(),
-			"updated_at":  time.Now(),
-		},
-		bson.M{
-			"_id":         uuid.New().String(),
-			"name":        "Premium",
-			"description": "Premium subscription plan for artisans",
-			"price":       5000,
-			"duration":    30,
-			"is_default":  false,
-			"created_at":  time.Now(),
-			"updated_at":  time.Now(),
-		},
-	}
-
-	_, err := configs.MI.DB.Collection("subscription_plans").InsertMany(context.TODO(), plans)
+	_, err := configs.MI.DB.Collection("subscription_plans").DeleteMany(
+		ctx,
+		bson.M{"_id": bson.M{"$nin": planIDs}},
+	)
 	return err
 }
 

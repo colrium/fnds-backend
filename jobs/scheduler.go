@@ -66,7 +66,11 @@ func expireSubscriptions() {
 	_, err := configs.MI.DB.Collection("user_subscriptions").UpdateMany(
 		context.TODO(),
 		bson.M{"is_active": true, "end_date": bson.M{"$lt": time.Now()}},
-		bson.M{"$set": bson.M{"is_active": false, "updated_at": time.Now()}},
+		bson.M{"$set": bson.M{
+			"is_active":  false,
+			"status":     "expired",
+			"updated_at": time.Now(),
+		}},
 	)
 	if err != nil {
 		slog.Error("failed to expire subscriptions", "error", err)

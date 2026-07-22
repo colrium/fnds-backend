@@ -38,22 +38,24 @@ type JobRequest struct {
 }
 
 type JobVacancy struct {
-	ID                   string `json:"id" bson:"_id"`
-	OwnerID              string `json:"owner_id" bson:"owner_id"`
-	CompanyID            string `json:"company_id" bson:"company_id"`
-	Title                string `json:"title" bson:"title"`
-	Level                string `json:"level" bson:"level"`
-	Positions            int    `json:"positions" bson:"positions"`
-	EmploymentType       string `json:"employment_type" bson:"employment_type"`
-	Experience           string `json:"experience" bson:"experience"`
-	SalaryRange          string `json:"salary_range" bson:"salary_range"`
-	Skill                string `json:"skill" bson:"skill"`
-	Location             string `json:"location" bson:"location"`
-	Description          string `json:"description" bson:"description"`
-	Responsibilities     string `json:"responsibilities" bson:"responsibilities"`
-	ApplicationStartDate string `json:"application_start_date" bson:"application_start_date"`
-	ApplicationEndDate   string `json:"application_end_date" bson:"application_end_date"`
-	Status               string `json:"status" bson:"status"`
+	ID                   string     `json:"id" bson:"_id"`
+	OwnerID              string     `json:"owner_id" bson:"owner_id"`
+	CompanyID            string     `json:"company_id" bson:"company_id"`
+	Title                string     `json:"title" bson:"title"`
+	Level                string     `json:"level" bson:"level"`
+	Positions            int        `json:"positions" bson:"positions"`
+	EmploymentType       string     `json:"employment_type" bson:"employment_type"`
+	Experience           string     `json:"experience" bson:"experience"`
+	SalaryRange          string     `json:"salary_range" bson:"salary_range"`
+	Skill                string     `json:"skill" bson:"skill"`
+	Location             string     `json:"location" bson:"location"`
+	Description          string     `json:"description" bson:"description"`
+	Responsibilities     string     `json:"responsibilities" bson:"responsibilities"`
+	ApplicationStartDate string     `json:"application_start_date" bson:"application_start_date"`
+	ApplicationEndDate   string     `json:"application_end_date" bson:"application_end_date"`
+	Status               string     `json:"status" bson:"status"`
+	IsFeatured           bool       `json:"is_featured" bson:"is_featured"`
+	FeaturedAt           *time.Time `json:"featured_at,omitempty" bson:"featured_at,omitempty"`
 	// Company snapshot — captured at creation so listings render without a join.
 	CompanyName        string    `json:"company_name" bson:"company_name"`
 	CompanyWebsite     string    `json:"company_website" bson:"company_website"`
@@ -63,6 +65,35 @@ type JobVacancy struct {
 	ContactPersonEmail string    `json:"contact_person_email" bson:"contact_person_email"`
 	CreatedAt          time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at" bson:"updated_at"`
+}
+
+func EnsureIndexes(ctx context.Context) error {
+	_, err := configs.MI.DB.Collection("job_applications").Indexes().CreateOne(
+		ctx,
+		mongo.IndexModel{
+			Keys: bson.D{
+				{Key: "applicant_id", Value: 1},
+				{Key: "vacancy_id", Value: 1},
+			},
+			Options: options.Index().
+				SetName("uniq_applicant_vacancy").
+				SetUnique(true),
+		},
+	)
+	if err != nil {
+		return err
+	}
+	_, err = configs.MI.DB.Collection("job_vacancies").Indexes().CreateOne(
+		ctx,
+		mongo.IndexModel{
+			Keys: bson.D{
+				{Key: "is_featured", Value: -1},
+				{Key: "created_at", Value: -1},
+			},
+			Options: options.Index().SetName("featured_vacancies"),
+		},
+	)
+	return err
 }
 
 type JobApplication struct {
@@ -185,7 +216,10 @@ func CompleteJobRequest(id, artisanID string) (bool, error) {
 }
 
 func ListJobVacancies(filter bson.M, page, limit int64) ([]JobVacancy, int64, error) {
-	opts := options.Find().SetSkip((page - 1) * limit).SetLimit(limit)
+	opts := options.Find().
+		SetSkip((page - 1) * limit).
+		SetLimit(limit).
+		SetSort(bson.D{{Key: "is_featured", Value: -1}, {Key: "created_at", Value: -1}})
 	cursor, err := configs.MI.DB.Collection("job_vacancies").Find(context.TODO(), filter, opts)
 	if err != nil {
 		return nil, 0, err
@@ -298,6 +332,14 @@ func CreateJobApplication(a *JobApplication) error {
 	a.UpdatedAt = time.Now()
 	_, err := configs.MI.DB.Collection("job_applications").InsertOne(context.TODO(), a)
 	return err
+}
+
+func HasJobApplication(applicantID, vacancyID string) (bool, error) {
+	count, err := configs.MI.DB.Collection("job_applications").CountDocuments(
+		context.TODO(),
+		bson.M{"applicant_id": applicantID, "vacancy_id": vacancyID},
+	)
+	return count > 0, err
 }
 
 func GetJobApplicationByID(id string) (*JobApplication, error) {

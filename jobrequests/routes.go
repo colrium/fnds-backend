@@ -1,15 +1,21 @@
 package jobrequests
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"strings"
+	"time"
 
 	"backend/contextutil"
 	"backend/responses"
+	"backend/subscriptions"
 	"backend/users"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func RegisterAuthRoutes(g *echo.Group) {
@@ -26,6 +32,7 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.GET("/job-applications", HandleListVacancyApplications)
 	g.POST("/job-applications/decision", HandleDecideJobApplication)
 	g.GET("/employer/dashboard", HandleEmployerDashboard)
+	g.GET("/employer/artisans", HandleEmployerBrowseArtisans)
 	g.GET("/companies", HandleListCompanies)
 	g.POST("/companies", HandleCreateCompany)
 	g.POST("/companies/update", HandleUpdateCompany)
@@ -124,6 +131,10 @@ func HandleCreateJobVacancy(ctx echo.Context) error {
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
+	account, err := users.GetUserByID(userID)
+	if err != nil || account.UserType != "customer" {
+		return responses.SendError(ctx, http.StatusForbidden, "Only employer accounts can post vacancies")
+	}
 
 	var v JobVacancy
 	if err := ctx.Bind(&v); err != nil {
@@ -150,6 +161,8 @@ func HandleCreateJobVacancy(ctx echo.Context) error {
 	v.ContactPersonPhone = company.ContactPersonPhone
 	v.ContactPersonEmail = company.ContactPersonEmail
 	v.Status = "open"
+	v.IsFeatured = false
+	v.FeaturedAt = nil
 
 	if err := CreateJobVacancy(&v); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create job vacancy")
@@ -423,26 +436,96 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
+	account, err := users.GetUserByID(userID)
+	if err != nil || account.UserType != "artisan" {
+		return responses.SendError(ctx, http.StatusForbidden, "Only worker accounts can apply for jobs")
+	}
 
 	var app JobApplication
 	if err := ctx.Bind(&app); err != nil {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
 
-	if strings.TrimSpace(app.VacancyID) == "" {
-		return responses.SendError(ctx, 400, "vacancy_id is required")
+	if err := ValidateCreateJobApplication(app.VacancyID, app.CoverLetter); err != nil {
+		return responses.SendError(ctx, http.StatusBadRequest, err.Error())
 	}
-	if _, err := GetJobVacancyByID(app.VacancyID); err != nil {
+	vacancy, err := GetJobVacancyByID(app.VacancyID)
+	if err != nil {
 		return responses.SendError(ctx, 404, "Job vacancy not found")
+	}
+	if vacancy.Status != "open" {
+		return responses.SendError(ctx, http.StatusConflict, "Job vacancy is not open")
+	}
+	exists, err := HasJobApplication(userID, app.VacancyID)
+	if err != nil {
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to check job application")
+	}
+	if exists {
+		return responses.SendError(ctx, http.StatusConflict, "You have already applied for this vacancy")
+	}
+
+	reservation, err := subscriptions.ReserveApplication(
+		ctx.Request().Context(),
+		userID,
+		time.Now().UTC(),
+	)
+	if errors.Is(err, subscriptions.ErrApplicationLimitReached) {
+		return responses.SendError(
+			ctx,
+			http.StatusPaymentRequired,
+			"Monthly application limit reached. Use referral credits or purchase an unlimited plan.",
+		)
+	}
+	if err != nil {
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to reserve application allowance")
 	}
 
 	app.ApplicantID = userID
 	app.Status = ApplicationStatusPending
 
 	if err := CreateJobApplication(&app); err != nil {
+		if rollbackErr := reservation.Rollback(ctx.Request().Context()); rollbackErr != nil {
+			slog.Error("failed to restore application allowance", "user_id", userID, "error", rollbackErr)
+		}
+		if mongo.IsDuplicateKeyError(err) {
+			return responses.SendError(ctx, http.StatusConflict, "You have already applied for this vacancy")
+		}
 		return responses.SendError(ctx, 500, "Failed to create job application")
 	}
 	return responses.SendCreated(ctx, app, "Job application created successfully")
+}
+
+func HandleEmployerBrowseArtisans(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	account, err := users.GetUserByID(userID)
+	if err != nil || account.UserType != "customer" {
+		return responses.SendError(ctx, http.StatusForbidden, "Only employer accounts can browse workers")
+	}
+	allowed, err := subscriptions.HasEntitlement(
+		ctx.Request().Context(),
+		userID,
+		subscriptions.EntitlementBrowseWorkers,
+		time.Now().UTC(),
+	)
+	if err != nil {
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to check hiring plan")
+	}
+	if !allowed {
+		return responses.SendError(
+			ctx,
+			http.StatusPaymentRequired,
+			"An active daily or monthly hiring plan is required",
+		)
+	}
+
+	artisans, total, err := users.ListArtisans(1, 50)
+	if err != nil {
+		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to fetch workers")
+	}
+	return responses.SendOK(ctx, map[string]interface{}{
+		"data":  artisans,
+		"total": total,
+	}, "Workers retrieved successfully")
 }
 
 // HandleEmployerDashboard returns vacancy + application analytics and recent

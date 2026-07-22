@@ -198,36 +198,13 @@ func EnsureQualified(ctx context.Context, codeValue, referredUserID string) erro
 		return err
 	}
 	now := time.Now().UTC()
-	_, err = configs.MI.DB.Collection("referrals").UpdateOne(
+	result, err := configs.MI.DB.Collection("referrals").UpdateOne(
 		ctx,
-		bson.M{"referred_user_id": referredUserID},
 		bson.M{
-			"$setOnInsert": bson.M{
-				"_id":         uuid.New().String(),
-				"referrer_id": code.UserID,
-				"code":        code.Code,
-				"created_at":  now,
-			},
-			"$set": bson.M{
-				"status":                   StatusQualified,
-				"qualified_at":             now,
-				"application_credits":      RewardApplicationCredits,
-				"application_credits_used": 0,
-			},
+			"referred_user_id": referredUserID,
+			"referrer_id":      code.UserID,
+			"status":           StatusPending,
 		},
-		options.Update().SetUpsert(true),
-	)
-	if err != nil {
-		return fmt.Errorf("qualifying referral: %w", err)
-	}
-	return nil
-}
-
-func QualifyForUser(ctx context.Context, referredUserID string) error {
-	now := time.Now().UTC()
-	_, err := configs.MI.DB.Collection("referrals").UpdateOne(
-		ctx,
-		bson.M{"referred_user_id": referredUserID, "status": StatusPending},
 		bson.M{"$set": bson.M{
 			"status":                   StatusQualified,
 			"qualified_at":             now,
@@ -237,6 +214,38 @@ func QualifyForUser(ctx context.Context, referredUserID string) error {
 	)
 	if err != nil {
 		return fmt.Errorf("qualifying referral: %w", err)
+	}
+	if result.MatchedCount > 0 {
+		return nil
+	}
+
+	var existing Referral
+	err = configs.MI.DB.Collection("referrals").
+		FindOne(ctx, bson.M{"referred_user_id": referredUserID}).
+		Decode(&existing)
+	if err == nil {
+		if existing.ReferrerID == code.UserID && existing.Status == StatusQualified {
+			return nil
+		}
+		return ErrInvalidCode
+	}
+	if !errors.Is(err, mongo.ErrNoDocuments) {
+		return fmt.Errorf("checking referral qualification: %w", err)
+	}
+
+	referral := Referral{
+		ID:                     uuid.New().String(),
+		ReferrerID:             code.UserID,
+		ReferredUserID:         referredUserID,
+		Code:                   code.Code,
+		Status:                 StatusQualified,
+		ApplicationCredits:     RewardApplicationCredits,
+		ApplicationCreditsUsed: 0,
+		CreatedAt:              now,
+		QualifiedAt:            &now,
+	}
+	if _, err := configs.MI.DB.Collection("referrals").InsertOne(ctx, referral); err != nil {
+		return fmt.Errorf("creating qualified referral: %w", err)
 	}
 	return nil
 }
