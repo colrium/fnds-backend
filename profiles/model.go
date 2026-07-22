@@ -2,12 +2,15 @@ package profiles
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"backend/configs"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Profile struct {
@@ -61,18 +64,47 @@ func GetProfileByUserID(userID string) (*Profile, error) {
 }
 
 func CreateOrUpdateProfile(userID string, updates bson.M) error {
-	updates["updated_at"] = time.Now()
-	result := configs.MI.DB.Collection("profiles").FindOneAndUpdate(
+	return upsertProfile(
 		context.TODO(),
-		bson.M{"user_id": userID},
-		bson.M{"$set": updates},
+		configs.MI.DB.Collection("profiles"),
+		userID,
+		updates,
 	)
-	if result.Err() != nil {
-		updates["user_id"] = userID
-		updates["created_at"] = time.Now()
-		updates["_id"] = uuid.New().String()
-		_, err := configs.MI.DB.Collection("profiles").InsertOne(context.TODO(), updates)
-		return err
+}
+
+type profileCollection interface {
+	UpdateOne(
+		context.Context,
+		interface{},
+		interface{},
+		...*options.UpdateOptions,
+	) (*mongo.UpdateResult, error)
+}
+
+func upsertProfile(
+	ctx context.Context,
+	collection profileCollection,
+	userID string,
+	updates bson.M,
+) error {
+	now := time.Now()
+	updates["updated_at"] = now
+
+	_, err := collection.UpdateOne(
+		ctx,
+		bson.M{"user_id": userID},
+		bson.M{
+			"$set": updates,
+			"$setOnInsert": bson.M{
+				"_id":        uuid.New().String(),
+				"user_id":    userID,
+				"created_at": now,
+			},
+		},
+		options.Update().SetUpsert(true),
+	)
+	if err != nil {
+		return fmt.Errorf("upserting profile: %w", err)
 	}
 	return nil
 }

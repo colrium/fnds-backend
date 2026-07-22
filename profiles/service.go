@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type ProfileUpdateRequest struct {
@@ -56,33 +57,33 @@ type ProfileUpdateRequest struct {
 }
 
 type WorkingHourInput struct {
-	Day         string `json:"day"`
-	OpeningTime string `json:"opening_time"`
-	ClosingTime string `json:"closing_time"`
+	Day         string `json:"day" bson:"day"`
+	OpeningTime string `json:"opening_time" bson:"opening_time"`
+	ClosingTime string `json:"closing_time" bson:"closing_time"`
 }
 
 type PastEmployerInput struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	PhoneNumber string `json:"phone_number"`
-	Location    string `json:"location"`
+	ID          string `json:"id" bson:"_id"`
+	Name        string `json:"name" bson:"name"`
+	PhoneNumber string `json:"phone_number" bson:"phone_number"`
+	Location    string `json:"location" bson:"location"`
 }
 
 type LanguageProficiencyInput struct {
-	ID               string `json:"id"`
-	Language         string `json:"language"`
-	ProficiencyLevel string `json:"proficiency_level"`
-	WrittenSkills    string `json:"written_skills"`
+	ID               string `json:"id" bson:"_id"`
+	Language         string `json:"language" bson:"language"`
+	ProficiencyLevel string `json:"proficiency_level" bson:"proficiency_level"`
+	WrittenSkills    string `json:"written_skills" bson:"written_skills"`
 }
 
 type ReferenceInput struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	PhoneNumber string `json:"phone_number"`
-	JobTypeID   string `json:"job_type_id"`
-	JobTitle    string `json:"job_title"`
-	Email       string `json:"email"`
-	Location    string `json:"location"`
+	ID          string `json:"id" bson:"_id"`
+	Name        string `json:"name" bson:"name"`
+	PhoneNumber string `json:"phone_number" bson:"phone_number"`
+	JobTypeID   string `json:"job_type_id" bson:"job_type_id"`
+	JobTitle    string `json:"job_title" bson:"job_title"`
+	Email       string `json:"email" bson:"email"`
+	Location    string `json:"location" bson:"location"`
 }
 
 // FullProfile is the merged user + profile view returned to clients. The
@@ -91,41 +92,45 @@ type ReferenceInput struct {
 // profiles collection). It renders even when no profiles row exists yet.
 type FullProfile struct {
 	*users.User
-	Avatar                         string   `json:"avatar,omitempty"`
-	IDNumber                       string   `json:"id_number"`
-	DateOfBirth                    string   `json:"date_of_birth"`
-	Gender                         string   `json:"gender"`
-	HasSocialMediaHandles          bool     `json:"has_social_media_handles"`
-	SocialMedias                   string   `json:"social_medias"`
-	HasSmartphone                  bool     `json:"has_smartphone"`
-	IsBusinessRegistered           bool     `json:"is_business_registered"`
-	BusinessName                   string   `json:"business_name"`
-	BusinessRegistrationNumber     string   `json:"business_registration_number"`
-	RecentGoodConduct              bool     `json:"recent_good_conduct"`
-	Address                        string   `json:"address"`
-	City                           string   `json:"city"`
-	State                          string   `json:"state"`
-	Zip                            string   `json:"zip"`
-	Country                        string   `json:"country"`
-	HighestEducationLevel          string   `json:"highest_education_level"`
-	Certificate                    string   `json:"certificate"`
-	Institution                    string   `json:"institution"`
-	OtherQualifications            string   `json:"other_qualifications"`
-	ProfessionalMembership         bool     `json:"professional_membership"`
-	ProfessionalBody               string   `json:"professional_body"`
-	SkillAcquisitionMode           string   `json:"skill_acquisition_mode"`
-	YearsOfExperience              int      `json:"years_of_experience"`
-	NextOfKinName                  string   `json:"next_of_kin_name"`
-	NextOfKinPhoneNumber           string   `json:"next_of_kin_phone_number"`
-	NextOfKinRelationship          string   `json:"next_of_kin_relationship"`
-	IsCommunityOrgMember           bool     `json:"is_community_org_member"`
-	YearsAtCommunityOrg            int      `json:"years_at_community_org"`
-	CharacterReferenceName         string   `json:"character_reference_name"`
-	CharacterReferenceContact      string   `json:"character_reference_contact"`
-	CharacterReferenceRelationship string   `json:"character_reference_relationship"`
-	EarningGoalAmount              float64  `json:"earning_goal_amount"`
-	Skills                         []string `json:"skills"`
-	Locations                      []string `json:"locations"`
+	Avatar                         string                     `json:"avatar,omitempty"`
+	IDNumber                       string                     `json:"id_number"`
+	DateOfBirth                    string                     `json:"date_of_birth"`
+	Gender                         string                     `json:"gender"`
+	HasSocialMediaHandles          bool                       `json:"has_social_media_handles"`
+	SocialMedias                   string                     `json:"social_medias"`
+	HasSmartphone                  bool                       `json:"has_smartphone"`
+	IsBusinessRegistered           bool                       `json:"is_business_registered"`
+	BusinessName                   string                     `json:"business_name"`
+	BusinessRegistrationNumber     string                     `json:"business_registration_number"`
+	RecentGoodConduct              bool                       `json:"recent_good_conduct"`
+	Address                        string                     `json:"address"`
+	City                           string                     `json:"city"`
+	State                          string                     `json:"state"`
+	Zip                            string                     `json:"zip"`
+	Country                        string                     `json:"country"`
+	HighestEducationLevel          string                     `json:"highest_education_level"`
+	Certificate                    string                     `json:"certificate"`
+	Institution                    string                     `json:"institution"`
+	OtherQualifications            string                     `json:"other_qualifications"`
+	ProfessionalMembership         bool                       `json:"professional_membership"`
+	ProfessionalBody               string                     `json:"professional_body"`
+	SkillAcquisitionMode           string                     `json:"skill_acquisition_mode"`
+	YearsOfExperience              int                        `json:"years_of_experience"`
+	NextOfKinName                  string                     `json:"next_of_kin_name"`
+	NextOfKinPhoneNumber           string                     `json:"next_of_kin_phone_number"`
+	NextOfKinRelationship          string                     `json:"next_of_kin_relationship"`
+	IsCommunityOrgMember           bool                       `json:"is_community_org_member"`
+	YearsAtCommunityOrg            int                        `json:"years_at_community_org"`
+	CharacterReferenceName         string                     `json:"character_reference_name"`
+	CharacterReferenceContact      string                     `json:"character_reference_contact"`
+	CharacterReferenceRelationship string                     `json:"character_reference_relationship"`
+	EarningGoalAmount              float64                    `json:"earning_goal_amount"`
+	Skills                         []string                   `json:"skills"`
+	Locations                      []string                   `json:"locations"`
+	WorkingHours                   []WorkingHourInput         `json:"working_hours"`
+	PastEmployers                  []PastEmployerInput        `json:"past_employers"`
+	LanguageProficiencies          []LanguageProficiencyInput `json:"language_proficiencies"`
+	References                     []ReferenceInput           `json:"references"`
 }
 
 // GetFullProfile returns the authenticated user's identity merged with their
@@ -179,7 +184,43 @@ func GetFullProfile(userID string) (*FullProfile, error) {
 		full.Skills = profile.Skills
 		full.Locations = profile.Locations
 	}
+
+	full.WorkingHours, err = getProfileItems[WorkingHourInput]("working_hours", userID)
+	if err != nil {
+		return nil, err
+	}
+	full.PastEmployers, err = getProfileItems[PastEmployerInput]("past_employers", userID)
+	if err != nil {
+		return nil, err
+	}
+	full.LanguageProficiencies, err = getProfileItems[LanguageProficiencyInput]("language_proficiencies", userID)
+	if err != nil {
+		return nil, err
+	}
+	full.References, err = getProfileItems[ReferenceInput]("competency_references", userID)
+	if err != nil {
+		return nil, err
+	}
 	return full, nil
+}
+
+func getProfileItems[T any](collectionName, userID string) ([]T, error) {
+	ctx := context.TODO()
+	cursor, err := configs.MI.DB.Collection(collectionName).Find(
+		ctx,
+		bson.M{"user_id": userID},
+		options.Find().SetSort(bson.D{{Key: "created_at", Value: 1}}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("finding %s: %w", collectionName, err)
+	}
+	defer cursor.Close(ctx)
+
+	items := []T{}
+	if err := cursor.All(ctx, &items); err != nil {
+		return nil, fmt.Errorf("decoding %s: %w", collectionName, err)
+	}
+	return items, nil
 }
 
 func buildProfileUpdates(req ProfileUpdateRequest) bson.M {
@@ -252,25 +293,22 @@ func UpdateProfile(userID string, req ProfileUpdateRequest) error {
 		userUpdates["email"] = req.Email
 	}
 	if len(userUpdates) > 0 {
-		_ = users.UpdateUser(userID, userUpdates)
+		if err := users.UpdateUser(userID, userUpdates); err != nil {
+			return fmt.Errorf("updating user profile fields: %w", err)
+		}
 	}
 
 	profileUpdates := buildProfileUpdates(req)
 	if len(profileUpdates) > 0 {
-		profileUpdates["updated_at"] = time.Now()
-		_, _ = configs.MI.DB.Collection("profiles").UpdateOne(
-			context.TODO(),
-			bson.M{"user_id": user.ID},
-			bson.M{"$set": profileUpdates},
-		)
+		if err := CreateOrUpdateProfile(user.ID, profileUpdates); err != nil {
+			return err
+		}
 	}
 
-	updateSubResources(user.ID, req)
-
-	return nil
+	return updateSubResources(user.ID, req)
 }
 
-func updateSubResources(userID string, req ProfileUpdateRequest) {
+func updateSubResources(userID string, req ProfileUpdateRequest) error {
 	if req.SkillAcquisitionMode != "" || req.YearsOfExperience != nil {
 		training := bson.M{"user_id": userID, "updated_at": time.Now()}
 		if req.SkillAcquisitionMode != "" {
@@ -279,17 +317,26 @@ func updateSubResources(userID string, req ProfileUpdateRequest) {
 		if req.YearsOfExperience != nil {
 			training["years_of_experience"] = *req.YearsOfExperience
 		}
-		_, _ = configs.MI.DB.Collection("professional_trainings").UpdateOne(
+		_, err := configs.MI.DB.Collection("professional_trainings").UpdateOne(
 			context.TODO(),
 			bson.M{"user_id": userID},
 			bson.M{"$set": training},
+			options.Update().SetUpsert(true),
 		)
+		if err != nil {
+			return fmt.Errorf("updating professional training: %w", err)
+		}
 	}
 
-	if len(req.References) > 0 {
-		coll := configs.MI.DB.Collection("competency_references")
+	if req.References != nil {
+		documents := make([]interface{}, 0, len(req.References))
 		for _, ref := range req.References {
-			refData := bson.M{"user_id": userID, "updated_at": time.Now()}
+			refData := bson.M{
+				"_id":        uuid.New().String(),
+				"user_id":    userID,
+				"created_at": time.Now(),
+				"updated_at": time.Now(),
+			}
 			if ref.Name != "" {
 				refData["name"] = ref.Name
 			}
@@ -308,26 +355,17 @@ func updateSubResources(userID string, req ProfileUpdateRequest) {
 			if ref.Location != "" {
 				refData["location"] = ref.Location
 			}
-
-			if ref.ID != "" {
-				_, _ = coll.UpdateOne(
-					context.TODO(),
-					bson.M{"_id": ref.ID, "user_id": userID},
-					bson.M{"$set": refData},
-				)
-			} else {
-				refData["_id"] = uuid.New().String()
-				refData["created_at"] = time.Now()
-				_, _ = coll.InsertOne(context.TODO(), refData)
-			}
+			documents = append(documents, refData)
+		}
+		if err := replaceProfileItems("competency_references", userID, documents); err != nil {
+			return err
 		}
 	}
 
 	if req.WorkingHours != nil {
-		coll := configs.MI.DB.Collection("working_hours")
-		_, _ = coll.DeleteMany(context.TODO(), bson.M{"user_id": userID})
+		documents := make([]interface{}, 0, len(req.WorkingHours))
 		for _, wh := range req.WorkingHours {
-			_, _ = coll.InsertOne(context.TODO(), bson.M{
+			documents = append(documents, bson.M{
 				"_id":          uuid.New().String(),
 				"user_id":      userID,
 				"day":          wh.Day,
@@ -337,12 +375,20 @@ func updateSubResources(userID string, req ProfileUpdateRequest) {
 				"updated_at":   time.Now(),
 			})
 		}
+		if err := replaceProfileItems("working_hours", userID, documents); err != nil {
+			return err
+		}
 	}
 
 	if req.PastEmployers != nil {
-		coll := configs.MI.DB.Collection("past_employers")
+		documents := make([]interface{}, 0, len(req.PastEmployers))
 		for _, pe := range req.PastEmployers {
-			peData := bson.M{"user_id": userID, "updated_at": time.Now()}
+			peData := bson.M{
+				"_id":        uuid.New().String(),
+				"user_id":    userID,
+				"created_at": time.Now(),
+				"updated_at": time.Now(),
+			}
 			if pe.Name != "" {
 				peData["name"] = pe.Name
 			}
@@ -352,25 +398,22 @@ func updateSubResources(userID string, req ProfileUpdateRequest) {
 			if pe.Location != "" {
 				peData["location"] = pe.Location
 			}
-
-			if pe.ID != "" {
-				_, _ = coll.UpdateOne(
-					context.TODO(),
-					bson.M{"_id": pe.ID, "user_id": userID},
-					bson.M{"$set": peData},
-				)
-			} else {
-				peData["_id"] = uuid.New().String()
-				peData["created_at"] = time.Now()
-				_, _ = coll.InsertOne(context.TODO(), peData)
-			}
+			documents = append(documents, peData)
+		}
+		if err := replaceProfileItems("past_employers", userID, documents); err != nil {
+			return err
 		}
 	}
 
 	if req.LanguageProficiencies != nil {
-		coll := configs.MI.DB.Collection("language_proficiencies")
+		documents := make([]interface{}, 0, len(req.LanguageProficiencies))
 		for _, lp := range req.LanguageProficiencies {
-			lpData := bson.M{"user_id": userID, "updated_at": time.Now()}
+			lpData := bson.M{
+				"_id":        uuid.New().String(),
+				"user_id":    userID,
+				"created_at": time.Now(),
+				"updated_at": time.Now(),
+			}
 			if lp.Language != "" {
 				lpData["language"] = lp.Language
 			}
@@ -380,18 +423,27 @@ func updateSubResources(userID string, req ProfileUpdateRequest) {
 			if lp.WrittenSkills != "" {
 				lpData["written_skills"] = lp.WrittenSkills
 			}
-
-			if lp.ID != "" {
-				_, _ = coll.UpdateOne(
-					context.TODO(),
-					bson.M{"_id": lp.ID, "user_id": userID},
-					bson.M{"$set": lpData},
-				)
-			} else {
-				lpData["_id"] = uuid.New().String()
-				lpData["created_at"] = time.Now()
-				_, _ = coll.InsertOne(context.TODO(), lpData)
-			}
+			documents = append(documents, lpData)
+		}
+		if err := replaceProfileItems("language_proficiencies", userID, documents); err != nil {
+			return err
 		}
 	}
+
+	return nil
+}
+
+func replaceProfileItems(collectionName, userID string, documents []interface{}) error {
+	ctx := context.TODO()
+	collection := configs.MI.DB.Collection(collectionName)
+	if _, err := collection.DeleteMany(ctx, bson.M{"user_id": userID}); err != nil {
+		return fmt.Errorf("clearing %s: %w", collectionName, err)
+	}
+	if len(documents) == 0 {
+		return nil
+	}
+	if _, err := collection.InsertMany(ctx, documents); err != nil {
+		return fmt.Errorf("saving %s: %w", collectionName, err)
+	}
+	return nil
 }
