@@ -91,7 +91,6 @@ func TestEnvVarsReturnEmptyWhenUnset(t *testing.T) {
 		{"GetSessionKey", GetSessionKey},
 		{"EnvMongoURI", EnvMongoURI},
 		{"EnvPort", EnvPort},
-		{"GetPlunkKey", GetPlunkKey},
 	}
 
 	for _, v := range vars {
@@ -101,7 +100,6 @@ func TestEnvVarsReturnEmptyWhenUnset(t *testing.T) {
 			os.Unsetenv("SESSION_KEY")
 			os.Unsetenv("MONGODB_URI")
 			os.Unsetenv("PORT")
-			os.Unsetenv("USE_PLUNK")
 
 			if got := v.fn(); got != "" {
 				t.Errorf("%s() = %q, want empty string when env var is unset", v.name, got)

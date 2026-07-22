@@ -1,6 +1,7 @@
 package quotations
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -26,11 +27,7 @@ func notifyCustomerQuotation(eq *ExternalQuotation) {
 		eq.CustomerName, eq.JobTitle, eq.TotalAmount, acceptURL, rejectURL,
 	)
 	if eq.CustomerEmail != "" {
-		if err := notifications.NewEmailService("noreply@fundis.app").Send(notifications.EmailRequest{
-			To:      eq.CustomerEmail,
-			Subject: "You've received a quotation from Fundis",
-			Body:    emailBody,
-		}); err != nil {
+		if err := notifications.SendEmailViaSendGrid(context.Background(), eq.CustomerEmail, "You've received a quotation from Fundis", emailBody); err != nil {
 			slog.Error("failed to send quotation email", "quotation_id", eq.ID, "error", err)
 		}
 	}
@@ -55,11 +52,7 @@ func notifyCustomerInvoice(eq *ExternalQuotation, paymentLink string) {
 		eq.CustomerName, eq.JobTitle, eq.TotalAmount, paymentLink,
 	)
 	if eq.CustomerEmail != "" {
-		if err := notifications.NewEmailService("noreply@fundis.app").Send(notifications.EmailRequest{
-			To:      eq.CustomerEmail,
-			Subject: "Your Fundis invoice is ready for payment",
-			Body:    emailBody,
-		}); err != nil {
+		if err := notifications.SendEmailViaSendGrid(context.Background(), eq.CustomerEmail, "Your Fundis invoice is ready for payment", emailBody); err != nil {
 			slog.Error("failed to send invoice email", "quotation_id", eq.ID, "error", err)
 		}
 	}

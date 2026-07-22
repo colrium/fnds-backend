@@ -29,10 +29,6 @@ func EnvPort() string {
 	return os.Getenv("PORT")
 }
 
-func GetPlunkKey() string {
-	return os.Getenv("USE_PLUNK")
-}
-
 func SendGridAPIKey() string {
 	return os.Getenv("SENDGRID_API_KEY")
 }
