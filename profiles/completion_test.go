@@ -57,6 +57,36 @@ func TestGetProfileCompletion(t *testing.T) {
 			wantMissingPart: "Skills and experience",
 		},
 		{
+			name: "multiple legacy skills require selecting one skill",
+			profile: func() *FullProfile {
+				profile := *completeProfile
+				profile.Skills = []string{"skill-1", "skill-2"}
+				return &profile
+			}(),
+			wantPercent:     83,
+			wantMissingPart: "Skills and experience",
+		},
+		{
+			name: "blank service location leaves profile incomplete",
+			profile: func() *FullProfile {
+				profile := *completeProfile
+				profile.Locations = []string{" "}
+				return &profile
+			}(),
+			wantPercent:     83,
+			wantMissingPart: "Service locations",
+		},
+		{
+			name: "empty working hour leaves profile incomplete",
+			profile: func() *FullProfile {
+				profile := *completeProfile
+				profile.WorkingHours = []WorkingHourInput{{}}
+				return &profile
+			}(),
+			wantPercent:     83,
+			wantMissingPart: "Working hours",
+		},
+		{
 			name:            "empty profile has no completed sections",
 			profile:         &FullProfile{User: &users.User{}},
 			wantPercent:     0,

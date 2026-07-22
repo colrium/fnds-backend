@@ -39,6 +39,10 @@ func TestWorkerVacancyFilter(t *testing.T) {
 			name:          "does not match unknown skill",
 			profileSkills: []string{"unknown"},
 		},
+		{
+			name:          "does not choose arbitrarily from legacy multiple skills",
+			profileSkills: []string{"skill-electrician", "skill-plumber"},
+		},
 	}
 
 	for _, tt := range tests {

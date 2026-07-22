@@ -42,7 +42,7 @@ func workerVacancyFilter(
 	profileSkills []string,
 	skillList []skills.Skill,
 ) (bson.M, string, bool) {
-	if len(profileSkills) == 0 {
+	if len(profileSkills) != 1 {
 		return nil, "", false
 	}
 

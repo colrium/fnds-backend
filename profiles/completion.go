@@ -28,7 +28,7 @@ func GetProfileCompletion(profile *FullProfile) ProfileCompletion {
 		},
 		{
 			name: "Skills and experience",
-			complete: len(profile.Skills) > 0 &&
+			complete: hasSingleValue(profile.Skills) &&
 				hasText(profile.SkillAcquisitionMode),
 		},
 		{
@@ -43,11 +43,11 @@ func GetProfileCompletion(profile *FullProfile) ProfileCompletion {
 		},
 		{
 			name:     "Service locations",
-			complete: len(profile.Locations) > 0,
+			complete: hasValue(profile.Locations),
 		},
 		{
 			name:     "Working hours",
-			complete: len(profile.WorkingHours) > 0,
+			complete: hasCompleteWorkingHour(profile.WorkingHours),
 		},
 	}
 
@@ -69,6 +69,30 @@ func GetProfileCompletion(profile *FullProfile) ProfileCompletion {
 func hasCompleteReference(references []ReferenceInput) bool {
 	for _, reference := range references {
 		if hasText(reference.Name) && hasText(reference.PhoneNumber) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasCompleteWorkingHour(workingHours []WorkingHourInput) bool {
+	for _, workingHour := range workingHours {
+		if hasText(workingHour.Day) &&
+			hasText(workingHour.OpeningTime) &&
+			hasText(workingHour.ClosingTime) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasSingleValue(values []string) bool {
+	return len(values) == 1 && hasText(values[0])
+}
+
+func hasValue(values []string) bool {
+	for _, value := range values {
+		if hasText(value) {
 			return true
 		}
 	}
