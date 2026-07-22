@@ -81,6 +81,8 @@ func createInvoicePaymentLink(inv *ExternalInvoice, eq *ExternalQuotation) (stri
 		Status:         "pending",
 		UserID:         inv.ArtisanID,
 	})
+	inv.PaymentLink = resp.Data.Link
+	_ = UpdateExternalInvoice(inv.ID, map[string]interface{}{"payment_link": inv.PaymentLink})
 
 	return resp.Data.Link, nil
 }

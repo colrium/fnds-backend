@@ -69,6 +69,7 @@ type ExternalInvoice struct {
 	Status      string    `json:"status" bson:"status"`
 	TotalAmount float64   `json:"total_amount" bson:"total_amount"`
 	DueDate     string    `json:"due_date" bson:"due_date"`
+	PaymentLink string    `json:"payment_link,omitempty" bson:"payment_link,omitempty"`
 	CreatedAt   time.Time `json:"created_at" bson:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" bson:"updated_at"`
 }
@@ -84,6 +85,11 @@ type ExternalPaymentBill struct {
 }
 
 func CreateQuotation(q *Quotation) error {
+	for i := range q.Items {
+		if q.Items[i].ID == "" {
+			q.Items[i].ID = uuid.New().String()
+		}
+	}
 	q.ID = uuid.New().String()
 	q.CreatedAt = time.Now()
 	q.UpdatedAt = time.Now()
@@ -146,6 +152,11 @@ func ListQuotations(filter bson.M) ([]Quotation, error) {
 }
 
 func CreateExternalQuotation(eq *ExternalQuotation) error {
+	for i := range eq.Items {
+		if eq.Items[i].ID == "" {
+			eq.Items[i].ID = uuid.New().String()
+		}
+	}
 	eq.ID = uuid.New().String()
 	eq.CreatedAt = time.Now()
 	eq.UpdatedAt = time.Now()
@@ -187,6 +198,18 @@ func CreateExternalInvoice(inv *ExternalInvoice) error {
 	inv.UpdatedAt = time.Now()
 	_, err := configs.MI.DB.Collection("external_invoices").InsertOne(context.TODO(), inv)
 	return err
+}
+
+func GetExternalInvoiceByQuotationID(quotationID string) (*ExternalInvoice, error) {
+	var inv ExternalInvoice
+	err := configs.MI.DB.Collection("external_invoices").FindOne(
+		context.TODO(),
+		bson.M{"quotation_id": quotationID},
+	).Decode(&inv)
+	if err != nil {
+		return nil, err
+	}
+	return &inv, nil
 }
 
 func GetExternalInvoiceByID(id string) (*ExternalInvoice, error) {

@@ -4,9 +4,11 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"backend/configs"
 	"backend/contextutil"
+	"backend/jobrequests"
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
@@ -48,8 +50,33 @@ func HandleCreateQuotation(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
 
+	job, err := jobrequests.GetJobRequestByID(q.JobRequestID)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Job request not found")
+	}
+	if job.ArtisanID != userID {
+		return responses.SendError(ctx, 403, "You can only quote on jobs assigned to you")
+	}
+	if len(q.Items) == 0 {
+		return responses.SendError(ctx, 400, "At least one quotation item is required")
+	}
+
 	q.ArtisanID = userID
+	q.CustomerID = job.CustomerID
 	q.Status = "pending"
+	q.TotalAmount = 0
+	for i := range q.Items {
+		item := &q.Items[i]
+		if err := ValidateQuotationItem(item.Description, item.Quantity, item.UnitPrice); err != nil {
+			return responses.SendError(ctx, 400, err.Error())
+		}
+		item.ID = ""
+		item.TotalPrice = float64(item.Quantity) * item.UnitPrice
+		q.TotalAmount += item.TotalPrice
+	}
+	if err := ValidateCreateQuotation(q.JobRequestID, q.TotalAmount); err != nil {
+		return responses.SendError(ctx, 400, err.Error())
+	}
 
 	if err := CreateQuotation(&q); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create quotation")
@@ -97,6 +124,16 @@ func HandleUpdateQuotation(ctx echo.Context) error {
 	if err := ValidateUpdateQuotation(req.Status); err != nil {
 		return responses.SendError(ctx, 400, err.Error())
 	}
+	q, err := GetQuotationByID(id)
+	if err != nil {
+		return responses.SendError(ctx, 404, "Quotation not found")
+	}
+	if q.CustomerID != userID {
+		return responses.SendError(ctx, 403, "Only the customer can respond to a quotation")
+	}
+	if q.Status != "pending" {
+		return responses.SendError(ctx, 400, "Quotation has already been processed")
+	}
 	updates := bson.M{"status": req.Status}
 	updated, err := UpdateQuotationForUser(id, userID, updates)
 	if err != nil {
@@ -105,7 +142,8 @@ func HandleUpdateQuotation(ctx echo.Context) error {
 	if !updated {
 		return responses.SendError(ctx, 404, "Quotation not found")
 	}
-	return responses.SendOK(ctx, nil, "Quotation updated successfully")
+	q.Status = req.Status
+	return responses.SendOK(ctx, q, "Quotation updated successfully")
 }
 
 func relatedQuotationFilter(userID string) bson.M {
@@ -148,13 +186,14 @@ func HandleCreateExternalQuotation(ctx echo.Context) error {
 	}
 	for _, item := range req.Items {
 		eq.Items = append(eq.Items, ExternalQuotationItem{
-			Name:       item.Name,
-			Quantity:   item.Quantity,
-			Unit:       item.Unit,
-			UnitPrice:  item.UnitPrice,
-			TotalPrice: item.TotalPrice,
+			Name:        item.Name,
+			Quantity:    item.Quantity,
+			Unit:        item.Unit,
+			UnitPrice:   item.UnitPrice,
+			TotalPrice:  float64(item.Quantity) * item.UnitPrice,
+			Description: item.Description,
 		})
-		eq.TotalAmount += item.TotalPrice
+		eq.TotalAmount += float64(item.Quantity) * item.UnitPrice
 	}
 
 	if err := CreateExternalQuotation(&eq); err != nil {
@@ -197,12 +236,26 @@ func HandleUpdateExternalQuotationStatus(ctx echo.Context) error {
 		return responses.SendError(ctx, 404, "External quotation not found")
 	}
 
+	if eq.Status == "accepted" && action == "accepted" {
+		invoice, link, err := ensureAcceptedQuotationInvoice(eq)
+		if err != nil {
+			return responses.SendError(ctx, 500, "Failed to prepare invoice")
+		}
+		return respondToExternalQuotationAction(ctx, action, invoice, link)
+	}
 	if eq.Status != "pending" {
 		return responses.SendError(ctx, 400, "Quotation has already been processed")
 	}
 
 	if err := UpdateExternalQuotation(id, map[string]interface{}{"status": action}); err != nil {
 		return responses.SendError(ctx, 500, "Failed to update quotation status")
+	}
+	if action == "accepted" {
+		invoice, link, err := ensureAcceptedQuotationInvoice(eq)
+		if err != nil {
+			return responses.SendError(ctx, 500, "Failed to prepare invoice")
+		}
+		return respondToExternalQuotationAction(ctx, action, invoice, link)
 	}
 
 	// A customer opening the link from email/SMS uses GET; send them to the
@@ -215,6 +268,52 @@ func HandleUpdateExternalQuotationStatus(ctx echo.Context) error {
 	}
 
 	return responses.SendOK(ctx, nil, "Quotation status updated to "+action)
+}
+
+func ensureAcceptedQuotationInvoice(eq *ExternalQuotation) (*ExternalInvoice, string, error) {
+	invoice, err := GetExternalInvoiceByQuotationID(eq.ID)
+	if err != nil {
+		invoice = &ExternalInvoice{
+			QuotationID: eq.ID,
+			ArtisanID:   eq.ArtisanID,
+			Status:      InvoiceStatusUnpaid,
+			TotalAmount: eq.TotalAmount,
+			DueDate:     time.Now().AddDate(0, 0, 7).Format(time.RFC3339),
+		}
+		if err := CreateExternalInvoice(invoice); err != nil {
+			return nil, "", err
+		}
+	}
+	if invoice.Status == InvoiceStatusPaid {
+		return invoice, "", nil
+	}
+	if invoice.PaymentLink != "" {
+		return invoice, invoice.PaymentLink, nil
+	}
+	link, err := createInvoicePaymentLink(invoice, eq)
+	if err != nil {
+		slog.Warn("failed to create accepted quotation payment link", "invoice_id", invoice.ID, "error", err)
+		return invoice, "", nil
+	}
+	notifyCustomerInvoice(eq, link)
+	return invoice, link, nil
+}
+
+func respondToExternalQuotationAction(ctx echo.Context, action string, invoice *ExternalInvoice, paymentLink string) error {
+	if ctx.Request().Method == http.MethodGet {
+		if paymentLink != "" {
+			return ctx.Redirect(http.StatusFound, paymentLink)
+		}
+		appURL := strings.TrimRight(configs.AppPublicURL(), "/")
+		if appURL != "" {
+			return ctx.Redirect(http.StatusFound, appURL+"/quotation-updated?status="+action+"&invoice_id="+invoice.ID)
+		}
+	}
+	return responses.SendOK(ctx, map[string]interface{}{
+		"status":       action,
+		"invoice":      invoice,
+		"payment_link": paymentLink,
+	}, "Quotation status updated to "+action)
 }
 
 func HandleCreateExternalInvoice(ctx echo.Context) error {
@@ -250,13 +349,14 @@ func HandleCreateExternalInvoice(ctx echo.Context) error {
 	}
 	for _, item := range req.Items {
 		eq.Items = append(eq.Items, ExternalQuotationItem{
-			Name:       item.Name,
-			Quantity:   item.Quantity,
-			Unit:       item.Unit,
-			UnitPrice:  item.UnitPrice,
-			TotalPrice: item.TotalPrice,
+			Name:        item.Name,
+			Quantity:    item.Quantity,
+			Unit:        item.Unit,
+			UnitPrice:   item.UnitPrice,
+			TotalPrice:  float64(item.Quantity) * item.UnitPrice,
+			Description: item.Description,
 		})
-		eq.TotalAmount += item.TotalPrice
+		eq.TotalAmount += float64(item.Quantity) * item.UnitPrice
 	}
 
 	if err := CreateExternalQuotation(&eq); err != nil {
@@ -268,6 +368,7 @@ func HandleCreateExternalInvoice(ctx echo.Context) error {
 		ArtisanID:   userID,
 		Status:      InvoiceStatusUnpaid,
 		TotalAmount: eq.TotalAmount,
+		DueDate:     time.Now().AddDate(0, 0, 7).Format(time.RFC3339),
 	}
 	if err := CreateExternalInvoice(&invoice); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create invoice")
