@@ -88,10 +88,16 @@ func HandleUpdateQuotation(ctx echo.Context) error {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
 	id := ctx.Param("id")
-	var updates map[string]interface{}
-	if err := ctx.Bind(&updates); err != nil {
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := ctx.Bind(&req); err != nil {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
+	if err := ValidateUpdateQuotation(req.Status); err != nil {
+		return responses.SendError(ctx, 400, err.Error())
+	}
+	updates := bson.M{"status": req.Status}
 	updated, err := UpdateQuotationForUser(id, userID, updates)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to update quotation")
