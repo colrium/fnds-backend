@@ -30,14 +30,22 @@ type verifyOtpRequest struct {
 }
 type forgotPasswordRequest struct {
 	Phone          string `json:"phone"`
+	Email          string `json:"email"`
 	UserType       string `json:"user_type"`
 	TurnstileToken string `json:"turnstile_token"`
 }
 type resetPasswordRequest struct {
+	Phone           string `json:"phone"`
+	Email           string `json:"email"`
 	Otp             string `json:"otp"`
 	Password        string `json:"password"`
 	ConfirmPassword string `json:"confirm_password"`
 	UserType        string `json:"user_type"`
+}
+type changePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+	ConfirmPassword string `json:"confirm_password"`
 }
 
 // issuePhoneOTP generates a fresh code, persists it, and sends it by SMS.
@@ -55,6 +63,22 @@ func issuePhoneOTP(userID, phone string) {
 	}
 	if err := notifications.SendOTPSMS(phone, otp); err != nil {
 		log.Printf("[otp] failed to send SMS to %s: %v", phone, err)
+	}
+}
+
+// issueEmailOTP generates a fresh code, persists it, and sends it by email.
+func issueEmailOTP(userID, email string) {
+	otp := GenerateOTP()
+	if err := UpdateUser(userID, bson.M{
+		"otp":            otp,
+		"otp_expires_at": time.Now().UTC().Add(OTPTTL),
+		"otp_attempts":   0,
+	}); err != nil {
+		log.Printf("[otp] failed to persist code for user %s: %v", userID, err)
+		return
+	}
+	if err := notifications.SendPasswordResetOTPEmail(email, otp); err != nil {
+		log.Printf("[otp] failed to send email OTP to %s: %v", email, err)
 	}
 }
 
@@ -86,6 +110,7 @@ func RegisterAuthRoutes(g *echo.Group) {
 	g.POST("/otp/verify", HandleVerifyOtp)
 	g.POST("/otp/resend", HandleResendOtp)
 	g.PATCH("/fcm-token", HandleUpdateToken)
+	g.POST("/change-password", HandleChangePassword)
 }
 
 // RegisterArtisanRoutes registers artisan-only authenticated routes
@@ -95,7 +120,9 @@ func RegisterArtisanRoutes(g *echo.Group) {
 
 func RegisterPublicRoutes(g *echo.Group) {
 	g.POST("/forgot-password", HandleForgotPassword)
-	g.POST("/reset-password/:phone", HandleResetPassword)
+	g.POST("/reset-password", HandleResetPassword)
+	// Legacy route kept for backward compatibility with existing clients.
+	g.POST("/reset-password/:phone", HandleResetPasswordByPhone)
 }
 
 func HandleSendOtp(ctx echo.Context) error {
@@ -208,25 +235,98 @@ func HandleForgotPassword(ctx echo.Context) error {
 		slog.Warn("turnstile verification rejected", "error", err)
 		return responses.SendError(ctx, http.StatusBadRequest, "captcha verification failed")
 	}
+
 	phone := req.Phone
+	email := req.Email
 	userType := req.UserType
 
-	if phone == "" {
-		return responses.SendError(ctx, 400, "phone is required")
+	if phone == "" && email == "" {
+		return responses.SendError(ctx, 400, "phone or email is required")
 	}
 	if userType == "" {
 		return responses.SendError(ctx, 400, "user_type is required")
 	}
 
-	user, err := GetUserByPhoneAndType(phone, userType)
-	if err == nil {
-		issuePhoneOTP(user.ID, user.Phone)
+	// Look up user by whatever identifier was provided and send OTP via the
+	// corresponding channel. Never reveal whether the account exists.
+	if phone != "" {
+		user, err := GetUserByPhoneAndType(phone, userType)
+		if err == nil {
+			issuePhoneOTP(user.ID, user.Phone)
+		}
+	} else {
+		user, err := GetUserByEmailAndType(email, userType)
+		if err == nil {
+			issueEmailOTP(user.ID, user.Email)
+		}
 	}
-	// Always the same response — do not leak whether the account exists.
-	return responses.SendOK(ctx, nil, "If an account with that phone exists, a reset code has been sent.")
+
+	return responses.SendOK(ctx, nil, "If an account with that identifier exists, a reset code has been sent.")
 }
 
 func HandleResetPassword(ctx echo.Context) error {
+	var req resetPasswordRequest
+	if err := ctx.Bind(&req); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+
+	phone := req.Phone
+	email := req.Email
+	otp := req.Otp
+	password := req.Password
+	confirmPassword := req.ConfirmPassword
+	userType := req.UserType
+
+	if (phone == "" && email == "") || otp == "" || password == "" || confirmPassword == "" || userType == "" {
+		return responses.SendError(ctx, 400, "All fields are required")
+	}
+
+	if password != confirmPassword {
+		return responses.SendError(ctx, 400, "Passwords do not match")
+	}
+
+	var user *User
+	var err error
+	if phone != "" {
+		user, err = GetUserByPhoneAndType(phone, userType)
+	} else {
+		user, err = GetUserByEmailAndType(email, userType)
+	}
+	if err != nil {
+		return responses.SendError(ctx, 400, "Invalid credentials or code")
+	}
+
+	if err := verifyUserOtp(user, otp); err != nil {
+		return responses.SendError(ctx, 400, "Invalid credentials or code")
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	if err != nil {
+		return responses.SendError(ctx, 500, "failed to hash password")
+	}
+
+	if err := UpdateUser(user.ID, bson.M{"password": hashed, "otp": "", "otp_attempts": 0, "phone_verified": true}); err != nil {
+		return responses.SendError(ctx, 500, "failed to reset password")
+	}
+
+	// Notify user via email if they have one on file.
+	if user.Email != "" {
+		go func() {
+			name := user.FirstName
+			if name == "" {
+				name = "there"
+			}
+			if err := notifications.SendPasswordResetConfirmationEmail(user.Email, name); err != nil {
+				log.Printf("[password-reset] failed to send confirmation email to %s: %v", user.Email, err)
+			}
+		}()
+	}
+
+	return responses.SendOK(ctx, nil, "Password reset successfully")
+}
+
+// HandleResetPasswordByPhone is the legacy endpoint kept for backward compatibility.
+func HandleResetPasswordByPhone(ctx echo.Context) error {
 	phone := ctx.Param("phone")
 	var req resetPasswordRequest
 	if err := ctx.Bind(&req); err != nil {
@@ -263,6 +363,19 @@ func HandleResetPassword(ctx echo.Context) error {
 		return responses.SendError(ctx, 500, "failed to reset password")
 	}
 
+	// Notify user via email if they have one on file.
+	if user.Email != "" {
+		go func() {
+			name := user.FirstName
+			if name == "" {
+				name = "there"
+			}
+			if err := notifications.SendPasswordResetConfirmationEmail(user.Email, name); err != nil {
+				log.Printf("[password-reset] failed to send confirmation email to %s: %v", user.Email, err)
+			}
+		}()
+	}
+
 	return responses.SendOK(ctx, nil, "Password reset successfully")
 }
 
@@ -280,4 +393,64 @@ func HandleUpdateToken(ctx echo.Context) error {
 	_ = UpdateUser(userID, bson.M{"fcm_token": token})
 
 	return responses.SendOK(ctx, nil, "FCM token updated")
+}
+
+// HandleChangePassword allows an authenticated user to change their password
+// by providing their current password and choosing a new one.
+func HandleChangePassword(ctx echo.Context) error {
+	userID := contextutil.GetUserID(ctx)
+	if userID == "" {
+		return responses.SendError(ctx, 401, "Unauthorized")
+	}
+
+	var req changePasswordRequest
+	if err := ctx.Bind(&req); err != nil {
+		return responses.SendError(ctx, 400, "Invalid request body")
+	}
+
+	if req.CurrentPassword == "" || req.NewPassword == "" || req.ConfirmPassword == "" {
+		return responses.SendError(ctx, 400, "All fields are required")
+	}
+
+	if req.NewPassword != req.ConfirmPassword {
+		return responses.SendError(ctx, 400, "New passwords do not match")
+	}
+
+	if req.CurrentPassword == req.NewPassword {
+		return responses.SendError(ctx, 400, "New password must be different from current password")
+	}
+
+	user, err := GetUserByID(userID)
+	if err != nil {
+		return responses.SendError(ctx, 400, "Invalid user")
+	}
+
+	// Verify the current password.
+	if err := bcrypt.CompareHashAndPassword(user.Password, []byte(req.CurrentPassword)); err != nil {
+		return responses.SendError(ctx, 400, "Current password is incorrect")
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 14)
+	if err != nil {
+		return responses.SendError(ctx, 500, "failed to hash password")
+	}
+
+	if err := UpdateUser(user.ID, bson.M{"password": hashed}); err != nil {
+		return responses.SendError(ctx, 500, "failed to update password")
+	}
+
+	// Notify user via email if they have one on file.
+	if user.Email != "" {
+		go func() {
+			name := user.FirstName
+			if name == "" {
+				name = "there"
+			}
+			if err := notifications.SendPasswordChangedEmail(user.Email, name); err != nil {
+				log.Printf("[password-change] failed to send notification email to %s: %v", user.Email, err)
+			}
+		}()
+	}
+
+	return responses.SendOK(ctx, nil, "Password changed successfully")
 }
