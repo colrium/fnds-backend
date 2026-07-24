@@ -1,12 +1,15 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"net/mail"
 	"strings"
+	"time"
 
+	"backend/notifications"
 	"backend/referrals"
 	"backend/responses"
 	"backend/turnstile"
@@ -166,6 +169,22 @@ func HandleUserRegistration(ctx echo.Context) error {
 		}
 		return responses.SendError(ctx, 500, "failed to create user: "+err.Error())
 	}
+
+	// Fire-and-forget Slack notification for new registration.
+	go func(u users.User) {
+		registeredAt := u.CreatedAt
+		if registeredAt.IsZero() {
+			registeredAt = time.Now().UTC()
+		}
+		_ = notifications.NotifyUserRegistered(context.Background(), notifications.RegistrationActivity{
+			UserName:     strings.TrimSpace(u.FirstName + " " + u.LastName),
+			UserEmail:    u.Email,
+			UserPhone:    u.Phone,
+			UserID:       u.ID,
+			RegisteredAt: registeredAt,
+		})
+	}(*user)
+
 	if referralCode != nil {
 		if err := referrals.CreatePending(ctx.Request().Context(), referralCode, user.ID); err != nil {
 			slog.Error("failed to record referral", "referred_user_id", user.ID, "error", err)

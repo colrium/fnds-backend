@@ -177,6 +177,14 @@ func HandleCreateJobVacancy(ctx echo.Context) error {
 		return responses.SendError(ctx, 500, "Failed to create job vacancy")
 	}
 	notifyWorkersAboutVacancy(ctx.Request().Context(), v)
+	go func(v JobVacancy, creatorID string) {
+		_ = notifications.NotifyVacancyCreated(context.Background(), notifications.VacancyCreatedActivity{
+			VacancyID:     v.ID,
+			VacancyTitle:  v.Title,
+			CreatorUserID: creatorID,
+			CreatedAt:     v.CreatedAt,
+		})
+	}(v, userID)
 	return responses.SendCreated(ctx, v, "Job vacancy created successfully")
 }
 
