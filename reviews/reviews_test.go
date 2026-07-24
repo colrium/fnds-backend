@@ -6,12 +6,12 @@ import (
 
 func TestValidateCreateReview(t *testing.T) {
 	tests := []struct {
-		name        string
+		name         string
 		jobRequestID string
-		artisanID   string
-		rating      int
-		wantErr     bool
-		errMsg      string
+		artisanID    string
+		rating       int
+		wantErr      bool
+		errMsg       string
 	}{
 		{"valid review", "jr-123", "art-456", 4, false, ""},
 		{"empty job request ID", "", "art-456", 4, true, "job request ID is required"},

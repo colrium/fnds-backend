@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrAccountPending     = errors.New("account pending phone verification")
-	ErrAccountSuspended   = errors.New("account suspended")
-	ErrDuplicateUser      = errors.New("an account with this phone or email already exists for this user type")
+	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrAccountPending        = errors.New("account pending phone verification")
+	ErrAccountSuspended      = errors.New("account suspended")
+	ErrDuplicateUser         = errors.New("an account with this phone or email already exists for this user type")
+	ErrPasswordResetRequired = errors.New("password reset required")
 )
 
 func processUserLogin(email, phone, password string) (*users.User, string, error) {
@@ -33,6 +34,13 @@ func processUserLogin(email, phone, password string) (*users.User, string, error
 
 	if err != nil {
 		return nil, "", ErrInvalidCredentials
+	}
+
+	// Users imported from the old platform have no usable password (their hashes
+	// were not migrated). Steer them into the reset flow instead of returning a
+	// confusing "invalid credentials".
+	if user.Migrated {
+		return user, "", ErrPasswordResetRequired
 	}
 
 	if err := bcrypt.CompareHashAndPassword(user.Password, []byte(password)); err != nil {

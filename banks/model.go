@@ -99,4 +99,3 @@ func ListBankAccountsByUser(userID string) ([]BankAccount, error) {
 	}
 	return accounts, nil
 }
-

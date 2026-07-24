@@ -7,3 +7,5 @@ main
 .spartan/ai.env
 .gstack/
 tmp/*
+scripts/data/*
+importusers

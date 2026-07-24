@@ -16,16 +16,16 @@ import (
 
 // vacancyShareData is the view model for the server-rendered share page.
 type vacancyShareData struct {
-	Title       string
-	Company     string
-	Description string
-	MetaDesc    string
+	Title        string
+	Company      string
+	Description  string
+	MetaDesc     string
 	CanonicalURL string
-	ApplyURL    string
-	Monogram    string
-	StatusOpen  bool
-	Fields      []shareField
-	JSONLD      template.JS
+	ApplyURL     string
+	Monogram     string
+	StatusOpen   bool
+	Fields       []shareField
+	JSONLD       template.JS
 }
 
 type shareField struct {

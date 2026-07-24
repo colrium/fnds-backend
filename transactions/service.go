@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	TypePayment   = "payment"
-	TypeDeposit   = "deposit"
+	TypePayment    = "payment"
+	TypeDeposit    = "deposit"
 	TypeWithdrawal = "withdrawal"
-	TypeRefund    = "refund"
+	TypeRefund     = "refund"
 
 	StatusPending   = "pending"
 	StatusCompleted = "completed"

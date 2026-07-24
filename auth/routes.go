@@ -86,6 +86,11 @@ func HandleUserLogin(ctx echo.Context) error {
 	user, token, err := processUserLogin(email, phone, req.Password)
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrPasswordResetRequired):
+			return responses.SendOK(ctx, map[string]interface{}{
+				"reset_required": true,
+				"user_type":      user.UserType,
+			}, "This account was migrated from the old platform. Please reset your password to continue.")
 		case errors.Is(err, ErrAccountPending):
 			return responses.SendError(ctx, 403, "Your account is pending phone verification. Please verify your phone number to continue.")
 		case errors.Is(err, ErrAccountSuspended):

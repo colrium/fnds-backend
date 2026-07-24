@@ -238,24 +238,21 @@ func HandleForgotPassword(ctx echo.Context) error {
 
 	phone := req.Phone
 	email := req.Email
-	userType := req.UserType
 
 	if phone == "" && email == "" {
 		return responses.SendError(ctx, 400, "phone or email is required")
 	}
-	if userType == "" {
-		return responses.SendError(ctx, 400, "user_type is required")
-	}
 
-	// Look up user by whatever identifier was provided and send OTP via the
-	// corresponding channel. Never reveal whether the account exists.
+	// Phone and email are globally unique, so the identifier alone resolves a
+	// single account. Look up the user and send OTP via the corresponding
+	// channel. Never reveal whether the account exists.
 	if phone != "" {
-		user, err := GetUserByPhoneAndType(phone, userType)
+		user, err := GetUserByPhone(phone)
 		if err == nil {
 			issuePhoneOTP(user.ID, user.Phone)
 		}
 	} else {
-		user, err := GetUserByEmailAndType(email, userType)
+		user, err := GetUserByEmail(email)
 		if err == nil {
 			issueEmailOTP(user.ID, user.Email)
 		}
@@ -275,9 +272,8 @@ func HandleResetPassword(ctx echo.Context) error {
 	otp := req.Otp
 	password := req.Password
 	confirmPassword := req.ConfirmPassword
-	userType := req.UserType
 
-	if (phone == "" && email == "") || otp == "" || password == "" || confirmPassword == "" || userType == "" {
+	if (phone == "" && email == "") || otp == "" || password == "" || confirmPassword == "" {
 		return responses.SendError(ctx, 400, "All fields are required")
 	}
 
@@ -288,9 +284,9 @@ func HandleResetPassword(ctx echo.Context) error {
 	var user *User
 	var err error
 	if phone != "" {
-		user, err = GetUserByPhoneAndType(phone, userType)
+		user, err = GetUserByPhone(phone)
 	} else {
-		user, err = GetUserByEmailAndType(email, userType)
+		user, err = GetUserByEmail(email)
 	}
 	if err != nil {
 		return responses.SendError(ctx, 400, "Invalid credentials or code")
@@ -305,7 +301,7 @@ func HandleResetPassword(ctx echo.Context) error {
 		return responses.SendError(ctx, 500, "failed to hash password")
 	}
 
-	if err := UpdateUser(user.ID, bson.M{"password": hashed, "otp": "", "otp_attempts": 0, "phone_verified": true}); err != nil {
+	if err := UpdateUser(user.ID, bson.M{"password": hashed, "otp": "", "otp_attempts": 0, "phone_verified": true, "migrated": false}); err != nil {
 		return responses.SendError(ctx, 500, "failed to reset password")
 	}
 
@@ -335,9 +331,8 @@ func HandleResetPasswordByPhone(ctx echo.Context) error {
 	otp := req.Otp
 	password := req.Password
 	confirmPassword := req.ConfirmPassword
-	userType := req.UserType
 
-	if phone == "" || otp == "" || password == "" || confirmPassword == "" || userType == "" {
+	if phone == "" || otp == "" || password == "" || confirmPassword == "" {
 		return responses.SendError(ctx, 400, "All fields are required")
 	}
 
@@ -345,7 +340,7 @@ func HandleResetPasswordByPhone(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Passwords do not match")
 	}
 
-	user, err := GetUserByPhoneAndType(phone, userType)
+	user, err := GetUserByPhone(phone)
 	if err != nil {
 		return responses.SendError(ctx, 400, "Invalid phone or code")
 	}
@@ -359,7 +354,7 @@ func HandleResetPasswordByPhone(ctx echo.Context) error {
 		return responses.SendError(ctx, 500, "failed to hash password")
 	}
 
-	if err := UpdateUser(user.ID, bson.M{"password": hashed, "otp": "", "otp_attempts": 0, "phone_verified": true}); err != nil {
+	if err := UpdateUser(user.ID, bson.M{"password": hashed, "otp": "", "otp_attempts": 0, "phone_verified": true, "migrated": false}); err != nil {
 		return responses.SendError(ctx, 500, "failed to reset password")
 	}
 

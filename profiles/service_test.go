@@ -16,8 +16,8 @@ func TestBuildProfileUpdates_MapsAllScalarFields(t *testing.T) {
 		ProfessionalMembership: &yes, ProfessionalBody: "NCA",
 		NextOfKinName: "Kin", NextOfKinPhoneNumber: "+254712345678", NextOfKinRelationship: "Wife",
 		EarningGoalAmount: 50000,
-		Skills:    []string{"s1", "s2"},
-		Locations: []string{"loc1", "loc2"},
+		Skills:            []string{"s1", "s2"},
+		Locations:         []string{"loc1", "loc2"},
 	}
 	u := buildProfileUpdates(req)
 	for _, k := range []string{

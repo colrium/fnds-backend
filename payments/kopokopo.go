@@ -13,18 +13,18 @@ type KopoKopoConfig struct {
 }
 
 type KopoKopoPaymentRequest struct {
-	Amount          float64 `json:"amount"`
-	Currency        string  `json:"currency"`
-	Destination     string  `json:"destination"`
-	DestinationType string  `json:"destination_type"`
-	CallbackURL     string  `json:"callback_url"`
+	Amount          float64           `json:"amount"`
+	Currency        string            `json:"currency"`
+	Destination     string            `json:"destination"`
+	DestinationType string            `json:"destination_type"`
+	CallbackURL     string            `json:"callback_url"`
 	Metadata        map[string]string `json:"metadata,omitempty"`
 }
 
 type KopoKopoResponse struct {
-	Status          string `json:"status"`
-	TransactionRef  string `json:"transaction_ref"`
-	Description     string `json:"description"`
+	Status         string `json:"status"`
+	TransactionRef string `json:"transaction_ref"`
+	Description    string `json:"description"`
 }
 
 func NewKopoKopoService(apiKey string) *KopoKopoConfig {

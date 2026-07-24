@@ -5,9 +5,9 @@ import (
 )
 
 type JobResult struct {
-	Name      string `json:"name"`
-	Success   bool   `json:"success"`
-	Message   string `json:"message"`
+	Name    string `json:"name"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
 }
 
 func CloseExpiredJobVacancies() JobResult {

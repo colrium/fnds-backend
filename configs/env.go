@@ -140,3 +140,15 @@ func APIPublicURL() string {
 func AppPublicURL() string {
 	return os.Getenv("APP_PUBLIC_URL")
 }
+
+// SlackOpsNotifsURL is the dedicated Slack Incoming Webhook for operations
+// activity notifications.
+func SlackOpsNotifsURL() string {
+	return os.Getenv("SLACK_OPS_NOTIFS_URL")
+}
+
+// SlackWebhookURL is the general-purpose Slack Incoming Webhook, used as a
+// fallback when a channel-specific URL is not configured.
+func SlackWebhookURL() string {
+	return os.Getenv("SLACK_WEBHOOK_URL")
+}

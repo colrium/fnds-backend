@@ -20,6 +20,7 @@ const (
 
 type User struct {
 	ID               string     `json:"id" bson:"_id"`
+	OldID            int        `json:"old_id,omitempty" bson:"old_id,omitempty"`
 	FirstName        string     `json:"first_name" bson:"first_name"`
 	LastName         string     `json:"last_name" bson:"last_name"`
 	Email            string     `json:"email" bson:"email"`
@@ -39,6 +40,7 @@ type User struct {
 	IsVerified       bool       `json:"is_verified" bson:"is_verified"`
 	VerifiedUntil    *time.Time `json:"verified_until,omitempty" bson:"verified_until,omitempty"`
 	ReferralCodeUsed string     `json:"-" bson:"referral_code_used,omitempty"`
+	Migrated         bool       `json:"migrated,omitempty" bson:"migrated,omitempty"`
 	CreatedAt        time.Time  `json:"created_at" bson:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at" bson:"updated_at"`
 }
@@ -62,19 +64,19 @@ func CreateNewUser(user *User) error {
 }
 
 // EnsureIndexes creates the unique constraints for the users collection.
-// Uniqueness is scoped per user_type so the same person can hold both a
-// customer and an artisan account. Email is enforced only when present, since
-// it is optional at registration.
+// Phone and email are globally unique: a phone number or email belongs to
+// exactly one account regardless of user_type. Email is enforced only when
+// present, since it is optional at registration.
 func EnsureIndexes(ctx context.Context) error {
 	_, err := configs.MI.DB.Collection("users").Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
-			Keys:    bson.D{{Key: "phone", Value: 1}, {Key: "user_type", Value: 1}},
-			Options: options.Index().SetName("uniq_phone_user_type").SetUnique(true),
+			Keys:    bson.D{{Key: "phone", Value: 1}},
+			Options: options.Index().SetName("uniq_phone").SetUnique(true),
 		},
 		{
-			Keys: bson.D{{Key: "email", Value: 1}, {Key: "user_type", Value: 1}},
+			Keys: bson.D{{Key: "email", Value: 1}},
 			Options: options.Index().
-				SetName("uniq_email_user_type").
+				SetName("uniq_email").
 				SetUnique(true).
 				SetPartialFilterExpression(bson.M{"email": bson.M{"$type": "string", "$gt": ""}}),
 		},
