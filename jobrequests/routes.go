@@ -597,6 +597,19 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 		}
 		return responses.SendError(ctx, 500, "Failed to create job application")
 	}
+
+	go func(app JobApplication, acct users.User, vac JobVacancy) {
+		_ = notifications.NotifyApplicationCreated(context.Background(), notifications.ApplicationActivity{
+			ApplicantName:  strings.TrimSpace(acct.FirstName + " " + acct.LastName),
+			ApplicantEmail: acct.Email,
+			ApplicantPhone: acct.Phone,
+			ApplicantID:    acct.ID,
+			VacancyID:      vac.ID,
+			VacancyTitle:   vac.Title,
+			AppliedAt:      app.CreatedAt,
+		})
+	}(app, *account, *vacancy)
+
 	employer, employerErr := users.GetUserByID(vacancy.OwnerID)
 	if employerErr != nil {
 		slog.Error(
