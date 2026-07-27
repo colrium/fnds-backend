@@ -70,9 +70,9 @@ func main() {
 	// Idempotent: each seeder skips when its collection is already populated.
 	seeders.RunAll()
 
+	// Restore user index creation after the MongoDB volume is expanded.
 	if err := users.EnsureIndexes(context.Background()); err != nil {
-		slog.Error("failed to ensure user indexes", "error", err)
-		os.Exit(1)
+		slog.Warn("failed to ensure user indexes, continuing without them", "error", err)
 	}
 	if err := files.EnsureIndexes(context.Background()); err != nil {
 		slog.Error("failed to ensure file indexes", "error", err)
