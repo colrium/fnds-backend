@@ -175,10 +175,7 @@ func HandleUserRegistration(ctx echo.Context) error {
 		referrals.NormalizeCode(req.ReferralCode),
 	)
 	if err != nil {
-		if dupErr := duplicateRegistrationError(ctx, err); dupErr != nil {
-			return dupErr
-		}
-		return responses.SendError(ctx, 500, "failed to create user: "+err.Error())
+		return classifyRegistrationError(ctx, err)
 	}
 
 	// Fire-and-forget Slack notification for new registration.
@@ -215,6 +212,45 @@ func HandleUserRegistration(ctx echo.Context) error {
 		},
 		"user": user,
 	}, "User registered successfully.")
+}
+
+// classifyRegistrationError maps a createNewUser failure to a user-facing
+// response. Raw errors are logged server-side but never returned to the
+// client — they can leak infrastructure detail (e.g. "OutOfDiskSpace",
+// connection strings) and are useless to end users anyway.
+func classifyRegistrationError(ctx echo.Context, err error) error {
+	if dupErr := duplicateRegistrationError(ctx, err); dupErr != nil {
+		return dupErr
+	}
+
+	slog.Error("registration failed", "error", err, "remote_ip", ctx.RealIP())
+
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "OutOfDiskSpace") || strings.Contains(msg, "no space"):
+		return responses.SendErrorWithCode(
+			ctx, http.StatusServiceUnavailable,
+			"service_unavailable",
+			"We're upgrading our systems. Please try again in a few minutes.",
+			"", "", nil,
+		)
+	case strings.Contains(msg, "context deadline exceeded") ||
+		strings.Contains(msg, "server selection error") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "i/o timeout"):
+		return responses.SendErrorWithCode(
+			ctx, http.StatusServiceUnavailable,
+			"service_unavailable",
+			"We can't reach our servers right now. Please check your connection and try again.",
+			"", "", nil,
+		)
+	}
+	return responses.SendErrorWithCode(
+		ctx, http.StatusInternalServerError,
+		"registration_failed",
+		"Something went wrong while creating your account. Please try again in a moment.",
+		"", "", nil,
+	)
 }
 
 // duplicateRegistrationError returns a structured 409 response when `err` is
@@ -376,10 +412,7 @@ func HandleCreateUserViaAdmin(ctx echo.Context) error {
 
 	user, err := createUserViaAdmin(req.FirstName, req.LastName, req.Email, req.Phone, req.Password, req.UserType)
 	if err != nil {
-		if dupErr := duplicateRegistrationError(ctx, err); dupErr != nil {
-			return dupErr
-		}
-		return responses.SendError(ctx, 500, "failed to create user: "+err.Error())
+		return classifyRegistrationError(ctx, err)
 	}
 
 	return responses.SendOK(ctx, user, "User created successfully.")
