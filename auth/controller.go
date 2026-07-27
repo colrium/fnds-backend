@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"backend/notifications"
@@ -17,6 +18,8 @@ var (
 	ErrAccountPending        = errors.New("account pending phone verification")
 	ErrAccountSuspended      = errors.New("account suspended")
 	ErrDuplicateUser         = errors.New("an account with this phone or email already exists for this user type")
+	ErrDuplicatePhone        = errors.New("an account with this phone number already exists")
+	ErrDuplicateEmail        = errors.New("an account with this email already exists")
 	ErrPasswordResetRequired = errors.New("password reset required")
 )
 
@@ -75,6 +78,26 @@ func accountLoginError(user *users.User) error {
 func createNewUser(
 	firstName, lastName, email, phone, password, userType, referralCode string,
 ) (*users.User, error) {
+	// Application-layer duplicate check. The unique DB indexes on users.phone /
+	// users.email can't currently be created (disk-full on the Mongo host), so
+	// we can't rely on them to reject duplicate registrations.
+	if phone != "" {
+		existing, err := users.GetUserByPhone(phone)
+		if err == nil && existing != nil {
+			return nil, ErrDuplicatePhone
+		} else if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, err
+		}
+	}
+	if email != "" {
+		existing, err := users.GetUserByEmail(email)
+		if err == nil && existing != nil {
+			return nil, ErrDuplicateEmail
+		} else if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, err
+		}
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	if err != nil {
 		return nil, err
@@ -100,7 +123,7 @@ func createNewUser(
 	err = users.CreateNewUser(user)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			return nil, ErrDuplicateUser
+			return nil, classifyDuplicateKeyError(err)
 		}
 		return nil, err
 	}
@@ -134,9 +157,28 @@ func createUserViaAdmin(firstName, lastName, email, phone, password, userType st
 	err = users.CreateNewUser(user)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			return nil, ErrDuplicateUser
+			return nil, classifyDuplicateKeyError(err)
 		}
 		return nil, err
 	}
 	return user, nil
+}
+
+// classifyDuplicateKeyError inspects a mongo duplicate-key error and returns a
+// field-specific sentinel (phone/email) when we can figure it out, otherwise
+// falls back to the generic ErrDuplicateUser.
+func classifyDuplicateKeyError(err error) error {
+	var writeException mongo.WriteException
+	if errors.As(err, &writeException) {
+		for _, we := range writeException.WriteErrors {
+			msg := strings.ToLower(we.Message)
+			if strings.Contains(msg, "phone") {
+				return ErrDuplicatePhone
+			}
+			if strings.Contains(msg, "email") {
+				return ErrDuplicateEmail
+			}
+		}
+	}
+	return ErrDuplicateUser
 }

@@ -164,8 +164,8 @@ func HandleUserRegistration(ctx echo.Context) error {
 		referrals.NormalizeCode(req.ReferralCode),
 	)
 	if err != nil {
-		if errors.Is(err, ErrDuplicateUser) {
-			return responses.SendError(ctx, 409, ErrDuplicateUser.Error())
+		if dupErr := duplicateRegistrationError(ctx, err); dupErr != nil {
+			return dupErr
 		}
 		return responses.SendError(ctx, 500, "failed to create user: "+err.Error())
 	}
@@ -204,6 +204,36 @@ func HandleUserRegistration(ctx echo.Context) error {
 		},
 		"user": user,
 	}, "User registered successfully.")
+}
+
+// duplicateRegistrationError returns a structured 409 response when `err` is
+// one of the duplicate-user sentinels, or nil to let the caller decide. The
+// frontend uses `code` and `field` to steer users into Sign In / Reset Password.
+func duplicateRegistrationError(ctx echo.Context, err error) error {
+	switch {
+	case errors.Is(err, ErrDuplicatePhone):
+		return responses.SendErrorWithCode(
+			ctx, http.StatusConflict,
+			"duplicate_phone",
+			"An account with this phone number already exists.",
+			"phone", "sign_in", nil,
+		)
+	case errors.Is(err, ErrDuplicateEmail):
+		return responses.SendErrorWithCode(
+			ctx, http.StatusConflict,
+			"duplicate_email",
+			"An account with this email already exists.",
+			"email", "sign_in", nil,
+		)
+	case errors.Is(err, ErrDuplicateUser):
+		return responses.SendErrorWithCode(
+			ctx, http.StatusConflict,
+			"duplicate_user",
+			"An account with these details already exists.",
+			"", "sign_in", nil,
+		)
+	}
+	return nil
 }
 
 func sendTurnstileError(ctx echo.Context, err error) error {
@@ -263,8 +293,8 @@ func HandleSocialLogin(ctx echo.Context) error {
 	if err != nil {
 		user, err = createNewUser(req.FirstName, req.LastName, req.Email, req.Phone, "social_login_placeholder", req.UserType, "")
 		if err != nil {
-			if errors.Is(err, ErrDuplicateUser) {
-				return responses.SendError(ctx, 409, ErrDuplicateUser.Error())
+			if dupErr := duplicateRegistrationError(ctx, err); dupErr != nil {
+				return dupErr
 			}
 			return responses.SendError(ctx, 500, "failed to create user")
 		}
@@ -335,8 +365,8 @@ func HandleCreateUserViaAdmin(ctx echo.Context) error {
 
 	user, err := createUserViaAdmin(req.FirstName, req.LastName, req.Email, req.Phone, req.Password, req.UserType)
 	if err != nil {
-		if errors.Is(err, ErrDuplicateUser) {
-			return responses.SendError(ctx, 409, ErrDuplicateUser.Error())
+		if dupErr := duplicateRegistrationError(ctx, err); dupErr != nil {
+			return dupErr
 		}
 		return responses.SendError(ctx, 500, "failed to create user: "+err.Error())
 	}
