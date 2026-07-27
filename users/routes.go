@@ -48,6 +48,13 @@ type changePasswordRequest struct {
 	ConfirmPassword string `json:"confirm_password"`
 }
 
+// IssuePhoneOTP is the exported entry point for other packages that need to
+// kick off the reset/verification flow (e.g. the auth package when a migrated
+// user logs in). It delegates to the internal issuer.
+func IssuePhoneOTP(userID, phone string) {
+	issuePhoneOTP(userID, phone)
+}
+
 // issuePhoneOTP generates a fresh code, persists it, and sends it by SMS.
 // SMS delivery failures are logged but do not fail the request, so the user
 // can still retry via resend without the account being wedged.
@@ -64,6 +71,11 @@ func issuePhoneOTP(userID, phone string) {
 	if err := notifications.SendOTPSMS(phone, otp); err != nil {
 		log.Printf("[otp] failed to send SMS to %s: %v", phone, err)
 	}
+}
+
+// IssueEmailOTP is the exported entry point for other packages. See IssuePhoneOTP.
+func IssueEmailOTP(userID, email string) {
+	issueEmailOTP(userID, email)
 }
 
 // issueEmailOTP generates a fresh code, persists it, and sends it by email.

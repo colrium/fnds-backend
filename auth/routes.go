@@ -90,9 +90,20 @@ func HandleUserLogin(ctx echo.Context) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrPasswordResetRequired):
+			// Issue the OTP server-side so the client can jump straight to the
+			// verify-otp screen. Doing it here avoids a second /forgot-password
+			// call that would need a fresh Turnstile token minted with a
+			// different action (the login token can't be reused).
+			if user.Phone != "" {
+				users.IssuePhoneOTP(user.ID, user.Phone)
+			} else if user.Email != "" {
+				users.IssueEmailOTP(user.ID, user.Email)
+			}
 			return responses.SendOK(ctx, map[string]interface{}{
 				"reset_required": true,
 				"user_type":      user.UserType,
+				"phone":          user.Phone,
+				"email":          user.Email,
 			}, "This account was migrated from the old platform. Please reset your password to continue.")
 		case errors.Is(err, ErrAccountPending):
 			return responses.SendError(ctx, 403, "Your account is pending phone verification. Please verify your phone number to continue.")
