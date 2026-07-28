@@ -78,26 +78,6 @@ func accountLoginError(user *users.User) error {
 func createNewUser(
 	firstName, lastName, email, phone, password, userType, referralCode string,
 ) (*users.User, error) {
-	// Application-layer duplicate check. The unique DB indexes on users.phone /
-	// users.email can't currently be created (disk-full on the Mongo host), so
-	// we can't rely on them to reject duplicate registrations.
-	if phone != "" {
-		existing, err := users.GetUserByPhone(phone)
-		if err == nil && existing != nil {
-			return nil, ErrDuplicatePhone
-		} else if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, err
-		}
-	}
-	if email != "" {
-		existing, err := users.GetUserByEmail(email)
-		if err == nil && existing != nil {
-			return nil, ErrDuplicateEmail
-		} else if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, err
-		}
-	}
-
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	if err != nil {
 		return nil, err

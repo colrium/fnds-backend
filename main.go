@@ -70,9 +70,9 @@ func main() {
 	// Idempotent: each seeder skips when its collection is already populated.
 	seeders.RunAll()
 
-	// Restore user index creation after the MongoDB volume is expanded.
 	if err := users.EnsureIndexes(context.Background()); err != nil {
-		slog.Warn("failed to ensure user indexes, continuing without them", "error", err)
+		slog.Error("failed to ensure user indexes", "error", err)
+		os.Exit(1)
 	}
 	if err := files.EnsureIndexes(context.Background()); err != nil {
 		slog.Error("failed to ensure file indexes", "error", err)
@@ -94,8 +94,11 @@ func main() {
 		slog.Error("failed to ensure notification indexes", "error", err)
 		os.Exit(1)
 	}
+	if err := jobrequests.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to ensure job request indexes", "error", err)
+		os.Exit(1)
+	}
 	go notifications.NewDefaultDispatcher().Run(context.Background())
-	// Restore job request index creation after the MongoDB volume is expanded.
 
 	api := app.Group("/api/v1")
 
