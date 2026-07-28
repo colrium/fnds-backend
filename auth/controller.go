@@ -103,7 +103,9 @@ func createNewUser(
 	err = users.CreateNewUser(user)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			return nil, classifyDuplicateKeyError(err)
+			classified := classifyDuplicateKeyError(err)
+			notifyDuplicateRegistrationAttempt(classified, email, phone)
+			return nil, classified
 		}
 		return nil, err
 	}
@@ -114,6 +116,26 @@ func createNewUser(
 		log.Printf("[register] failed to send OTP SMS to %s: %v", user.Phone, err)
 	}
 	return user, nil
+}
+
+// notifyDuplicateRegistrationAttempt alerts the existing account holder that
+// someone tried to sign up with their email. Fire-and-forget: never block
+// the registration response, never leak whether the account exists.
+func notifyDuplicateRegistrationAttempt(dupErr error, attemptedEmail, attemptedPhone string) {
+	if !errors.Is(dupErr, ErrDuplicateEmail) || attemptedEmail == "" {
+		return
+	}
+	go func(email string) {
+		existing, err := users.GetUserByEmail(email)
+		if err != nil || existing == nil {
+			return
+		}
+		name := strings.TrimSpace(existing.FirstName + " " + existing.LastName)
+		if err := notifications.SendDuplicateRegistrationAlertEmail(existing.Email, name); err != nil {
+			log.Printf("[register] failed to send duplicate-registration alert to %s: %v", existing.Email, err)
+		}
+	}(attemptedEmail)
+	_ = attemptedPhone
 }
 
 func createUserViaAdmin(firstName, lastName, email, phone, password, userType string) (*users.User, error) {
@@ -137,7 +159,9 @@ func createUserViaAdmin(firstName, lastName, email, phone, password, userType st
 	err = users.CreateNewUser(user)
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			return nil, classifyDuplicateKeyError(err)
+			classified := classifyDuplicateKeyError(err)
+			notifyDuplicateRegistrationAttempt(classified, email, phone)
+			return nil, classified
 		}
 		return nil, err
 	}

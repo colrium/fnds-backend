@@ -78,6 +78,28 @@ func SendPasswordResetConfirmationEmail(email, name string) error {
 	return SendEmailViaSendGrid(context.Background(), email, "Password Reset Successful - Fundis", body)
 }
 
+// SendDuplicateRegistrationAlertEmail notifies an existing account holder that
+// somebody attempted to register a new account using their email. Helps them
+// spot both innocent mistakes ("did I already sign up?") and account probing.
+func SendDuplicateRegistrationAlertEmail(email, name string) error {
+	greeting := "Hello"
+	if name != "" {
+		greeting = "Hello " + name
+	}
+	body := fmt.Sprintf(
+		"%s,\n\n"+
+			"Someone just tried to create a Fundis account using this email address, "+
+			"but an account already exists for it.\n\n"+
+			"If this was you, you can sign in at https://app.fundis.co.ke/sign-in — "+
+			"use \"Forgot Password\" if you don't remember your password.\n\n"+
+			"If it wasn't you, no action is needed. Your account is safe and no changes "+
+			"were made. We just wanted you to know.\n\n"+
+			"Best regards,\nThe Fundis Team",
+		greeting,
+	)
+	return SendEmailViaSendGrid(context.Background(), email, "Sign-up attempt on your Fundis account", body)
+}
+
 // SendPasswordChangedEmail notifies a user that their password was changed
 // from within their authenticated session.
 func SendPasswordChangedEmail(email, name string) error {
