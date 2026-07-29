@@ -189,6 +189,7 @@ func HandleUserRegistration(ctx echo.Context) error {
 			UserEmail:    u.Email,
 			UserPhone:    u.Phone,
 			UserID:       u.ID,
+			UserType:     u.UserType,
 			RegisteredAt: registeredAt,
 		})
 	}(*user)

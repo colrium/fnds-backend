@@ -43,6 +43,7 @@ type RegistrationActivity struct {
 	UserEmail    string
 	UserPhone    string
 	UserID       string
+	UserType     string
 	RegisteredAt time.Time
 }
 
@@ -78,6 +79,7 @@ func NotifyUserRegistered(ctx context.Context, a RegistrationActivity) error {
 		UserEmail:    a.UserEmail,
 		UserPhone:    a.UserPhone,
 		UserID:       a.UserID,
+		UserType:     a.UserType,
 		RegisteredAt: a.RegisteredAt,
 	})
 	return sendActivity(ctx, msg, "user_registered", SlackChannelOps)

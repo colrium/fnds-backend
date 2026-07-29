@@ -163,6 +163,7 @@ type RegistrationEvent struct {
 	UserEmail    string
 	UserPhone    string
 	UserID       string
+	UserType     string
 	RegisteredAt time.Time
 }
 
@@ -193,6 +194,7 @@ func BuildApplicationMessage(e ApplicationEvent) BlockKitMessage {
 func BuildRegistrationMessage(e RegistrationEvent) BlockKitMessage {
 	return buildActivityMessage("New User Registration", []MessageField{
 		{Label: "Name", Value: e.UserName},
+		{Label: "User Type", Value: e.UserType},
 		{Label: "Email", Value: e.UserEmail},
 		{Label: "Phone", Value: e.UserPhone},
 		{Label: "User ID", Value: e.UserID},
