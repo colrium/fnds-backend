@@ -34,6 +34,26 @@ test:
 	@echo "Testing..."
 	@go test ./... -v
 
+# Lint the application
+lint:
+	@echo "Linting..."
+	@go vet ./...
+
+# Format the application
+format:
+	@echo "Formatting..."
+	@gofmt -w .
+
+# Check formatting without modifying files
+format-check:
+	@echo "Checking formatting..."
+	@unformatted="$$(gofmt -l .)"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "The following files are not properly formatted:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+
 # Clean the binary
 clean:
 	@echo "Cleaning..."
@@ -56,4 +76,4 @@ dev:
 	    fi; \
 	fi
 
-.PHONY: all build run test clean
+.PHONY: all build run test lint format format-check clean
