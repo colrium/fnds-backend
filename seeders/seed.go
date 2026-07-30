@@ -2,7 +2,10 @@ package seeders
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"backend/configs"
@@ -12,6 +15,11 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// InstitutionsDataPath is the location of the institutions seed file. Ops can
+// override with the INSTITUTIONS_SEED_PATH env var so the list can be updated
+// without a code change.
+const defaultInstitutionsDataPath = "seeders/data/institutions.json"
 
 type Seeder struct {
 	Name string
@@ -145,145 +153,42 @@ func SeedInstitutions() error {
 		log.Printf("[seeder] institutions already populated, skipping")
 		return nil
 	}
-	type inst struct {
-		name string
-		typ  string
-	}
-	// Comprehensive list of Kenyan education institutions. Types are limited to
-	// "university", "college", "tvet" and "polytechnic".
-	items := []inst{
-		// Universities
-		{"University of Nairobi", "university"},
-		{"Kenyatta University", "university"},
-		{"Jomo Kenyatta University of Agriculture and Technology", "university"},
-		{"Moi University", "university"},
-		{"Egerton University", "university"},
-		{"Maseno University", "university"},
-		{"Technical University of Kenya", "university"},
-		{"Technical University of Mombasa", "university"},
-		{"Dedan Kimathi University of Technology", "university"},
-		{"Masinde Muliro University of Science and Technology", "university"},
-		{"Multimedia University of Kenya", "university"},
-		{"Meru University of Science and Technology", "university"},
-		{"Murang'a University of Technology", "university"},
-		{"Machakos University", "university"},
-		{"Kirinyaga University", "university"},
-		{"Kibabii University", "university"},
-		{"Karatina University", "university"},
-		{"Laikipia University", "university"},
-		{"Chuka University", "university"},
-		{"Pwani University", "university"},
-		{"South Eastern Kenya University", "university"},
-		{"Taita Taveta University", "university"},
-		{"University of Embu", "university"},
-		{"University of Eldoret", "university"},
-		{"University of Kabianga", "university"},
-		{"Kisii University", "university"},
-		{"Rongo University", "university"},
-		{"Jaramogi Oginga Odinga University of Science and Technology", "university"},
-		{"Tom Mboya University", "university"},
-		{"Alupe University", "university"},
-		{"Garissa University", "university"},
-		{"Cooperative University of Kenya", "university"},
-		{"Strathmore University", "university"},
-		{"United States International University Africa", "university"},
-		{"Mount Kenya University", "university"},
-		{"Kenya Methodist University", "university"},
-		{"Catholic University of Eastern Africa", "university"},
-		{"Daystar University", "university"},
-		{"Africa Nazarene University", "university"},
-		{"KCA University", "university"},
-		{"Zetech University", "university"},
-		{"Riara University", "university"},
-
-		// Colleges
-		{"Kenya Technical Trainers College", "college"},
-		{"Kenya Institute of Highways and Building Technology", "college"},
-		{"Kenya Water Institute", "college"},
-		{"Kenya School of Government", "college"},
-		{"Kenya Institute of Mass Communication", "college"},
-		{"Kenya Medical Training College", "college"},
-		{"Kenya Utalii College", "college"},
-		{"Kenya Institute of Management", "college"},
-		{"Railway Training Institute", "college"},
-		{"Kenya Wildlife Service Training Institute", "college"},
-		{"Kenya Forestry College", "college"},
-		{"Kenya School of Law", "college"},
-		{"Bandari Maritime Academy", "college"},
-		{"East African Institute of Certified Studies", "college"},
-		{"Nairobi Institute of Business Studies", "college"},
-		{"Graffins College", "college"},
-		{"Regina Pacis Institute", "college"},
-		{"Don Bosco Technical Institute Embu", "college"},
-		{"St. Joseph Technical Institute for the Deaf Nyang'oma", "college"},
-		{"Christ the King Technical Institute", "college"},
-
-		// TVETs
-		// NITA is classified as a TVET here (it was previously "government",
-		// which is not one of the supported institution types listed above).
-		// NITA runs technical/vocational training centres, so "tvet" is the
-		// closest fit within the allowed vocabulary.
-		{"National Industrial Training Authority (NITA)", "tvet"},
-		{"Nairobi Technical Training Institute", "tvet"},
-		{"Rift Valley Technical Training Institute", "tvet"},
-		{"Thika Technical Training Institute", "tvet"},
-		{"Kiambu Institute of Science and Technology", "tvet"},
-		{"Machakos Institute of Technology", "tvet"},
-		{"Michuki Technical Training Institute", "tvet"},
-		{"Kaiboi Technical Training Institute", "tvet"},
-		{"Sang'alo Institute of Science and Technology", "tvet"},
-		{"Bushiangala Technical Training Institute", "tvet"},
-		{"Mawego Technical Training Institute", "tvet"},
-		{"Ramogi Institute of Advanced Technology", "tvet"},
-		{"Nyandarua Institute of Science and Technology", "tvet"},
-		{"Rift Valley Institute of Science and Technology", "tvet"},
-		{"Masai Technical Training Institute", "tvet"},
-		{"Coast Institute of Technology", "tvet"},
-		{"Mombasa Technical Training Institute", "tvet"},
-		{"Wote Technical Training Institute", "tvet"},
-		{"Kabete Technical Training Institute", "tvet"},
-		{"Karen Technical Training Institute for the Deaf", "tvet"},
-		{"Nairobi Institute of Technology", "tvet"},
-		{"Gusii Institute of Technology", "tvet"},
-		{"Kisiwa Technical Training Institute", "tvet"},
-		{"Bumbe Technical Training Institute", "tvet"},
-		{"Ol'lessos Technical Training Institute", "tvet"},
-		{"Kipsoen Technical Training Institute", "tvet"},
-		{"Baringo Technical College", "tvet"},
-		{"Emining Technical Training Institute", "tvet"},
-		{"Keroka Technical Training Institute", "tvet"},
-		{"Nkabune Technical Training Institute", "tvet"},
-		{"Kitui Technical Training Institute", "tvet"},
-		{"Garissa Technical Training Institute", "tvet"},
-		{"Godoma Technical Training Institute", "tvet"},
-
-		// Polytechnics
-		{"Kabete National Polytechnic", "polytechnic"},
-		{"Kenya Coast National Polytechnic", "polytechnic"},
-		{"Kisumu National Polytechnic", "polytechnic"},
-		{"Eldoret National Polytechnic", "polytechnic"},
-		{"Meru National Polytechnic", "polytechnic"},
-		{"Nyeri National Polytechnic", "polytechnic"},
-		{"Sigalagala National Polytechnic", "polytechnic"},
-		{"Kitale National Polytechnic", "polytechnic"},
-		{"Kirinyaga National Polytechnic", "polytechnic"},
-		{"Nyandarua National Polytechnic", "polytechnic"},
-		{"Bungoma National Polytechnic", "polytechnic"},
-		{"Kabarnet National Polytechnic", "polytechnic"},
-		{"Kisii National Polytechnic", "polytechnic"},
-		{"Machakos National Polytechnic", "polytechnic"},
-		{"Thika National Polytechnic", "polytechnic"},
+	items, err := loadInstitutionsData()
+	if err != nil {
+		return fmt.Errorf("load institutions data: %w", err)
 	}
 	institutions := make([]any, 0, len(items))
 	for _, it := range items {
 		institutions = append(institutions, bson.M{
 			"_id":        uuid.New().String(),
-			"name":       it.name,
-			"type":       it.typ,
+			"name":       it.Name,
+			"type":       it.Type,
 			"created_at": time.Now(),
 			"updated_at": time.Now(),
 		})
 	}
-	_, err := configs.MI.DB.Collection("institutions").InsertMany(context.TODO(), institutions)
+	_, err = configs.MI.DB.Collection("institutions").InsertMany(context.TODO(), institutions)
 	return err
 }
+
+type institutionSeed struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+func loadInstitutionsData() ([]institutionSeed, error) {
+	path := os.Getenv("INSTITUTIONS_SEED_PATH")
+	if path == "" {
+		path = defaultInstitutionsDataPath
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	var items []institutionSeed
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	return items, nil
+}
+
