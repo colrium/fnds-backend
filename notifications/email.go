@@ -19,19 +19,28 @@ type EmailRequest struct {
 // SendEmailViaSendGrid sends transactional mail through the configured
 // provider and returns provider/API errors to the caller.
 func SendEmailViaSendGrid(ctx context.Context, to, subject, body string) error {
+	return newConfiguredEmailSender().Send(ctx, to, subject, body)
+}
+
+func newConfiguredEmailSender() emailSender {
 	return integrations.NewSendGridClient(
 		configs.SendGridAPIKey(),
 		configs.SendGridFromEmail(),
 		configs.SendGridFromName(),
-	).Send(ctx, to, subject, body)
+	)
 }
 
 type EmailService struct {
 	DefaultFrom string
+	sender      emailSender
 }
 
 func NewEmailService(defaultFrom string) *EmailService {
-	return &EmailService{DefaultFrom: defaultFrom}
+	return newEmailService(defaultFrom, newConfiguredEmailSender())
+}
+
+func newEmailService(defaultFrom string, sender emailSender) *EmailService {
+	return &EmailService{DefaultFrom: defaultFrom, sender: sender}
 }
 
 func (s *EmailService) Send(req EmailRequest) error {
@@ -39,17 +48,25 @@ func (s *EmailService) Send(req EmailRequest) error {
 		req.From = s.DefaultFrom
 	}
 	log.Printf("[EmailService] sending to %s: %s", req.To, req.Subject)
-	return SendEmailViaSendGrid(context.Background(), req.To, req.Subject, req.Body)
+	return s.sender.Send(context.Background(), req.To, req.Subject, req.Body)
 }
 
 func SendWelcomeEmail(email, name string) error {
+	return sendWelcomeEmail(newConfiguredEmailSender(), email, name)
+}
+
+func sendWelcomeEmail(sender emailSender, email, name string) error {
 	body := fmt.Sprintf("Hello %s,\n\nWelcome to Fundis! We're excited to have you on board.\n\nBest regards,\nThe Fundis Team", name)
-	return SendEmailViaSendGrid(context.Background(), email, "Welcome to Fundis", body)
+	return sender.Send(context.Background(), email, "Welcome to Fundis", body)
 }
 
 func SendOTPEmail(email, otp string) error {
+	return sendOTPEmail(newConfiguredEmailSender(), email, otp)
+}
+
+func sendOTPEmail(sender emailSender, email, otp string) error {
 	body := fmt.Sprintf("Your OTP code is: %s\n\nThis code will expire in 5 minutes. Do not share it with anyone.", otp)
-	return SendEmailViaSendGrid(context.Background(), email, "Your Fundis Verification Code", body)
+	return sender.Send(context.Background(), email, "Your Fundis Verification Code", body)
 }
 
 // SendPasswordResetOTPEmail sends a password-reset specific OTP via email.
