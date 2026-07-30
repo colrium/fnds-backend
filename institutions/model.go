@@ -11,8 +11,31 @@ import (
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// EnsureIndexes creates the search-supporting indexes for institutions:
+//   - a text index on name so future search can switch to $text
+//   - a plain ascending index on name to accelerate prefix / sort queries
+//
+// Called once at startup from main.go.
+func EnsureIndexes(ctx context.Context) error {
+	_, err := configs.MI.DB.Collection("institutions").Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "name", Value: "text"}},
+			Options: options.Index().SetName("institutions_name_text"),
+		},
+		{
+			Keys:    bson.D{{Key: "name", Value: 1}},
+			Options: options.Index().SetName("institutions_name_asc"),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("ensure institution indexes: %w", err)
+	}
+	return nil
+}
 
 // DefaultSearchLimit caps the number of results returned from a search or
 // list operation to protect the pod from OOM on large collections.

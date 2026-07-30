@@ -98,6 +98,10 @@ func main() {
 		slog.Error("failed to ensure job request indexes", "error", err)
 		os.Exit(1)
 	}
+	if err := institutions.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to ensure institution indexes", "error", err)
+		os.Exit(1)
+	}
 	go notifications.NewDefaultDispatcher().Run(context.Background())
 
 	api := app.Group("/api/v1")
