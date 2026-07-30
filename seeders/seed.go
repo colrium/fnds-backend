@@ -2,7 +2,10 @@ package seeders
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"backend/configs"
@@ -12,6 +15,11 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// InstitutionsDataPath is the location of the institutions seed file. Ops can
+// override with the INSTITUTIONS_SEED_PATH env var so the list can be updated
+// without a code change.
+const defaultInstitutionsDataPath = "seeders/data/institutions.json"
 
 type Seeder struct {
 	Name string
@@ -90,7 +98,7 @@ func SeedLocations() error {
 		"Thika", "Nyeri", "Machakos", "Kakamega", "Kisii",
 		"Meru", "Kericho", "Naivasha", "Kitale", "Malindi",
 	}
-	locations := make([]interface{}, 0, len(names))
+	locations := make([]any, 0, len(names))
 	for _, n := range names {
 		locations = append(locations, bson.M{"_id": uuid.New().String(), "name": n, "created_at": time.Now()})
 	}
@@ -109,7 +117,7 @@ func SeedSkills() error {
 		"Mason", "Carpenter", "Electrician", "Plumber", "Painter",
 		"Welder", "Tile Fixer", "Gardener", "Cleaner", "General Labourer",
 	}
-	skills := make([]interface{}, 0, len(names))
+	skills := make([]any, 0, len(names))
 	for _, n := range names {
 		skills = append(skills, bson.M{"_id": uuid.New().String(), "name": n, "created_at": time.Now()})
 	}
@@ -124,7 +132,7 @@ func SeedBanks() error {
 		log.Printf("[seeder] banks already populated, skipping")
 		return nil
 	}
-	banks := []interface{}{
+	banks := []any{
 		bson.M{"_id": uuid.New().String(), "name": "Kenya Commercial Bank", "code": "KCB", "created_at": time.Now()},
 		bson.M{"_id": uuid.New().String(), "name": "Equity Bank", "code": "EQUITY", "created_at": time.Now()},
 		bson.M{"_id": uuid.New().String(), "name": "Co-operative Bank", "code": "COOP", "created_at": time.Now()},
@@ -145,30 +153,41 @@ func SeedInstitutions() error {
 		log.Printf("[seeder] institutions already populated, skipping")
 		return nil
 	}
-	type inst struct {
-		name string
-		typ  string
+	items, err := loadInstitutionsData()
+	if err != nil {
+		return fmt.Errorf("load institutions data: %w", err)
 	}
-	items := []inst{
-		{"National Industrial Training Authority (NITA)", "government"},
-		{"Kenya Technical Trainers College", "college"},
-		{"Nairobi Technical Training Institute", "tvet"},
-		{"Kabete National Polytechnic", "polytechnic"},
-		{"Kenya Coast National Polytechnic", "polytechnic"},
-		{"Rift Valley Technical Training Institute", "tvet"},
-		{"Kisumu National Polytechnic", "polytechnic"},
-		{"Eldoret National Polytechnic", "polytechnic"},
-	}
-	institutions := make([]interface{}, 0, len(items))
+	institutions := make([]any, 0, len(items))
 	for _, it := range items {
 		institutions = append(institutions, bson.M{
 			"_id":        uuid.New().String(),
-			"name":       it.name,
-			"type":       it.typ,
+			"name":       it.Name,
+			"type":       it.Type,
 			"created_at": time.Now(),
 			"updated_at": time.Now(),
 		})
 	}
-	_, err := configs.MI.DB.Collection("institutions").InsertMany(context.TODO(), institutions)
+	_, err = configs.MI.DB.Collection("institutions").InsertMany(context.TODO(), institutions)
 	return err
+}
+
+type institutionSeed struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+func loadInstitutionsData() ([]institutionSeed, error) {
+	path := os.Getenv("INSTITUTIONS_SEED_PATH")
+	if path == "" {
+		path = defaultInstitutionsDataPath
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	var items []institutionSeed
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	return items, nil
 }

@@ -1,13 +1,46 @@
 package institutions
 
 import (
+	"fmt"
+	"strconv"
+	"unicode/utf8"
+
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
 )
 
+// MinSearchQueryLength is the minimum number of runes required in a search
+// query before we hit the database. Shorter queries are rejected to avoid
+// full-collection scans on near-empty input.
+const MinSearchQueryLength = 2
+
+// DefaultPageLimit and MaxPageLimit bound the number of institutions returned
+// per request.
+const (
+	DefaultPageLimit int64 = 20
+	MaxPageLimit     int64 = 100
+)
+
 func HandleGetAll(ctx echo.Context) error {
-	institutions, err := GetAllInstitutions()
+	q := ctx.QueryParam("q")
+
+	if q != "" && utf8.RuneCountInString(q) < MinSearchQueryLength {
+		return responses.SendError(ctx, 400, "Search query must be at least 2 characters")
+	}
+
+	limit, err := parsePositiveInt(ctx.QueryParam("limit"), DefaultPageLimit)
+	if err != nil {
+		return responses.SendError(ctx, 400, fmt.Sprintf("Invalid limit: %s", err))
+	}
+	limit = min(limit, MaxPageLimit)
+
+	offset, err := parsePositiveInt(ctx.QueryParam("offset"), 0)
+	if err != nil {
+		return responses.SendError(ctx, 400, fmt.Sprintf("Invalid offset: %s", err))
+	}
+
+	institutions, err := SearchInstitutions(q, limit, offset)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to fetch institutions")
 	}
@@ -36,7 +69,7 @@ func HandleCreate(ctx echo.Context) error {
 
 func HandleUpdate(ctx echo.Context) error {
 	id := ctx.Param("institutionId")
-	var updates map[string]interface{}
+	var updates map[string]any
 	if err := ctx.Bind(&updates); err != nil {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
@@ -44,4 +77,18 @@ func HandleUpdate(ctx echo.Context) error {
 		return responses.SendError(ctx, 500, "Failed to update institution")
 	}
 	return responses.SendOK(ctx, nil, "Institution updated successfully")
+}
+
+func parsePositiveInt(raw string, fallback int64) (int64, error) {
+	if raw == "" {
+		return fallback, nil
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%q is not a valid integer", raw)
+	}
+	if v < 0 {
+		return 0, fmt.Errorf("%d must be >= 0", v)
+	}
+	return v, nil
 }
