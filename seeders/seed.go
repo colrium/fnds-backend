@@ -191,4 +191,3 @@ func loadInstitutionsData() ([]institutionSeed, error) {
 	}
 	return items, nil
 }
-
