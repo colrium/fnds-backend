@@ -2,8 +2,10 @@ package institutions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"backend/configs"
@@ -15,13 +17,20 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// mongoIndexAlreadyExistsCode is the server error code returned when
+// CreateOne is called for an index that already exists with the same spec.
+// It's safe to ignore during startup index creation.
+const mongoIndexAlreadyExistsCode = 85
+
 // EnsureIndexes creates the search-supporting indexes for institutions:
-//   - a text index on name so future search can switch to $text
+//   - a text index on name so search can use $text
 //   - a plain ascending index on name to accelerate prefix / sort queries
 //
-// Called once at startup from main.go.
+// Called once at startup from main.go. Idempotent — an "already exists" error
+// from Mongo (code 85) is treated as success so repeated deploys don't crash.
 func EnsureIndexes(ctx context.Context) error {
-	_, err := configs.MI.DB.Collection("institutions").Indexes().CreateMany(ctx, []mongo.IndexModel{
+	collection := configs.MI.DB.Collection("institutions")
+	models := []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "name", Value: "text"}},
 			Options: options.Index().SetName("institutions_name_text"),
@@ -30,16 +39,30 @@ func EnsureIndexes(ctx context.Context) error {
 			Keys:    bson.D{{Key: "name", Value: 1}},
 			Options: options.Index().SetName("institutions_name_asc"),
 		},
-	})
-	if err != nil {
-		return fmt.Errorf("ensure institution indexes: %w", err)
+	}
+	for _, m := range models {
+		if _, err := collection.Indexes().CreateOne(ctx, m); err != nil {
+			var cmdErr mongo.CommandError
+			if errors.As(err, &cmdErr) && cmdErr.Code == mongoIndexAlreadyExistsCode {
+				continue
+			}
+			return fmt.Errorf("ensure institution indexes: %w", err)
+		}
 	}
 	return nil
 }
 
-// DefaultSearchLimit caps the number of results returned from a search or
-// list operation to protect the pod from OOM on large collections.
-const DefaultSearchLimit int64 = 100
+// DefaultSearchLimit is the fallback page size used when a direct caller
+// passes limit <= 0. It matches MaxPageLimit so no caller can bypass the
+// HTTP-layer ceiling by going straight to the model.
+var DefaultSearchLimit = MaxPageLimit
+
+// MaxSearchOffset caps how deep offset-based pagination can go. SetSkip
+// scans and discards `offset` documents server-side, so latency grows
+// linearly. This ceiling forces callers past it to narrow their query
+// instead. Revisit (or switch to keyset pagination) if the collection
+// grows into the tens of thousands.
+const MaxSearchOffset int64 = 10_000
 
 // dbTimeout is the default timeout applied to institution DB operations.
 const dbTimeout = 5 * time.Second
@@ -70,10 +93,15 @@ func GetAllInstitutions() ([]Institution, error) {
 	return institutions, nil
 }
 
-// SearchInstitutions returns institutions whose names contain the query string,
-// matched case-insensitively, sorted alphabetically by name. An empty query
+// SearchInstitutions returns institutions matching the query string. When
+// query is non-empty it uses a MongoDB $text search against the
+// institutions_name_text index and sorts by relevance score. An empty query
 // returns institutions sorted alphabetically. Results are paginated via limit
 // and offset; if limit <= 0 it falls back to DefaultSearchLimit.
+//
+// $text tokenizes on word boundaries, so partial words won't match (e.g. "univ"
+// won't match "University"). For prefix-style matching on very short inputs
+// we fall back to an anchored case-insensitive regex.
 func SearchInstitutions(query string, limit int64, offset int64) ([]Institution, error) {
 	if limit <= 0 {
 		limit = DefaultSearchLimit
@@ -81,21 +109,35 @@ func SearchInstitutions(query string, limit int64, offset int64) ([]Institution,
 	if offset < 0 {
 		offset = 0
 	}
-
-	filter := bson.M{}
-	if query != "" {
-		filter["name"] = bson.M{
-			"$regex": primitive.Regex{Pattern: regexp.QuoteMeta(query), Options: "i"},
-		}
+	if offset > MaxSearchOffset {
+		return nil, fmt.Errorf("offset %d exceeds max %d: narrow the query instead", offset, MaxSearchOffset)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
-	opts := options.Find().
-		SetSort(bson.D{{Key: "name", Value: 1}}).
-		SetLimit(limit).
-		SetSkip(offset)
+	filter := bson.M{}
+	// NOTE: SetSkip is offset-based pagination — Mongo must walk and discard
+	// `offset` documents before returning results, so latency degrades linearly
+	// with offset. Fine at the current scale (a few hundred institutions), but
+	// if this collection grows into the tens of thousands, switch to keyset
+	// pagination (e.g. filter { name: { $gt: cursor } } sorted by name).
+	opts := options.Find().SetLimit(limit).SetSkip(offset)
+
+	switch {
+	case query == "":
+		opts.SetSort(bson.D{{Key: "name", Value: 1}})
+	case shouldUseTextSearch(query):
+		filter["$text"] = bson.M{"$search": query}
+		opts.SetProjection(bson.M{"score": bson.M{"$meta": "textScore"}})
+		opts.SetSort(bson.D{{Key: "score", Value: bson.M{"$meta": "textScore"}}})
+	default:
+		filter["name"] = bson.M{
+			"$regex": primitive.Regex{Pattern: "^" + regexp.QuoteMeta(query), Options: "i"},
+		}
+		opts.SetSort(bson.D{{Key: "name", Value: 1}})
+	}
+
 	cursor, err := configs.MI.DB.Collection("institutions").Find(ctx, filter, opts)
 	if err != nil {
 		return nil, fmt.Errorf("search institutions (query=%q): %w", query, err)
@@ -107,6 +149,18 @@ func SearchInstitutions(query string, limit int64, offset int64) ([]Institution,
 		return nil, fmt.Errorf("decode institutions (query=%q): %w", query, err)
 	}
 	return institutions, nil
+}
+
+// shouldUseTextSearch reports whether the query contains at least one full
+// word (>=3 chars separated by whitespace). Text search does not do partial
+// word matching, so short/partial inputs go through the regex prefix path.
+func shouldUseTextSearch(query string) bool {
+	for _, word := range strings.Fields(query) {
+		if len(word) >= 3 {
+			return true
+		}
+	}
+	return false
 }
 
 func GetInstitutionByID(id string) (*Institution, error) {

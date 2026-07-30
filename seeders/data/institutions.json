@@ -63,7 +63,7 @@
   {"name": "St. Joseph Technical Institute for the Deaf Nyang'oma", "type": "college"},
   {"name": "Christ the King Technical Institute", "type": "college"},
 
-  {"name": "National Industrial Training Authority (NITA)", "type": "tvet"},
+  {"name": "National Industrial Training Authority (NITA)", "type": "government"},
   {"name": "Nairobi Technical Training Institute", "type": "tvet"},
   {"name": "Rift Valley Technical Training Institute", "type": "tvet"},
   {"name": "Thika Technical Training Institute", "type": "tvet"},
