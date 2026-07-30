@@ -1,6 +1,7 @@
 package institutions
 
 import (
+	"strconv"
 	"unicode/utf8"
 
 	"backend/responses"
@@ -8,15 +9,29 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// MinSearchQueryLength is the minimum number of runes required in a search
+// query before we hit the database. Shorter queries are rejected to avoid
+// full-collection scans on near-empty input.
+const MinSearchQueryLength = 2
+
+// DefaultPageLimit and MaxPageLimit bound the number of institutions returned
+// per request.
+const (
+	DefaultPageLimit int64 = 20
+	MaxPageLimit     int64 = 100
+)
+
 func HandleGetAll(ctx echo.Context) error {
 	q := ctx.QueryParam("q")
 
-	// Queries shorter than 2 characters are too broad, return an empty list.
-	if q != "" && utf8.RuneCountInString(q) < 2 {
-		return responses.SendOK(ctx, []Institution{}, "Institutions retrieved successfully")
+	if q != "" && utf8.RuneCountInString(q) < MinSearchQueryLength {
+		return responses.SendError(ctx, 400, "Search query must be at least 2 characters")
 	}
 
-	institutions, err := SearchInstitutions(q)
+	limit := min(parsePositiveInt(ctx.QueryParam("limit"), DefaultPageLimit), MaxPageLimit)
+	offset := parsePositiveInt(ctx.QueryParam("offset"), 0)
+
+	institutions, err := SearchInstitutions(q, limit, offset)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to fetch institutions")
 	}
@@ -45,7 +60,7 @@ func HandleCreate(ctx echo.Context) error {
 
 func HandleUpdate(ctx echo.Context) error {
 	id := ctx.Param("institutionId")
-	var updates map[string]interface{}
+	var updates map[string]any
 	if err := ctx.Bind(&updates); err != nil {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
@@ -53,4 +68,15 @@ func HandleUpdate(ctx echo.Context) error {
 		return responses.SendError(ctx, 500, "Failed to update institution")
 	}
 	return responses.SendOK(ctx, nil, "Institution updated successfully")
+}
+
+func parsePositiveInt(raw string, fallback int64) int64 {
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || v < 0 {
+		return fallback
+	}
+	return v
 }

@@ -90,7 +90,7 @@ func SeedLocations() error {
 		"Thika", "Nyeri", "Machakos", "Kakamega", "Kisii",
 		"Meru", "Kericho", "Naivasha", "Kitale", "Malindi",
 	}
-	locations := make([]interface{}, 0, len(names))
+	locations := make([]any, 0, len(names))
 	for _, n := range names {
 		locations = append(locations, bson.M{"_id": uuid.New().String(), "name": n, "created_at": time.Now()})
 	}
@@ -109,7 +109,7 @@ func SeedSkills() error {
 		"Mason", "Carpenter", "Electrician", "Plumber", "Painter",
 		"Welder", "Tile Fixer", "Gardener", "Cleaner", "General Labourer",
 	}
-	skills := make([]interface{}, 0, len(names))
+	skills := make([]any, 0, len(names))
 	for _, n := range names {
 		skills = append(skills, bson.M{"_id": uuid.New().String(), "name": n, "created_at": time.Now()})
 	}
@@ -124,7 +124,7 @@ func SeedBanks() error {
 		log.Printf("[seeder] banks already populated, skipping")
 		return nil
 	}
-	banks := []interface{}{
+	banks := []any{
 		bson.M{"_id": uuid.New().String(), "name": "Kenya Commercial Bank", "code": "KCB", "created_at": time.Now()},
 		bson.M{"_id": uuid.New().String(), "name": "Equity Bank", "code": "EQUITY", "created_at": time.Now()},
 		bson.M{"_id": uuid.New().String(), "name": "Co-operative Bank", "code": "COOP", "created_at": time.Now()},
@@ -219,6 +219,10 @@ func SeedInstitutions() error {
 		{"Christ the King Technical Institute", "college"},
 
 		// TVETs
+		// NITA is classified as a TVET here (it was previously "government",
+		// which is not one of the supported institution types listed above).
+		// NITA runs technical/vocational training centres, so "tvet" is the
+		// closest fit within the allowed vocabulary.
 		{"National Industrial Training Authority (NITA)", "tvet"},
 		{"Nairobi Technical Training Institute", "tvet"},
 		{"Rift Valley Technical Training Institute", "tvet"},
@@ -270,7 +274,7 @@ func SeedInstitutions() error {
 		{"Machakos National Polytechnic", "polytechnic"},
 		{"Thika National Polytechnic", "polytechnic"},
 	}
-	institutions := make([]interface{}, 0, len(items))
+	institutions := make([]any, 0, len(items))
 	for _, it := range items {
 		institutions = append(institutions, bson.M{
 			"_id":        uuid.New().String(),
