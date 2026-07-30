@@ -1,13 +1,22 @@
 package institutions
 
 import (
+	"unicode/utf8"
+
 	"backend/responses"
 
 	"github.com/labstack/echo/v4"
 )
 
 func HandleGetAll(ctx echo.Context) error {
-	institutions, err := GetAllInstitutions()
+	q := ctx.QueryParam("q")
+
+	// Queries shorter than 2 characters are too broad, return an empty list.
+	if q != "" && utf8.RuneCountInString(q) < 2 {
+		return responses.SendOK(ctx, []Institution{}, "Institutions retrieved successfully")
+	}
+
+	institutions, err := SearchInstitutions(q)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to fetch institutions")
 	}

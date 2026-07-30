@@ -2,12 +2,15 @@ package institutions
 
 import (
 	"context"
+	"regexp"
 	"time"
 
 	"backend/configs"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type Institution struct {
@@ -26,6 +29,31 @@ func GetAllInstitutions() ([]Institution, error) {
 	defer cursor.Close(context.TODO())
 
 	var institutions []Institution
+	if err := cursor.All(context.TODO(), &institutions); err != nil {
+		return nil, err
+	}
+	return institutions, nil
+}
+
+// SearchInstitutions returns institutions whose names contain the query string,
+// matched case-insensitively, sorted alphabetically by name. An empty query
+// returns all institutions sorted alphabetically.
+func SearchInstitutions(query string) ([]Institution, error) {
+	filter := bson.M{}
+	if query != "" {
+		filter["name"] = bson.M{
+			"$regex": primitive.Regex{Pattern: regexp.QuoteMeta(query), Options: "i"},
+		}
+	}
+
+	opts := options.Find().SetSort(bson.D{{Key: "name", Value: 1}})
+	cursor, err := configs.MI.DB.Collection("institutions").Find(context.TODO(), filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	institutions := []Institution{}
 	if err := cursor.All(context.TODO(), &institutions); err != nil {
 		return nil, err
 	}
