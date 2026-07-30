@@ -24,7 +24,7 @@ func ConnectDB() {
 	opts := options.Client().ApplyURI(EnvMongoURI()).SetServerAPIOptions(serverAPI)
 	client, err := mongo.Connect(context.TODO(), opts)
 	if err != nil {
-		log.Fatalf(err.Error())
+		log.Fatalf("failed to connect to MongoDB: %v", err)
 	}
 	// defer func() {
 	// 	if err = client.Disconnect(context.TODO()); err != nil {
@@ -33,7 +33,7 @@ func ConnectDB() {
 	// }()
 	var result bson.M
 	if err := client.Database(dbName).RunCommand(context.TODO(), bson.D{{Key: "ping", Value: 1}}).Decode(&result); err != nil {
-		log.Fatalf(err.Error())
+		log.Fatalf("failed to ping MongoDB: %v", err)
 	}
 	fmt.Println("Pinged your deployment. You successfully connected to MongoDB!")
 

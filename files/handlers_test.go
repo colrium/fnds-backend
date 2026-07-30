@@ -2,7 +2,6 @@ package files
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -170,15 +169,4 @@ func newFileContext(method, target, body, userID string) (echo.Context, *httptes
 	ctx := app.NewContext(request, recorder)
 	contextutil.SetUser(ctx, userID)
 	return ctx, recorder
-}
-
-func decodeResponseData[T any](t *testing.T, recorder *httptest.ResponseRecorder) T {
-	t.Helper()
-	var response struct {
-		Data T `json:"data"`
-	}
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
-		t.Fatalf("decoding response: %v", err)
-	}
-	return response.Data
 }

@@ -16,7 +16,9 @@ func TestGenerateOTP(t *testing.T) {
 		}
 	}
 	// Two calls should almost never collide; a repeat signals a non-random source.
-	if GenerateOTP() == otp && GenerateOTP() == otp {
+	secondOTP := GenerateOTP()
+	thirdOTP := GenerateOTP()
+	if secondOTP == otp && thirdOTP == otp {
 		t.Errorf("GenerateOTP() appears non-random: repeated %q", otp)
 	}
 }

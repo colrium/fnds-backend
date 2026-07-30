@@ -45,7 +45,9 @@ func (s *FCMService) SendPush(req PushNotificationRequest) error {
 	}
 
 	body := new(bytes.Buffer)
-	json.NewEncoder(body).Encode(msg)
+	if err := json.NewEncoder(body).Encode(msg); err != nil {
+		return fmt.Errorf("failed to encode FCM message: %w", err)
+	}
 
 	httpReq, err := http.NewRequest("POST", "https://fcm.googleapis.com/fcm/send", body)
 	if err != nil {

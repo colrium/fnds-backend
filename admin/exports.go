@@ -23,14 +23,18 @@ func ExportToCSV(records []map[string]interface{}, columns []ExportColumn) (stri
 	for i, col := range columns {
 		headers[i] = col.Header
 	}
-	writer.Write(headers)
+	if err := writer.Write(headers); err != nil {
+		return "", fmt.Errorf("failed to write CSV headers: %w", err)
+	}
 
 	for _, record := range records {
 		row := make([]string, len(columns))
 		for i, col := range columns {
 			row[i] = col.Value(record)
 		}
-		writer.Write(row)
+		if err := writer.Write(row); err != nil {
+			return "", fmt.Errorf("failed to write CSV row: %w", err)
+		}
 	}
 
 	writer.Flush()

@@ -164,7 +164,9 @@ func TestProperty7_FailureLogsExcludePII(t *testing.T) {
 	// Create a test server that always returns 500 to force a delivery failure.
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, "internal server error")
+		if _, err := io.WriteString(w, "internal server error"); err != nil {
+			t.Errorf("writing test response: %v", err)
+		}
 	}))
 	defer ts.Close()
 

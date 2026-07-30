@@ -33,7 +33,9 @@ func TestIsAdminRejectsNonAdmin(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	handler(c)
+	if err := handler(c); err != nil {
+		t.Fatalf("handler returned error: %v", err)
+	}
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected status 401, got %d", rec.Code)
@@ -50,7 +52,9 @@ func TestIsArtisanRejectsNonArtisan(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	handler(c)
+	if err := handler(c); err != nil {
+		t.Fatalf("handler returned error: %v", err)
+	}
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected status 401, got %d", rec.Code)
@@ -67,7 +71,9 @@ func TestIsCustomerRejectsNonCustomer(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	handler(c)
+	if err := handler(c); err != nil {
+		t.Fatalf("handler returned error: %v", err)
+	}
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected status 401, got %d", rec.Code)
@@ -84,7 +90,9 @@ func TestIsAssessorRejectsNonAssessor(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	handler(c)
+	if err := handler(c); err != nil {
+		t.Fatalf("handler returned error: %v", err)
+	}
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected status 401, got %d", rec.Code)
@@ -101,7 +109,9 @@ func TestIsSuspendedRejectsInactiveUser(t *testing.T) {
 		return c.JSON(http.StatusOK, "ok")
 	})
 
-	handler(c)
+	if err := handler(c); err != nil {
+		t.Fatalf("handler returned error: %v", err)
+	}
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected status 401, got %d", rec.Code)

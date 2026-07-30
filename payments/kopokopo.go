@@ -36,7 +36,9 @@ func NewKopoKopoService(apiKey string) *KopoKopoConfig {
 
 func (k *KopoKopoConfig) InitiatePayment(req KopoKopoPaymentRequest) (*KopoKopoResponse, error) {
 	body := new(bytes.Buffer)
-	json.NewEncoder(body).Encode(req)
+	if err := json.NewEncoder(body).Encode(req); err != nil {
+		return nil, fmt.Errorf("failed to encode KopoKopo payment request: %w", err)
+	}
 
 	httpReq, err := http.NewRequest("POST", k.BaseURL+"/payments", body)
 	if err != nil {

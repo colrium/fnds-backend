@@ -47,7 +47,9 @@ func NewFlutterwaveService(secretKey string) *FlutterwaveConfig {
 
 func (f *FlutterwaveConfig) CreatePayment(req FlutterwavePaymentRequest) (*FlutterwaveResponse, error) {
 	body := new(bytes.Buffer)
-	json.NewEncoder(body).Encode(req)
+	if err := json.NewEncoder(body).Encode(req); err != nil {
+		return nil, fmt.Errorf("failed to encode Flutterwave payment request: %w", err)
+	}
 
 	httpReq, err := http.NewRequest("POST", f.BaseURL+"/payments", body)
 	if err != nil {
