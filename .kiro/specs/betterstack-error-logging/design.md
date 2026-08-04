@@ -860,7 +860,7 @@ All values are trimmed of leading and trailing whitespace before evaluation.
 | `APP_ENV` | equals `production`, case-insensitive, **and** state is disabled | disabled | **additional ERROR**: centralized error logging inactive | 1.12 |
 | `BETTERSTACK_SERVICE_NAME` | unset, empty, or > 64 chars | `fundis-backend` | none | 1.3 |
 | `BETTERSTACK_MIN_LEVEL` | unset or empty | `slog.LevelError` | **none** (explicitly required) | 2.2 |
-| `BETTERSTACK_MIN_LEVEL` | `warn` / `error`, case-insensitive | `LevelWarn` / `LevelError` | none | 2.1 |
+| `BETTERSTACK_MIN_LEVEL` | `info` / `warn` / `error`, case-insensitive | `LevelInfo` / `LevelWarn` / `LevelError` | none | 2.1 |
 | `BETTERSTACK_MIN_LEVEL` | any other non-empty value | `slog.LevelError` | WARN, includes rejected value truncated to 64 chars | 2.8 |
 | `BETTERSTACK_BATCH_SIZE` | unset or empty | `20` | none — see interpretation below | 5.4 |
 | `BETTERSTACK_BATCH_SIZE` | non-empty, unparseable or outside 1–1000 | `20` | WARN, names the rejected value | 5.4 |
@@ -891,7 +891,7 @@ BETTERSTACK_SOURCE_TOKEN=""
 BETTERSTACK_INGEST_URL=""
 # Defaults to fundis-backend. Truncated to 64 characters.
 BETTERSTACK_SERVICE_NAME=""
-# "error" (default) or "warn".
+# "error" (default), "warn", or "info".
 BETTERSTACK_MIN_LEVEL=""
 # Max events per HTTP request, 1-1000. Defaults to 20.
 BETTERSTACK_BATCH_SIZE=""

@@ -282,8 +282,8 @@ func TestResolveConfigServiceName(t *testing.T) {
 	}
 }
 
-// TestResolveConfigMinLevel covers the three Shipping_Threshold rows: unset
-// resolves to ERROR silently (Req 2.2), warn/error map case-insensitively
+// TestResolveConfigMinLevel covers the four Shipping_Threshold rows: unset
+// resolves to ERROR silently (Req 2.2), info/warn/error map case-insensitively
 // (Req 2.1), and anything else resolves to ERROR with one WARN carrying the
 // rejected value truncated to 64 characters (Req 2.8).
 func TestResolveConfigMinLevel(t *testing.T) {
@@ -297,6 +297,9 @@ func TestResolveConfigMinLevel(t *testing.T) {
 	}{
 		{name: "unset resolves to error with no diagnostic", value: "", want: slog.LevelError},
 		{name: "whitespace-only resolves to error with no diagnostic", value: " \t ", want: slog.LevelError},
+		{name: "info", value: "info", want: slog.LevelInfo},
+		{name: "uppercase INFO", value: "INFO", want: slog.LevelInfo},
+		{name: "padded mixed-case Info", value: " Info ", want: slog.LevelInfo},
 		{name: "warn", value: "warn", want: slog.LevelWarn},
 		{name: "uppercase WARN", value: "WARN", want: slog.LevelWarn},
 		{name: "padded mixed-case Warn", value: " Warn ", want: slog.LevelWarn},
@@ -307,13 +310,6 @@ func TestResolveConfigMinLevel(t *testing.T) {
 			value:     "verbose",
 			want:      slog.LevelError,
 			wantDiags: []wantDiag{warnDiag(EnvMinLevel, "verbose")},
-		},
-		{
-			name:  "info is not an accepted threshold",
-			value: "info",
-			want:  slog.LevelError,
-			// slog knows INFO; the Shipping_Threshold does not accept it.
-			wantDiags: []wantDiag{warnDiag(EnvMinLevel, "info")},
 		},
 		{
 			name:  "oversized value is truncated to 64 characters",

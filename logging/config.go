@@ -155,13 +155,15 @@ func ResolveConfig(raw RawConfig) (Config, []Diagnostic) {
 	}
 	cfg.ServiceName = serviceName
 
-	// Shipping threshold: warn/error, case-insensitive. Unset or empty resolves
-	// to ERROR with no diagnostic (Req 2.2); any other non-empty value resolves
-	// to ERROR with one WARN naming the rejected value (Req 2.1, 2.8).
+	// Shipping threshold: info/warn/error, case-insensitive. Unset or empty
+	// resolves to ERROR with no diagnostic (Req 2.2); any other non-empty value
+	// resolves to ERROR with one WARN naming the rejected value (Req 2.1, 2.8).
 	minLevel := strings.TrimSpace(raw.MinLevel)
 	switch strings.ToLower(minLevel) {
 	case "":
 		cfg.MinLevel = slog.LevelError
+	case "info":
+		cfg.MinLevel = slog.LevelInfo
 	case "warn":
 		cfg.MinLevel = slog.LevelWarn
 	case "error":
