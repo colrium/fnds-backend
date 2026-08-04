@@ -1707,7 +1707,10 @@ invariant, asserted by the existing `notifications/activity_test.go` PII test.
 2. **Retire the Slack error path or define its relationship to Better Stack.**
    `notifications/slack.go` has an unused `SendErrorNotification` covering the same concern. Decide
    whether Better Stack alerting replaces it.
-3. **Echo access logs.** `echomiddleware.Logger()` writes its own JSON to stdout without going through
-   `slog`, so access logs are not forwarded and carry no `request.id`. Switching to
-   `LoggerWithConfig` emitting through `slog` would unify them, at a volume that would need a
-   separate quota discussion.
+3. ~~**Echo access logs.**~~ Done: `echomiddleware.Logger()` was replaced with
+   `middleware.AccessLog()`, which emits one `slog` record per request (INFO for 2xx/3xx/4xx, WARN
+   for 5xx) carrying `request.id` and, on authenticated routes, `user.id`. Registered in
+   `configureApplicationLoggingMiddleware` between `RequestContext()` and `Recover`. Volume is bounded
+   the same way every other record is: only records at or above `BETTERSTACK_MIN_LEVEL` reach Better
+   Stack, so raising the threshold above INFO keeps ordinary request traffic out of the shipped
+   volume while it still reaches stdout.

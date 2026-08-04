@@ -105,16 +105,24 @@ func TestMainRecoveryEmitsOneBoundedCorrelatedError(t *testing.T) {
 		t.Fatal("recovered panic response has no X-Request-Id header")
 	}
 
+	// Two records are expected for one recovered panic: the ERROR from echo's
+	// recover handler, and the AccessLog completion record for the same
+	// request. What this test guards is that "panic recovered" appears
+	// exactly once — a duplicate would mean echo's own recovery logging fired
+	// alongside the custom LogErrorFunc.
 	records := capture.snapshot()
-	if len(records) != 1 {
-		t.Fatalf("captured %d slog records, want exactly one ERROR record and no duplicate Echo recovery record: %+v", len(records), records)
+	var panicRecords []mainRecoveryCapturedRecord
+	for _, r := range records {
+		if r.message == "panic recovered" {
+			panicRecords = append(panicRecords, r)
+		}
 	}
-	record := records[0]
+	if len(panicRecords) != 1 {
+		t.Fatalf("captured %d \"panic recovered\" records, want exactly one and no duplicate Echo recovery record: %+v", len(panicRecords), records)
+	}
+	record := panicRecords[0]
 	if record.level != slog.LevelError {
 		t.Errorf("record level = %s, want ERROR", record.level)
-	}
-	if record.message != "panic recovered" {
-		t.Errorf("record message = %q, want %q", record.message, "panic recovered")
 	}
 
 	panicValue, ok := record.attrs["panic"].(string)

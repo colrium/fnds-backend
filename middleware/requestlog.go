@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"log/slog"
+	"net/http"
+	"time"
 
 	"backend/logging"
 
@@ -87,6 +89,61 @@ func RequestContext() echo.MiddlewareFunc {
 			))
 
 			return next(c)
+		}
+	}
+}
+
+// AccessLog emits exactly one structured Log_Record per request, through the
+// same slog pipeline every other call site uses, so completed requests are
+// visible in Better Stack and carry the request/user correlation that
+// RequestContext and contextutil.SetUser attach to the context.
+//
+// It replaces echo's built-in Logger() middleware, which writes its own text
+// line straight to stdout, bypassing slog entirely — invisible to the
+// Better_Stack_Handler and uncorrelated with request.id.
+//
+// Register after RequestContext() (and after JWTAuth on authenticated groups,
+// so user.id is already on the context) so the emitted record carries both.
+// The Better_Stack_Handler reads request/user straight off ctx regardless of
+// attrs (Req 4.5, 4.6), so Log_Events shipped to Better Stack are already
+// correlated by ctx alone. logging.FromContext additionally binds the same
+// request/user groups onto the *logger* used here, so the plain
+// slog.JSONHandler writing to stdout carries them too — otherwise console
+// output would show a request completed with no way to tie it to the rest of
+// that request's Log_Records.
+//
+// The level split keeps ordinary traffic at INFO and error responses at WARN
+// without a second call site: a 5xx status is the server's own fault and
+// worth flagging above normal traffic, a 4xx is routine (bad input, expired
+// token) and stays at INFO alongside 2xx/3xx.
+func AccessLog() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			start := time.Now()
+			err := next(c)
+
+			ctx := c.Request().Context()
+			status := c.Response().Status
+			if err != nil {
+				if httpErr, ok := err.(*echo.HTTPError); ok && httpErr.Code != 0 {
+					status = httpErr.Code
+				} else if status < http.StatusBadRequest {
+					status = http.StatusInternalServerError
+				}
+			}
+
+			level := slog.LevelInfo
+			if status >= http.StatusInternalServerError {
+				level = slog.LevelWarn
+			}
+			logging.FromContext(ctx).Log(ctx, level, "request completed",
+				slog.String("method", c.Request().Method),
+				slog.Int("status", status),
+				slog.Duration("duration", time.Since(start)),
+				slog.String("remote_ip", c.RealIP()),
+			)
+
+			return err
 		}
 	}
 }

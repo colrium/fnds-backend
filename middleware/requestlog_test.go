@@ -1,8 +1,11 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -550,5 +553,171 @@ func TestRequestContextRequiresUseNotPre(t *testing.T) {
 	}
 	if useGot.path != chatsRouteTemplate {
 		t.Errorf("app.Use: context path = %q, want the route template %q", useGot.path, chatsRouteTemplate)
+	}
+}
+
+// accessLogTestApp wires RequestContext and AccessLog exactly as
+// configureApplicationLoggingMiddleware does in main.go, and points
+// slog.Default at a buffer so a test can assert on the emitted record.
+func accessLogTestApp(t *testing.T) (*echo.Echo, *bytes.Buffer) {
+	t.Helper()
+	buf := new(bytes.Buffer)
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	app := echo.New()
+	app.HideBanner = true
+	app.Use(RequestContext())
+	app.Use(AccessLog())
+	app.Use(echomiddleware.RecoverWithConfig(echomiddleware.RecoverConfig{
+		DisableStackAll:   true,
+		DisablePrintStack: true,
+	}))
+
+	app.GET("/ok", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+	app.GET("/not-found", func(c echo.Context) error {
+		return echo.NewHTTPError(http.StatusNotFound, "missing")
+	})
+	app.GET("/plain-error", func(c echo.Context) error {
+		return errors.New("boom")
+	})
+	app.GET("/panic", func(c echo.Context) error {
+		panic("handler exploded")
+	})
+	app.GET("/protected", func(c echo.Context) error {
+		contextutil.SetUser(c, testUserID)
+		return c.String(http.StatusOK, "ok")
+	})
+
+	return app, buf
+}
+
+// decodeAccessLogLine parses the single JSON line an AccessLog test expects
+// to have been written.
+func decodeAccessLogLine(t *testing.T, buf *bytes.Buffer) map[string]any {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 1 || lines[0] == "" {
+		t.Fatalf("expected exactly one log line, got %d: %q", len(lines), buf.String())
+	}
+	var record map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &record); err != nil {
+		t.Fatalf("decoding log line: %v\nline: %s", err, lines[0])
+	}
+	return record
+}
+
+// TestAccessLogEmitsOneRecordPerRequest asserts the ordinary case: a
+// successful request produces exactly one INFO record naming the method,
+// status, and a non-negative duration.
+func TestAccessLogEmitsOneRecordPerRequest(t *testing.T) {
+	app, buf := accessLogTestApp(t)
+
+	rec := do(app, http.MethodGet, "/ok", false, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	record := decodeAccessLogLine(t, buf)
+	if record["msg"] != "request completed" {
+		t.Errorf("msg = %v, want %q", record["msg"], "request completed")
+	}
+	if record["level"] != "INFO" {
+		t.Errorf("level = %v, want INFO for a 2xx response", record["level"])
+	}
+	if record["method"] != http.MethodGet {
+		t.Errorf("method = %v, want %q", record["method"], http.MethodGet)
+	}
+	if got, ok := record["status"].(float64); !ok || int(got) != http.StatusOK {
+		t.Errorf("status = %v, want %d", record["status"], http.StatusOK)
+	}
+	if _, ok := record["duration"]; !ok {
+		t.Error("duration field is absent")
+	}
+}
+
+// TestAccessLogLevelsFollowStatus asserts the level split: 2xx/3xx/4xx stay at
+// INFO, and a 5xx (including a plain error, which echo's default error
+// handler renders as 500, and a recovered panic) is promoted to WARN.
+func TestAccessLogLevelsFollowStatus(t *testing.T) {
+	cases := []struct {
+		name       string
+		path       string
+		wantStatus int
+		wantLevel  string
+	}{
+		{"2xx stays INFO", "/ok", http.StatusOK, "INFO"},
+		{"4xx stays INFO", "/not-found", http.StatusNotFound, "INFO"},
+		{"plain error renders as 500 and warns", "/plain-error", http.StatusInternalServerError, "WARN"},
+		{"recovered panic renders as 500 and warns", "/panic", http.StatusInternalServerError, "WARN"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app, buf := accessLogTestApp(t)
+
+			rec := do(app, http.MethodGet, tc.path, false, "")
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.wantStatus)
+			}
+
+			record := decodeAccessLogLine(t, buf)
+			if got, ok := record["status"].(float64); !ok || int(got) != tc.wantStatus {
+				t.Errorf("logged status = %v, want %d", record["status"], tc.wantStatus)
+			}
+			if record["level"] != tc.wantLevel {
+				t.Errorf("level = %v, want %s", record["level"], tc.wantLevel)
+			}
+		})
+	}
+}
+
+// TestAccessLogCarriesRequestAndUserCorrelation asserts the whole point of
+// routing this through slog rather than echo's own Logger(): the record is
+// tagged with the same request id RequestContext assigned, and with the user
+// id an authenticated route attached via contextutil.SetUser.
+func TestAccessLogCarriesRequestAndUserCorrelation(t *testing.T) {
+	app, buf := accessLogTestApp(t)
+
+	rec := do(app, http.MethodGet, "/protected", true, "req-abc123")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	record := decodeAccessLogLine(t, buf)
+	requestGroup, ok := record["request"].(map[string]any)
+	if !ok {
+		t.Fatalf("request group is absent or not an object: %v", record["request"])
+	}
+	if requestGroup["id"] != "req-abc123" {
+		t.Errorf("request.id = %v, want %q", requestGroup["id"], "req-abc123")
+	}
+
+	userGroup, ok := record["user"].(map[string]any)
+	if !ok {
+		t.Fatalf("user group is absent or not an object: %v", record["user"])
+	}
+	if userGroup["id"] != testUserID {
+		t.Errorf("user.id = %v, want %q", userGroup["id"], testUserID)
+	}
+}
+
+// TestAccessLogOmitsUserOnPublicRoutes asserts that a request which never
+// authenticates carries no user group, matching Req 4.10's contract for every
+// other Log_Event.
+func TestAccessLogOmitsUserOnPublicRoutes(t *testing.T) {
+	app, buf := accessLogTestApp(t)
+
+	rec := do(app, http.MethodGet, "/ok", false, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	record := decodeAccessLogLine(t, buf)
+	if _, present := record["user"]; present {
+		t.Errorf("user group = %v, want absent on a public route", record["user"])
 	}
 }

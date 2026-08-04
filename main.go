@@ -45,6 +45,7 @@ import (
 func configureApplicationLoggingMiddleware(app *echo.Echo) {
 	app.IPExtractor = echo.ExtractIPDirect()
 	app.Use(middleware.RequestContext())
+	app.Use(middleware.AccessLog())
 	app.Use(echomiddleware.RecoverWithConfig(echomiddleware.RecoverConfig{
 		StackSize:         8192,
 		DisableStackAll:   true,
