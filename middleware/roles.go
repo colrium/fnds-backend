@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 
 	"backend/contextutil"
@@ -15,7 +16,19 @@ func getUser(c echo.Context) *users.User {
 	if userID == "" {
 		return nil
 	}
-	user, _ := users.GetUserByID(userID)
+
+	user, err := users.GetUserByID(c.Request().Context(), userID)
+	if err != nil {
+		slog.ErrorContext(
+			c.Request().Context(),
+			"failed to load user for role authorization",
+			"user_id",
+			userID,
+			"error",
+			err,
+		)
+		return nil
+	}
 	return user
 }
 

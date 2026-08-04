@@ -38,3 +38,37 @@ func GetAllLocations() ([]Location, error) {
 	}
 	return locations, nil
 }
+
+// GetLocationNamesByIDs returns the human-readable names for a list of location IDs.
+// Unknown IDs are silently skipped.
+func GetLocationNamesByIDs(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return []string{}, nil
+	}
+	cursor, err := configs.MI.DB.Collection("locations").Find(
+		ctx,
+		bson.M{"_id": bson.M{"$in": ids}},
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var locs []Location
+	if err := cursor.All(ctx, &locs); err != nil {
+		return nil, err
+	}
+
+	// Preserve the input order.
+	nameMap := make(map[string]string, len(locs))
+	for _, l := range locs {
+		nameMap[l.ID] = l.Name
+	}
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if name, ok := nameMap[id]; ok {
+			names = append(names, name)
+		}
+	}
+	return names, nil
+}

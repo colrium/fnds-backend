@@ -46,6 +46,24 @@ Copy `.env.example` to `.env` and configure:
 - `USE_PLUNK` - Email service key
 - `TELEGRAM_BOT_ID` / `TELEGRAM_CHAT_ID` - Telegram notifications
 
+### Redis Notifications Cache Rollout
+
+The authenticated `GET /api/v1/notifications` endpoint is backed by a Redis cache-aside decorator (`notifications.CachedStore`). MongoDB stays authoritative; Redis is purely a performance layer. Env vars: `NOTIFICATIONS_CACHE_ENABLED` (default `true`), `NOTIFICATIONS_CACHE_TTL` (default `30s`, range `5s`–`5m`), `NOTIFICATIONS_CACHE_OP_TIMEOUT` (default `100ms`, range `10ms`–`1s`).
+
+**Rollout sequence:**
+1. Deploy with `NOTIFICATIONS_CACHE_ENABLED=false`. Confirm unchanged endpoint behavior and mutation traffic (identical status codes, messages, and JSON shape).
+2. Enable in staging with a short TTL. Exercise every invalidation path — create, mark-read, mark-all-read — and simulate a Redis outage to confirm fail-open behavior.
+3. Enable on a production canary instance or a limited traffic slice before a full rollout.
+4. Roll back instantly by setting `NOTIFICATIONS_CACHE_ENABLED=false` — no Redis flush is required. Versioned, expiring entries are harmless while disabled.
+
+**What to monitor:** cache hit ratio, Redis operation errors, MongoDB `List`/`CountDocuments` call rate on this endpoint, invalidation failures (`notifications cache operation failed operation=invalidation`), Redis memory usage, and `GET /api/v1/notifications` p50/p95/p99 latency.
+
+**Kill switch:** `NOTIFICATIONS_CACHE_ENABLED=false` bypasses Redis entirely for both reads and invalidation — no cache flush needed, and it takes effect on the next request with no restart-time side effects beyond normal config reload.
+
+**Infrastructure requirements:** production Redis must be network-restricted and reachable only via the private network, authenticated through `REDIS_URL`, and use TLS (`rediss://`) where the deployment supports it. Never log `REDIS_URL` or notification payloads. Because notification content can be personal or business-sensitive, Redis persistence, backups, and access controls must meet the same data-handling standard as MongoDB.
+
+**Memory/eviction:** cache payload size is bounded (at most 100 notifications per entry). An eviction or full flush is simply an ordinary cache miss — no prewarming, no migration, and no synchronous cleanup is required; entries repopulate through normal request traffic. Old generation/schema-version entries become unreachable immediately and expire naturally via TTL, so no key scan is ever needed on the request path.
+
 ## Architecture
 
 ### Entry Point

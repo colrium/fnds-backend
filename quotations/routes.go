@@ -44,7 +44,51 @@ func RegisterPublicRoutes(g *echo.Group) {
 	g.GET("/external-quotations/:id/status/:action", HandleUpdateExternalQuotationStatus)
 }
 
+const internalQuotationNotificationTimeout = 5 * time.Second
+
+type quotationRouteDependencies struct {
+	getJobRequestByID               func(string) (*jobrequests.JobRequest, error)
+	createQuotation                 func(*Quotation) error
+	getQuotationByID                func(string) (*Quotation, error)
+	updateQuotationForUser          func(string, string, bson.M) (bool, error)
+	getQuotationForUser             func(string, string) (*Quotation, error)
+	getExternalInvoiceByQuotationID func(string) (*ExternalInvoice, error)
+	createExternalInvoice           func(*ExternalInvoice) error
+	getUserByID                     func(context.Context, string) (*users.User, error)
+	createInvoicePaymentLink        func(*ExternalInvoice, *ExternalQuotation) (string, error)
+	notifyCustomerInvoice           func(*ExternalQuotation, string)
+	notifyQuotationReceived         func(context.Context, notifications.QuotationReceivedEvent) error
+	notifyQuotationDecision         func(context.Context, notifications.QuotationDecisionEvent) error
+	now                             func() time.Time
+}
+
+func defaultQuotationRouteDependencies() quotationRouteDependencies {
+	return quotationRouteDependencies{
+		getJobRequestByID:               jobrequests.GetJobRequestByID,
+		createQuotation:                 CreateQuotation,
+		getQuotationByID:                GetQuotationByID,
+		updateQuotationForUser:          UpdateQuotationForUser,
+		getQuotationForUser:             GetQuotationForUser,
+		getExternalInvoiceByQuotationID: GetExternalInvoiceByQuotationID,
+		createExternalInvoice:           CreateExternalInvoice,
+		getUserByID:                     users.GetUserByID,
+		createInvoicePaymentLink:        createInvoicePaymentLink,
+		notifyCustomerInvoice:           notifyCustomerInvoice,
+		notifyQuotationReceived: func(ctx context.Context, event notifications.QuotationReceivedEvent) error {
+			return notifications.NewDefaultService().NotifyQuotationReceived(ctx, event)
+		},
+		notifyQuotationDecision: func(ctx context.Context, event notifications.QuotationDecisionEvent) error {
+			return notifications.NewDefaultService().NotifyQuotationDecision(ctx, event)
+		},
+		now: time.Now,
+	}
+}
+
 func HandleCreateQuotation(ctx echo.Context) error {
+	return handleCreateQuotation(ctx, defaultQuotationRouteDependencies())
+}
+
+func handleCreateQuotation(ctx echo.Context, deps quotationRouteDependencies) error {
 	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
@@ -55,7 +99,7 @@ func HandleCreateQuotation(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Invalid request body")
 	}
 
-	job, err := jobrequests.GetJobRequestByID(q.JobRequestID)
+	job, err := deps.getJobRequestByID(q.JobRequestID)
 	if err != nil {
 		return responses.SendError(ctx, 404, "Job request not found")
 	}
@@ -83,10 +127,10 @@ func HandleCreateQuotation(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, err.Error())
 	}
 
-	if err := CreateQuotation(&q); err != nil {
+	if err := deps.createQuotation(&q); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create quotation")
 	}
-	notifyInternalQuotationCreated(&q, job)
+	notifyInternalQuotationCreatedWithDependencies(ctx.Request().Context(), &q, job, deps)
 	return responses.SendCreated(ctx, q, "Quotation created successfully")
 }
 
@@ -116,6 +160,10 @@ func HandleGetQuotation(ctx echo.Context) error {
 }
 
 func HandleUpdateQuotation(ctx echo.Context) error {
+	return handleUpdateQuotation(ctx, defaultQuotationRouteDependencies())
+}
+
+func handleUpdateQuotation(ctx echo.Context, deps quotationRouteDependencies) error {
 	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
@@ -130,7 +178,7 @@ func HandleUpdateQuotation(ctx echo.Context) error {
 	if err := ValidateUpdateQuotation(req.Status); err != nil {
 		return responses.SendError(ctx, 400, err.Error())
 	}
-	q, err := GetQuotationByID(id)
+	q, err := deps.getQuotationByID(id)
 	if err != nil {
 		return responses.SendError(ctx, 404, "Quotation not found")
 	}
@@ -141,7 +189,7 @@ func HandleUpdateQuotation(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "Quotation has already been processed")
 	}
 	updates := bson.M{"status": req.Status}
-	updated, err := UpdateQuotationForUser(id, userID, updates)
+	updated, err := deps.updateQuotationForUser(id, userID, updates)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to update quotation")
 	}
@@ -150,49 +198,60 @@ func HandleUpdateQuotation(ctx echo.Context) error {
 	}
 	q.Status = req.Status
 	if req.Status == "accepted" {
-		invoice, paymentLink, err := ensureInternalQuotationInvoice(q)
+		invoice, paymentLink, err := ensureInternalQuotationInvoiceWithDependencies(ctx.Request().Context(), q, deps)
 		if err != nil {
 			return responses.SendError(ctx, 500, "Quotation accepted but invoice could not be prepared")
 		}
-		notifyInternalQuotationDecision(q, "accepted")
+		notifyInternalQuotationDecisionWithDependencies(ctx.Request().Context(), q, "accepted", deps)
 		return responses.SendOK(ctx, map[string]interface{}{
 			"quotation":    q,
 			"invoice":      invoice,
 			"payment_link": paymentLink,
 		}, "Quotation updated successfully")
 	}
-	notifyInternalQuotationDecision(q, req.Status)
+	notifyInternalQuotationDecisionWithDependencies(ctx.Request().Context(), q, req.Status, deps)
 	return responses.SendOK(ctx, q, "Quotation updated successfully")
 }
 
 func HandleGetQuotationInvoice(ctx echo.Context) error {
+	return handleGetQuotationInvoice(ctx, defaultQuotationRouteDependencies())
+}
+
+func handleGetQuotationInvoice(ctx echo.Context, deps quotationRouteDependencies) error {
 	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
-	q, err := GetQuotationForUser(ctx.Param("id"), userID)
+	q, err := deps.getQuotationForUser(ctx.Param("id"), userID)
 	if err != nil || q.Status != "accepted" {
 		return responses.SendError(ctx, 404, "Invoice not found")
 	}
-	invoice, _, err := ensureInternalQuotationInvoice(q)
+	invoice, _, err := ensureInternalQuotationInvoiceWithDependencies(ctx.Request().Context(), q, deps)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to load invoice")
 	}
 	return responses.SendOK(ctx, invoice, "Invoice retrieved successfully")
 }
 
-func notifyInternalQuotationCreated(q *Quotation, job *jobrequests.JobRequest) {
-	customer, err := users.GetUserByID(q.CustomerID)
+func notifyInternalQuotationCreatedWithDependencies(
+	ctx context.Context,
+	q *Quotation,
+	job *jobrequests.JobRequest,
+	deps quotationRouteDependencies,
+) {
+	customer, err := deps.getUserByID(ctx, q.CustomerID)
 	if err != nil {
 		slog.Warn("could not load quotation customer for notification", "quotation_id", q.ID, "error", err)
 		return
 	}
-	artisan, err := users.GetUserByID(q.ArtisanID)
+	artisan, err := deps.getUserByID(ctx, q.ArtisanID)
 	if err != nil {
 		slog.Warn("could not load quotation artisan for notification", "quotation_id", q.ID, "error", err)
 		return
 	}
-	err = notifications.NewDefaultService().NotifyQuotationReceived(context.Background(), notifications.QuotationReceivedEvent{
+	notificationCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), internalQuotationNotificationTimeout)
+	defer cancel()
+	err = deps.notifyQuotationReceived(notificationCtx, notifications.QuotationReceivedEvent{
 		CustomerID:    q.CustomerID,
 		CustomerEmail: customer.Email,
 		ArtisanName:   strings.TrimSpace(artisan.FirstName + " " + artisan.LastName),
@@ -206,16 +265,23 @@ func notifyInternalQuotationCreated(q *Quotation, job *jobrequests.JobRequest) {
 	}
 }
 
-func notifyInternalQuotationDecision(q *Quotation, status string) {
-	customer, err := users.GetUserByID(q.CustomerID)
+func notifyInternalQuotationDecisionWithDependencies(
+	ctx context.Context,
+	q *Quotation,
+	status string,
+	deps quotationRouteDependencies,
+) {
+	customer, err := deps.getUserByID(ctx, q.CustomerID)
 	if err != nil {
 		return
 	}
-	artisan, err := users.GetUserByID(q.ArtisanID)
+	artisan, err := deps.getUserByID(ctx, q.ArtisanID)
 	if err != nil {
 		return
 	}
-	_ = notifications.NewDefaultService().NotifyQuotationDecision(context.Background(), notifications.QuotationDecisionEvent{
+	notificationCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), internalQuotationNotificationTimeout)
+	defer cancel()
+	_ = deps.notifyQuotationDecision(notificationCtx, notifications.QuotationDecisionEvent{
 		ArtisanID:    q.ArtisanID,
 		ArtisanEmail: artisan.Email,
 		CustomerName: strings.TrimSpace(customer.FirstName + " " + customer.LastName),
@@ -225,21 +291,25 @@ func notifyInternalQuotationDecision(q *Quotation, status string) {
 	})
 }
 
-func ensureInternalQuotationInvoice(q *Quotation) (*ExternalInvoice, string, error) {
-	invoice, err := GetExternalInvoiceByQuotationID(q.ID)
+func ensureInternalQuotationInvoiceWithDependencies(
+	ctx context.Context,
+	q *Quotation,
+	deps quotationRouteDependencies,
+) (*ExternalInvoice, string, error) {
+	invoice, err := deps.getExternalInvoiceByQuotationID(q.ID)
 	if err != nil {
 		invoice = &ExternalInvoice{
 			QuotationID: q.ID,
 			ArtisanID:   q.ArtisanID,
 			Status:      InvoiceStatusUnpaid,
 			TotalAmount: q.TotalAmount,
-			DueDate:     time.Now().AddDate(0, 0, 7).Format(time.RFC3339),
+			DueDate:     deps.now().AddDate(0, 0, 7).Format(time.RFC3339),
 		}
-		if err := CreateExternalInvoice(invoice); err != nil {
+		if err := deps.createExternalInvoice(invoice); err != nil {
 			if !mongo.IsDuplicateKeyError(err) {
 				return nil, "", err
 			}
-			invoice, err = GetExternalInvoiceByQuotationID(q.ID)
+			invoice, err = deps.getExternalInvoiceByQuotationID(q.ID)
 			if err != nil {
 				return nil, "", err
 			}
@@ -248,7 +318,7 @@ func ensureInternalQuotationInvoice(q *Quotation) (*ExternalInvoice, string, err
 	if invoice.Status == InvoiceStatusPaid || invoice.PaymentLink != "" {
 		return invoice, invoice.PaymentLink, nil
 	}
-	customer, err := users.GetUserByID(q.CustomerID)
+	customer, err := deps.getUserByID(ctx, q.CustomerID)
 	if err != nil {
 		return invoice, "", err
 	}
@@ -261,12 +331,12 @@ func ensureInternalQuotationInvoice(q *Quotation) (*ExternalInvoice, string, err
 		JobTitle:      "Job quotation",
 		TotalAmount:   q.TotalAmount,
 	}
-	link, err := createInvoicePaymentLink(invoice, eq)
+	link, err := deps.createInvoicePaymentLink(invoice, eq)
 	if err != nil {
 		slog.Warn("failed to create internal quotation payment link", "quotation_id", q.ID, "error", err)
 		return invoice, "", nil
 	}
-	notifyCustomerInvoice(eq, link)
+	deps.notifyCustomerInvoice(eq, link)
 	return invoice, link, nil
 }
 

@@ -9,11 +9,6 @@ import (
 	"backend/configs"
 )
 
-type notificationCreator interface {
-	Create(context.Context, Notification) error
-	CreateMany(context.Context, []Notification) error
-}
-
 type Service struct {
 	store notificationCreator
 }
@@ -64,8 +59,18 @@ func NewService(store notificationCreator) *Service {
 	return &Service{store: store}
 }
 
+// NewDefaultService routes Create and CreateMany through the shared,
+// invalidating default CachedStore so job-request and quotation producers
+// keep the notifications feed cache correct. main.go must call
+// ConfigureDefaultStore before any caller reaches this function; that
+// ordering is a startup invariant, so a misconfigured call panics rather
+// than propagating a nil store into request handling.
 func NewDefaultService() *Service {
-	return NewService(NewMongoStore())
+	store, err := DefaultStore()
+	if err != nil {
+		panic(err)
+	}
+	return NewService(store)
 }
 
 func (s *Service) NotifyNewApplication(ctx context.Context, event NewApplicationEvent) error {

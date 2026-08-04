@@ -140,7 +140,7 @@ func HandleCreateJobVacancy(ctx echo.Context) error {
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
-	account, err := users.GetUserByID(userID)
+	account, err := users.GetUserByID(ctx.Request().Context(), userID)
 	if err != nil || account.UserType != "customer" {
 		return responses.SendError(ctx, http.StatusForbidden, "Only employer accounts can post vacancies")
 	}
@@ -403,7 +403,7 @@ func HandleListAvailableJobVacancies(ctx echo.Context) error {
 	page := int64(1)
 	limit := int64(20)
 
-	vacancies, total, err := listAvailableJobVacanciesForWorker(userID, page, limit)
+	vacancies, total, err := listAvailableJobVacanciesForWorker(ctx.Request().Context(), userID, page, limit)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to fetch job vacancies")
 	}
@@ -530,11 +530,11 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
-	account, err := users.GetUserByID(userID)
+	account, err := users.GetUserByID(ctx.Request().Context(), userID)
 	if err != nil || account.UserType != "artisan" {
 		return responses.SendError(ctx, http.StatusForbidden, "Only worker accounts can apply for jobs")
 	}
-	profile, err := profiles.GetFullProfile(userID)
+	profile, err := profiles.GetFullProfile(ctx.Request().Context(), userID)
 	if err != nil {
 		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to verify professional profile")
 	}
@@ -610,7 +610,7 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 		})
 	}(app, *account, *vacancy)
 
-	employer, employerErr := users.GetUserByID(vacancy.OwnerID)
+	employer, employerErr := users.GetUserByID(ctx.Request().Context(), vacancy.OwnerID)
 	if employerErr != nil {
 		slog.Error(
 			"failed to load employer for application notification",
@@ -663,7 +663,7 @@ func HandleGetJobApplicationStatus(ctx echo.Context) error {
 
 func HandleEmployerBrowseArtisans(ctx echo.Context) error {
 	userID := contextutil.GetUserID(ctx)
-	account, err := users.GetUserByID(userID)
+	account, err := users.GetUserByID(ctx.Request().Context(), userID)
 	if err != nil || account.UserType != "customer" {
 		return responses.SendError(ctx, http.StatusForbidden, "Only employer accounts can browse workers")
 	}
@@ -832,7 +832,7 @@ func HandleGetJobApplicationReview(ctx echo.Context) error {
 		return responses.SendError(ctx, http.StatusForbidden, "You do not own this vacancy")
 	}
 
-	fullProfile, err := profiles.GetFullProfile(application.ApplicantID)
+	fullProfile, err := profiles.GetFullProfile(ctx.Request().Context(), application.ApplicantID)
 	if err != nil {
 		return responses.SendError(ctx, http.StatusInternalServerError, "Failed to load professional profile")
 	}
@@ -921,7 +921,7 @@ func HandleDecideJobApplication(ctx echo.Context) error {
 	if !updated {
 		return responses.SendError(ctx, http.StatusConflict, "Application has already been decided")
 	}
-	worker, workerErr := users.GetUserByID(app.ApplicantID)
+	worker, workerErr := users.GetUserByID(ctx.Request().Context(), app.ApplicantID)
 	if workerErr != nil {
 		slog.Error(
 			"failed to load worker for application notification",

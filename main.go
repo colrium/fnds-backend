@@ -37,6 +37,58 @@ import (
 	"golang.org/x/time/rate"
 )
 
+type publicArtisanRouteDependencies struct {
+	registerAPIRoutes func(*echo.Group)
+	shareHandler      echo.HandlerFunc
+	sitemapHandler    echo.HandlerFunc
+	newLimiter        func() echo.MiddlewareFunc
+	newCache          func(middleware.CacheConfig) echo.MiddlewareFunc
+}
+
+func newPublicArtisanLimiter() echo.MiddlewareFunc {
+	return echomiddleware.RateLimiterWithConfig(echomiddleware.RateLimiterConfig{
+		Store: echomiddleware.NewRateLimiterMemoryStoreWithConfig(echomiddleware.RateLimiterMemoryStoreConfig{
+			Rate:      rate.Limit(10),
+			Burst:     30,
+			ExpiresIn: 10 * time.Minute,
+		}),
+	})
+}
+
+func registerPublicArtisanRoutes(
+	app *echo.Echo,
+	api *echo.Group,
+	deps publicArtisanRouteDependencies,
+) {
+	crawlerLimiter := deps.newLimiter()
+	app.GET(
+		"/artisan/:slug",
+		deps.shareHandler,
+		crawlerLimiter,
+		deps.newCache(middleware.CacheConfig{
+			TTL:       5 * time.Minute,
+			KeyPrefix: "artisan-share",
+		}),
+	)
+	app.GET(
+		"/sitemap-artisans.xml",
+		deps.sitemapHandler,
+		crawlerLimiter,
+		deps.newCache(middleware.CacheConfig{
+			TTL:       10 * time.Minute,
+			KeyPrefix: "artisan-sitemap",
+		}),
+	)
+
+	artisanPublicGroup := api.Group("")
+	artisanPublicGroup.Use(deps.newLimiter())
+	artisanPublicGroup.Use(deps.newCache(middleware.CacheConfig{
+		TTL:       5 * time.Minute,
+		KeyPrefix: "artisan-profile",
+	}))
+	deps.registerAPIRoutes(artisanPublicGroup)
+}
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
@@ -48,7 +100,25 @@ func main() {
 	app.Use(newCORSMiddleware(configs.AppEnv()))
 
 	configs.ConnectDB()
+	if err := configs.ConnectRedis(); err != nil {
+		slog.Error("failed to initialize Redis", "error", err)
+		os.Exit(1)
+	}
 	slog.Info("database connected", "env", configs.AppEnv())
+
+	notificationCacheSettings, err := configs.LoadNotificationCacheSettings()
+	if err != nil {
+		slog.Error("invalid notification cache configuration", "error", err)
+		os.Exit(1)
+	}
+	if err := notifications.ConfigureDefaultStore(
+		notifications.NewMongoStore(),
+		notificationCacheSettings,
+		notifications.NewSlogCacheObserver(),
+	); err != nil {
+		slog.Error("failed to configure notifications default store", "error", err)
+		os.Exit(1)
+	}
 
 	maxUploadBytes, err := configs.AWSS3MaxUploadBytes()
 	if err != nil {
@@ -114,6 +184,16 @@ func main() {
 	// is clean for sharing). Humans clicking "Apply" are deep-linked into the SPA.
 	app.GET("/vacancy/:id", jobrequests.HandleVacancySharePage)
 
+	// Public artisan pages and JSON API share cache policy but use separate
+	// crawler and API limiter instances.
+	registerPublicArtisanRoutes(app, api, publicArtisanRouteDependencies{
+		registerAPIRoutes: profiles.RegisterPublicRoutes,
+		shareHandler:      profiles.HandleArtisanSharePage,
+		sitemapHandler:    profiles.HandleArtisanSitemap,
+		newLimiter:        newPublicArtisanLimiter,
+		newCache:          middleware.RedisCache,
+	})
+
 	auth.RegisterPublicRoutes(api)
 	// Rate-limit password-reset endpoints: they send SMS and are brute-forceable.
 	// Note: IPExtractor set to ExtractIPDirect() for security. If fronting LB is added,
@@ -138,6 +218,7 @@ func main() {
 	reviews.RegisterPublicRoutes(api)
 	quotations.RegisterPublicRoutes(api)
 	jobrequests.RegisterPublicRoutes(api)
+
 	documenttypes.RegisterRoutes(api)
 	users.RegisterAvatarPublicRoutes(api, avatarHandler)
 
@@ -161,7 +242,12 @@ func main() {
 	subscriptions.RegisterAuthRoutes(authGroup)
 	referrals.RegisterAuthRoutes(authGroup)
 	chat.RegisterAuthRoutes(authGroup)
-	notifications.RegisterAuthRoutes(authGroup)
+	notificationStore, err := notifications.DefaultStore()
+	if err != nil {
+		slog.Error("failed to resolve notifications default store", "error", err)
+		os.Exit(1)
+	}
+	notifications.RegisterAuthRoutes(authGroup, notifications.NewHandler(notificationStore))
 	banks.RegisterAuthRoutes(authGroup)
 	documenttypes.RegisterAuthRoutes(authGroup)
 	users.RegisterAvatarAuthRoutes(authGroup, avatarHandler)

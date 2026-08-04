@@ -30,13 +30,17 @@ func CreateReview(r *Review) error {
 }
 
 func ListReviews(filter bson.M) ([]Review, error) {
-	cursor, err := configs.MI.DB.Collection("reviews").Find(context.TODO(), filter)
+	return ListReviewsContext(context.Background(), filter)
+}
+
+func ListReviewsContext(ctx context.Context, filter bson.M) ([]Review, error) {
+	cursor, err := configs.MI.DB.Collection("reviews").Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer cursor.Close(ctx)
 	var reviews []Review
-	if err := cursor.All(context.TODO(), &reviews); err != nil {
+	if err := cursor.All(ctx, &reviews); err != nil {
 		return nil, err
 	}
 	return reviews, nil

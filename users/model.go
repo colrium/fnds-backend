@@ -39,6 +39,8 @@ type User struct {
 	IsAvailable      bool       `json:"is_available" bson:"is_available"`
 	IsVerified       bool       `json:"is_verified" bson:"is_verified"`
 	VerifiedUntil    *time.Time `json:"verified_until,omitempty" bson:"verified_until,omitempty"`
+	Slug             string     `json:"slug,omitempty" bson:"slug,omitempty"`
+	IsProfilePublic  bool       `json:"is_profile_public" bson:"is_profile_public"`
 	ReferralCodeUsed string     `json:"-" bson:"referral_code_used,omitempty"`
 	Migrated         bool       `json:"migrated,omitempty" bson:"migrated,omitempty"`
 	CreatedAt        time.Time  `json:"created_at" bson:"created_at"`
@@ -80,13 +82,36 @@ func EnsureIndexes(ctx context.Context) error {
 				SetUnique(true).
 				SetPartialFilterExpression(bson.M{"email": bson.M{"$type": "string", "$gt": ""}}),
 		},
+		{
+			Keys: bson.D{{Key: "slug", Value: 1}},
+			Options: options.Index().
+				SetName("uniq_slug_public").
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{
+					"slug":              bson.M{"$type": "string", "$gt": ""},
+					"is_profile_public": true,
+				}),
+		},
 	})
 	return err
 }
 
-func GetUserByID(id string) (*User, error) {
+func GetUserByID(ctx context.Context, id string) (*User, error) {
 	var user User
-	err := configs.MI.DB.Collection("users").FindOne(context.TODO(), bson.M{"_id": id}).Decode(&user)
+	err := configs.MI.DB.Collection("users").FindOne(ctx, bson.M{"_id": id}).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func GetUserBySlug(ctx context.Context, slug string) (*User, error) {
+	var user User
+	err := configs.MI.DB.Collection("users").FindOne(ctx, bson.M{
+		"slug":              slug,
+		"is_profile_public": true,
+		"user_type":         "artisan",
+	}).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +173,21 @@ func GetUserByPhoneAndType(phone, userType string) (*User, error) {
 func GetUserByFundisID(fundisID string) (*User, error) {
 	var user User
 	err := configs.MI.DB.Collection("users").FindOne(context.TODO(), bson.M{"fundis_id": fundisID, "user_type": "artisan"}).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetPublicUserByFundisID looks up a public artisan by their fundis_id.
+// Used for fundis_id → slug redirects on public endpoints.
+func GetPublicUserByFundisID(ctx context.Context, fundisID string) (*User, error) {
+	var user User
+	err := configs.MI.DB.Collection("users").FindOne(ctx, bson.M{
+		"fundis_id":         fundisID,
+		"is_profile_public": true,
+		"user_type":         "artisan",
+	}).Decode(&user)
 	if err != nil {
 		return nil, err
 	}

@@ -14,8 +14,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func SendOTP(userID string) error {
-	user, err := GetUserByID(userID)
+func SendOTP(ctx context.Context, userID string) error {
+	user, err := GetUserByID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -26,8 +26,8 @@ func SendOTP(userID string) error {
 	return UpdateUser(userID, bson.M{"otp": otp})
 }
 
-func VerifyOTP(userID, otp string) error {
-	user, err := GetUserByID(userID)
+func VerifyOTP(ctx context.Context, userID, otp string) error {
+	user, err := GetUserByID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -45,8 +45,8 @@ func VerifyOTP(userID, otp string) error {
 	})
 }
 
-func ResendOTP(userID string) error {
-	return SendOTP(userID)
+func ResendOTP(ctx context.Context, userID string) error {
+	return SendOTP(ctx, userID)
 }
 
 func ForgotPassword(phone, userType string) error {
@@ -93,16 +93,16 @@ func UpdateFCMToken(userID, token string) error {
 	return UpdateUser(userID, bson.M{"fcm_token": token})
 }
 
-func GetProfile(userID string) (*User, error) {
-	user, err := GetUserByID(userID)
+func GetProfile(ctx context.Context, userID string) (*User, error) {
+	user, err := GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("user not found")
 	}
 	return user, nil
 }
 
-func UpdateProfile(userID string, req ProfileUpdateRequest) error {
-	user, err := GetUserByID(userID)
+func UpdateProfile(ctx context.Context, userID string, req ProfileUpdateRequest) error {
+	user, err := GetUserByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("user not found")
 	}

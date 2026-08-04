@@ -143,7 +143,7 @@ func HandleSendOtp(ctx echo.Context) error {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
 
-	user, err := GetUserByID(userID)
+	user, err := GetUserByID(ctx.Request().Context(), userID)
 	if err != nil {
 		return responses.SendError(ctx, 400, "Invalid user")
 	}
@@ -176,7 +176,7 @@ func HandleVerifyOtp(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "otp is required")
 	}
 
-	user, err := GetUserByID(userID)
+	user, err := GetUserByID(ctx.Request().Context(), userID)
 	if err != nil {
 		return responses.SendError(ctx, 400, "Invalid user")
 	}
@@ -427,7 +427,7 @@ func HandleChangePassword(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "New password must be different from current password")
 	}
 
-	user, err := GetUserByID(userID)
+	user, err := GetUserByID(ctx.Request().Context(), userID)
 	if err != nil {
 		return responses.SendError(ctx, 400, "Invalid user")
 	}

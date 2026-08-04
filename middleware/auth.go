@@ -30,7 +30,7 @@ func JWTAuth(next echo.HandlerFunc) echo.HandlerFunc {
 			return responses.SendError(c, http.StatusUnauthorized, "Invalid or expired token")
 		}
 
-		user, err := users.GetUserByID(claims.UserID)
+		user, err := users.GetUserByID(c.Request().Context(), claims.UserID)
 		if err != nil || user == nil {
 			return responses.SendError(c, http.StatusUnauthorized, "User not found")
 		}

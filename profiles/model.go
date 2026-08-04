@@ -55,9 +55,9 @@ type Profile struct {
 	UpdatedAt                      time.Time `json:"updated_at" bson:"updated_at"`
 }
 
-func GetProfileByUserID(userID string) (*Profile, error) {
+func GetProfileByUserID(ctx context.Context, userID string) (*Profile, error) {
 	var profile Profile
-	err := configs.MI.DB.Collection("profiles").FindOne(context.TODO(), bson.M{"user_id": userID}).Decode(&profile)
+	err := configs.MI.DB.Collection("profiles").FindOne(ctx, bson.M{"user_id": userID}).Decode(&profile)
 	if err != nil {
 		return nil, err
 	}

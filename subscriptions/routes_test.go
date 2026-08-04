@@ -40,7 +40,7 @@ func TestHandleGetPlansFiltersByAuthenticatedUserType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, recorder := plansTestContext("user-1")
-			handler := handleGetPlans(func(string) (*users.User, error) {
+			handler := handleGetPlans(func(context.Context, string) (*users.User, error) {
 				return &users.User{ID: "user-1", UserType: tt.userType}, nil
 			})
 
@@ -69,6 +69,49 @@ func TestHandleGetPlansFiltersByAuthenticatedUserType(t *testing.T) {
 	}
 }
 
+func TestHandleGetPlansPassesExactRequestContextToUserLookup(t *testing.T) {
+	type contextKey struct{}
+	requestContext, cancel := context.WithCancel(
+		context.WithValue(context.Background(), contextKey{}, "request-value"),
+	)
+	cancel()
+
+	server := echo.New()
+	request := httptest.NewRequest(http.MethodGet, "/subscriptions/plans", nil).
+		WithContext(requestContext)
+	recorder := httptest.NewRecorder()
+	ctx := server.NewContext(request, recorder)
+	contextutil.SetUser(ctx, "user-1")
+
+	lookupCalled := false
+	handler := handleGetPlans(func(gotContext context.Context, userID string) (*users.User, error) {
+		lookupCalled = true
+		if gotContext != requestContext {
+			t.Errorf("user lookup context = %p, want exact request context %p", gotContext, requestContext)
+		}
+		if !errors.Is(gotContext.Err(), context.Canceled) {
+			t.Errorf("user lookup context error = %v, want context.Canceled", gotContext.Err())
+		}
+		if got := gotContext.Value(contextKey{}); got != "request-value" {
+			t.Errorf("user lookup context value = %v, want request-value", got)
+		}
+		if userID != "user-1" {
+			t.Errorf("user lookup user ID = %q, want user-1", userID)
+		}
+		return &users.User{ID: userID, UserType: "artisan"}, nil
+	})
+
+	if err := handler(ctx); err != nil {
+		t.Fatalf("handleGetPlans() error = %v", err)
+	}
+	if !lookupCalled {
+		t.Fatal("user lookup was not called")
+	}
+	if recorder.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+}
+
 func TestHandleGetPlansClassifiesUserLookupFailures(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -90,7 +133,7 @@ func TestHandleGetPlansClassifiesUserLookupFailures(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, recorder := plansTestContext("user-1")
-			handler := handleGetPlans(func(string) (*users.User, error) {
+			handler := handleGetPlans(func(context.Context, string) (*users.User, error) {
 				return nil, tt.lookupErr
 			})
 

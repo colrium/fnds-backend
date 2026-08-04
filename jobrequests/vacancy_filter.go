@@ -1,6 +1,7 @@
 package jobrequests
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -13,12 +14,31 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+type profileByUserIDLookup func(context.Context, string) (*profiles.Profile, error)
+
 func listAvailableJobVacanciesForWorker(
+	ctx context.Context,
 	userID string,
 	page int64,
 	limit int64,
 ) ([]JobVacancy, int64, error) {
-	profile, err := profiles.GetProfileByUserID(userID)
+	return listAvailableJobVacanciesForWorkerWithProfileLookup(
+		ctx,
+		userID,
+		page,
+		limit,
+		profiles.GetProfileByUserID,
+	)
+}
+
+func listAvailableJobVacanciesForWorkerWithProfileLookup(
+	ctx context.Context,
+	userID string,
+	page int64,
+	limit int64,
+	getProfileByUserID profileByUserIDLookup,
+) ([]JobVacancy, int64, error) {
+	profile, err := getProfileByUserID(ctx, userID)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return []JobVacancy{}, 0, nil
 	}

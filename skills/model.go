@@ -38,3 +38,47 @@ func GetAllSkills() ([]Skill, error) {
 	}
 	return skills, nil
 }
+
+// GetSkillByID retrieves a single skill by its ID.
+func GetSkillByID(ctx context.Context, id string) (*Skill, error) {
+	var skill Skill
+	err := configs.MI.DB.Collection("skills").FindOne(ctx, bson.M{"_id": id}).Decode(&skill)
+	if err != nil {
+		return nil, err
+	}
+	return &skill, nil
+}
+
+// GetSkillNamesByIDs returns the human-readable names for a list of skill IDs.
+// Unknown IDs are silently skipped.
+func GetSkillNamesByIDs(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return []string{}, nil
+	}
+	cursor, err := configs.MI.DB.Collection("skills").Find(
+		ctx,
+		bson.M{"_id": bson.M{"$in": ids}},
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var skills []Skill
+	if err := cursor.All(ctx, &skills); err != nil {
+		return nil, err
+	}
+
+	// Preserve the input order.
+	nameMap := make(map[string]string, len(skills))
+	for _, s := range skills {
+		nameMap[s.ID] = s.Name
+	}
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if name, ok := nameMap[id]; ok {
+			names = append(names, name)
+		}
+	}
+	return names, nil
+}

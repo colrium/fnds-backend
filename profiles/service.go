@@ -140,8 +140,8 @@ type FullProfile struct {
 // GetFullProfile returns the authenticated user's identity merged with their
 // profile extension. A missing profiles row is not an error — the user always
 // has core fields, so we return those with empty extension fields.
-func GetFullProfile(userID string) (*FullProfile, error) {
-	user, err := users.GetUserByID(userID)
+func GetFullProfile(ctx context.Context, userID string) (*FullProfile, error) {
+	user, err := users.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func GetFullProfile(userID string) (*FullProfile, error) {
 			strconv.FormatInt(user.UpdatedAt.UnixNano(), 10),
 		)
 	}
-	if profile, err := GetProfileByUserID(userID); err == nil {
+	if profile, err := GetProfileByUserID(ctx, userID); err == nil {
 		full.IDNumber = profile.IDNumber
 		full.DateOfBirth = profile.DateOfBirth
 		full.Gender = profile.Gender
@@ -286,12 +286,12 @@ func buildProfileUpdates(req ProfileUpdateRequest) bson.M {
 	return u
 }
 
-func UpdateProfile(userID string, req ProfileUpdateRequest) error {
+func UpdateProfile(ctx context.Context, userID string, req ProfileUpdateRequest) error {
 	if err := validateProfileUpdate(req); err != nil {
 		return err
 	}
 
-	user, err := users.GetUserByID(userID)
+	user, err := users.GetUserByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("user not found")
 	}

@@ -14,7 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type userLookup func(string) (*users.User, error)
+type userLookup func(context.Context, string) (*users.User, error)
 type accountSummaryLookup func(
 	context.Context,
 	string,
@@ -37,7 +37,7 @@ func handleGetPlans(getUserByID userLookup) echo.HandlerFunc {
 		if userID == "" {
 			return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
 		}
-		user, err := getUserByID(userID)
+		user, err := getUserByID(ctx.Request().Context(), userID)
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
 		}
@@ -56,7 +56,7 @@ func HandleCreateSubscription(ctx echo.Context) error {
 	if userID == "" {
 		return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
 	}
-	user, err := users.GetUserByID(userID)
+	user, err := users.GetUserByID(ctx.Request().Context(), userID)
 	if err != nil {
 		return responses.SendError(ctx, http.StatusUnauthorized, "Unauthorized")
 	}

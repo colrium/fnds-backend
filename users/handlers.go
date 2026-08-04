@@ -32,7 +32,7 @@ func HandleSetAvailability(ctx echo.Context) error {
 	if err := UpdateUser(userID, bson.M{"is_available": req.IsAvailable}); err != nil {
 		return responses.SendError(ctx, 500, "failed to update availability")
 	}
-	user, err := GetUserByID(userID)
+	user, err := GetUserByID(ctx.Request().Context(), userID)
 	if err != nil {
 		return responses.SendError(ctx, 500, "failed to load updated user")
 	}

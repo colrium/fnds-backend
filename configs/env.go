@@ -1,8 +1,10 @@
 package configs
 
 import (
+	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 func AppEnv() string {
@@ -151,4 +153,97 @@ func SlackOpsNotifsURL() string {
 // fallback when a channel-specific URL is not configured.
 func SlackWebhookURL() string {
 	return os.Getenv("SLACK_WEBHOOK_URL")
+}
+
+const (
+	notificationCacheEnabledDefault = true
+	notificationCacheTTLDefault     = 30 * time.Second
+	notificationCacheTTLMin         = 5 * time.Second
+	notificationCacheTTLMax         = 5 * time.Minute
+
+	notificationCacheOpTimeoutDefault = 100 * time.Millisecond
+	notificationCacheOpTimeoutMin     = 10 * time.Millisecond
+	notificationCacheOpTimeoutMax     = 1 * time.Second
+)
+
+// NotificationCacheSettings is the immutable, validated configuration for the
+// Redis-backed notifications feed cache. Zero-value TTL/OperationTimeout only
+// occur when Enabled is false.
+type NotificationCacheSettings struct {
+	Enabled          bool
+	TTL              time.Duration
+	OperationTimeout time.Duration
+}
+
+// LoadNotificationCacheSettings parses NOTIFICATIONS_CACHE_ENABLED,
+// NOTIFICATIONS_CACHE_TTL, and NOTIFICATIONS_CACHE_OP_TIMEOUT. Invalid values
+// return a descriptive error instead of clamping to a default, so operator
+// misconfiguration fails startup rather than silently changing behavior.
+func LoadNotificationCacheSettings() (NotificationCacheSettings, error) {
+	enabled, err := parseBoolEnv("NOTIFICATIONS_CACHE_ENABLED", notificationCacheEnabledDefault)
+	if err != nil {
+		return NotificationCacheSettings{}, err
+	}
+
+	ttl, err := parseDurationEnvInRange(
+		"NOTIFICATIONS_CACHE_TTL",
+		notificationCacheTTLDefault,
+		notificationCacheTTLMin,
+		notificationCacheTTLMax,
+	)
+	if err != nil {
+		return NotificationCacheSettings{}, err
+	}
+
+	opTimeout, err := parseDurationEnvInRange(
+		"NOTIFICATIONS_CACHE_OP_TIMEOUT",
+		notificationCacheOpTimeoutDefault,
+		notificationCacheOpTimeoutMin,
+		notificationCacheOpTimeoutMax,
+	)
+	if err != nil {
+		return NotificationCacheSettings{}, err
+	}
+
+	return NotificationCacheSettings{
+		Enabled:          enabled,
+		TTL:              ttl,
+		OperationTimeout: opTimeout,
+	}, nil
+}
+
+func parseBoolEnv(name string, defaultValue bool) (bool, error) {
+	value := os.Getenv(name)
+	if value == "" {
+		return defaultValue, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("parsing %s=%q: %w", name, value, err)
+	}
+	return parsed, nil
+}
+
+func parseDurationEnvInRange(
+	name string,
+	defaultValue time.Duration,
+	minValue time.Duration,
+	maxValue time.Duration,
+) (time.Duration, error) {
+	value := os.Getenv(name)
+	if value == "" {
+		return defaultValue, nil
+	}
+
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("parsing %s=%q: %w", name, value, err)
+	}
+	if parsed < minValue || parsed > maxValue {
+		return 0, fmt.Errorf(
+			"%s=%s is out of range [%s, %s]",
+			name, parsed, minValue, maxValue,
+		)
+	}
+	return parsed, nil
 }
