@@ -9,8 +9,7 @@ import (
 )
 
 func TestGenerateToken(t *testing.T) {
-	os.Setenv("SESSION_KEY", "test-secret-key-for-jwt-signing")
-	defer os.Unsetenv("SESSION_KEY")
+	t.Setenv("SESSION_KEY", "test-secret-key-for-jwt-signing")
 
 	secret := []byte(os.Getenv("SESSION_KEY"))
 

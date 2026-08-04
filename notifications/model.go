@@ -126,7 +126,7 @@ func (s *MongoStore) List(ctx context.Context, userID string, limit int64) (Feed
 	if err != nil {
 		return Feed{}, fmt.Errorf("listing notifications: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	notifications := []Notification{}
 	if err := cursor.All(ctx, &notifications); err != nil {

@@ -46,7 +46,7 @@ func (s *SlackService) SendErrorNotification(errorCode int, errorMessage, enviro
 	if err != nil {
 		return fmt.Errorf("failed to send slack notification: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return nil
 }

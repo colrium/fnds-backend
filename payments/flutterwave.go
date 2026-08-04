@@ -63,7 +63,7 @@ func (f *FlutterwaveConfig) CreatePayment(req FlutterwavePaymentRequest) (*Flutt
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result FlutterwaveResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -86,7 +86,7 @@ func (f *FlutterwaveConfig) VerifyTransaction(transactionID int) (*FlutterwaveRe
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result FlutterwaveResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

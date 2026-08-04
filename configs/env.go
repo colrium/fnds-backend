@@ -155,6 +155,19 @@ func SlackWebhookURL() string {
 	return os.Getenv("SLACK_WEBHOOK_URL")
 }
 
+// Better Stack (Logtail) error log forwarding. These accessors deliberately
+// return the raw environment value rather than a parsed one: all parsing,
+// trimming, and range clamping lives in logging.ResolveConfig so that every
+// rejection path is unit-testable without t.Setenv and validation is not split
+// across two packages.
+func BetterStackSourceToken() string  { return os.Getenv("BETTERSTACK_SOURCE_TOKEN") }
+func BetterStackIngestURL() string    { return os.Getenv("BETTERSTACK_INGEST_URL") }
+func BetterStackServiceName() string  { return os.Getenv("BETTERSTACK_SERVICE_NAME") }
+func BetterStackMinLevel() string     { return os.Getenv("BETTERSTACK_MIN_LEVEL") }
+func BetterStackBatchSize() string    { return os.Getenv("BETTERSTACK_BATCH_SIZE") }
+func BetterStackFlushSeconds() string { return os.Getenv("BETTERSTACK_FLUSH_SECONDS") }
+func BetterStackQueueSize() string    { return os.Getenv("BETTERSTACK_QUEUE_SIZE") }
+
 const (
 	notificationCacheEnabledDefault = true
 	notificationCacheTTLDefault     = 30 * time.Second

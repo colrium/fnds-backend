@@ -30,7 +30,7 @@ func GetAllLocations() ([]Location, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	var locations []Location
 	if err := cursor.All(context.TODO(), &locations); err != nil {
@@ -52,7 +52,7 @@ func GetLocationNamesByIDs(ctx context.Context, ids []string) ([]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var locs []Location
 	if err := cursor.All(ctx, &locs); err != nil {

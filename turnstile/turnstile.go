@@ -73,7 +73,7 @@ func Verify(ctx context.Context, token, remoteIP, expectedAction string) error {
 	if err != nil {
 		return fmt.Errorf("%w: siteverify request: %v", ErrUnavailable, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%w: siteverify status %d", ErrUnavailable, resp.StatusCode)

@@ -52,7 +52,7 @@ func (k *KopoKopoConfig) InitiatePayment(req KopoKopoPaymentRequest) (*KopoKopoR
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result KopoKopoResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -75,7 +75,7 @@ func (k *KopoKopoConfig) VerifyPayment(transactionRef string) (*KopoKopoResponse
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var result KopoKopoResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

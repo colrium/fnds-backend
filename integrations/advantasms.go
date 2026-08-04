@@ -73,7 +73,7 @@ func SendAdvantaSMS(mobile, message string) error {
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	var parsed advantaResponse
 	if err := json.NewDecoder(res.Body).Decode(&parsed); err != nil {

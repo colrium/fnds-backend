@@ -69,7 +69,7 @@ func TestHandleGetPlansFiltersByAuthenticatedUserType(t *testing.T) {
 	}
 }
 
-func TestHandleGetPlansPassesExactRequestContextToUserLookup(t *testing.T) {
+func TestHandleGetPlansPropagatesRequestContextToUserLookup(t *testing.T) {
 	type contextKey struct{}
 	requestContext, cancel := context.WithCancel(
 		context.WithValue(context.Background(), contextKey{}, "request-value"),
@@ -81,14 +81,16 @@ func TestHandleGetPlansPassesExactRequestContextToUserLookup(t *testing.T) {
 		WithContext(requestContext)
 	recorder := httptest.NewRecorder()
 	ctx := server.NewContext(request, recorder)
+	// contextutil.SetUser derives a new context.Context from the request
+	// context (it stamps the authenticated user id for log correlation), so
+	// gotContext is no longer required to be requestContext by identity. What
+	// still must hold is that every property of requestContext — cancellation,
+	// deadline, and values — is preserved by that derivation.
 	contextutil.SetUser(ctx, "user-1")
 
 	lookupCalled := false
 	handler := handleGetPlans(func(gotContext context.Context, userID string) (*users.User, error) {
 		lookupCalled = true
-		if gotContext != requestContext {
-			t.Errorf("user lookup context = %p, want exact request context %p", gotContext, requestContext)
-		}
 		if !errors.Is(gotContext.Err(), context.Canceled) {
 			t.Errorf("user lookup context error = %v, want context.Canceled", gotContext.Err())
 		}

@@ -32,7 +32,7 @@ func ListChatsByJobRequest(jobRequestID string) ([]Chat, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 	var chats []Chat
 	if err := cursor.All(context.TODO(), &chats); err != nil {
 		return nil, err

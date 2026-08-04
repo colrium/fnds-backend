@@ -333,7 +333,7 @@ func Stats(ctx context.Context, referrerID string) (map[string]int64, error) {
 	if err != nil {
 		return nil, fmt.Errorf("counting referral credits: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 	if cursor.Next(ctx) {
 		if err := cursor.Decode(&credits); err != nil {
 			return nil, fmt.Errorf("decoding referral credits: %w", err)

@@ -163,7 +163,7 @@ func ListTransactions(filter bson.M) ([]Transaction, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 	var txns []Transaction
 	if err := cursor.All(context.TODO(), &txns); err != nil {
 		return nil, err

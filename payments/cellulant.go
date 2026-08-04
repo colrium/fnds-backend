@@ -103,7 +103,7 @@ func (s *CellulantService) CheckoutURL(request CellulantCheckoutRequest) (string
 		s.config.SecretKey == "" ||
 		s.config.IVKey == "" ||
 		s.config.CheckoutURL == "" {
-		return "", fmt.Errorf("Cellulant checkout is not configured")
+		return "", fmt.Errorf("cellulant checkout is not configured")
 	}
 	payload, err := json.Marshal(request)
 	if err != nil {
@@ -133,7 +133,7 @@ func (s *CellulantService) VerifyPayment(
 		s.config.ClientSecret == "" ||
 		s.config.APIKey == "" ||
 		s.config.ServiceCode == "" {
-		return nil, fmt.Errorf("Cellulant transaction verification is not configured")
+		return nil, fmt.Errorf("cellulant transaction verification is not configured")
 	}
 
 	authBody, err := json.Marshal(map[string]string{
@@ -161,9 +161,9 @@ func (s *CellulantService) VerifyPayment(
 	if err != nil {
 		return nil, fmt.Errorf("authenticating with Cellulant: %w", err)
 	}
-	defer authResponse.Body.Close()
+	defer func() { _ = authResponse.Body.Close() }()
 	if authResponse.StatusCode < http.StatusOK || authResponse.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("Cellulant auth returned status %d", authResponse.StatusCode)
+		return nil, fmt.Errorf("cellulant auth returned status %d", authResponse.StatusCode)
 	}
 	var authPayload struct {
 		AccessToken string `json:"access_token"`
@@ -172,7 +172,7 @@ func (s *CellulantService) VerifyPayment(
 		return nil, fmt.Errorf("decoding Cellulant auth response: %w", err)
 	}
 	if authPayload.AccessToken == "" {
-		return nil, fmt.Errorf("Cellulant auth response did not include an access token")
+		return nil, fmt.Errorf("cellulant auth response did not include an access token")
 	}
 
 	queryURL := fmt.Sprintf(
@@ -193,9 +193,9 @@ func (s *CellulantService) VerifyPayment(
 	if err != nil {
 		return nil, fmt.Errorf("querying Cellulant transaction: %w", err)
 	}
-	defer queryResponse.Body.Close()
+	defer func() { _ = queryResponse.Body.Close() }()
 	if queryResponse.StatusCode < http.StatusOK || queryResponse.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("Cellulant query returned status %d", queryResponse.StatusCode)
+		return nil, fmt.Errorf("cellulant query returned status %d", queryResponse.StatusCode)
 	}
 	var payload map[string]interface{}
 	if err := json.NewDecoder(queryResponse.Body).Decode(&payload); err != nil {

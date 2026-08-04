@@ -112,7 +112,7 @@ func verifyUserOtp(user *User, otp string) error {
 	}
 	if user.Otp != otp {
 		_ = IncrementOtpAttempts(user.ID)
-		return fmt.Errorf("Invalid OTP")
+		return fmt.Errorf("invalid OTP")
 	}
 	return nil
 }

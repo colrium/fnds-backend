@@ -1,15 +1,13 @@
 package configs
 
 import (
-	"os"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestAppEnv(t *testing.T) {
-	os.Setenv("APP_ENV", "test")
-	defer os.Unsetenv("APP_ENV")
+	t.Setenv("APP_ENV", "test")
 
 	if got := AppEnv(); got != "test" {
 		t.Errorf("AppEnv() = %q, want %q", got, "test")
@@ -29,8 +27,7 @@ func TestEnvIsProd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("APP_ENV", tt.env)
-			defer os.Unsetenv("APP_ENV")
+			t.Setenv("APP_ENV", tt.env)
 
 			if got := EnvIsProd(); got != tt.want {
 				t.Errorf("EnvIsProd() = %v, want %v", got, tt.want)
@@ -40,8 +37,7 @@ func TestEnvIsProd(t *testing.T) {
 }
 
 func TestEnvPort(t *testing.T) {
-	os.Setenv("PORT", "8080")
-	defer os.Unsetenv("PORT")
+	t.Setenv("PORT", "8080")
 
 	if got := EnvPort(); got != "8080" {
 		t.Errorf("EnvPort() = %q, want %q", got, "8080")
@@ -49,8 +45,7 @@ func TestEnvPort(t *testing.T) {
 }
 
 func TestEnvMongoURI(t *testing.T) {
-	os.Setenv("MONGODB_URI", "mongodb://localhost:27017")
-	defer os.Unsetenv("MONGODB_URI")
+	t.Setenv("MONGODB_URI", "mongodb://localhost:27017")
 
 	if got := EnvMongoURI(); got != "mongodb://localhost:27017" {
 		t.Errorf("EnvMongoURI() = %q, want %q", got, "mongodb://localhost:27017")
@@ -58,8 +53,7 @@ func TestEnvMongoURI(t *testing.T) {
 }
 
 func TestGetSessionKey(t *testing.T) {
-	os.Setenv("SESSION_KEY", "secret-key")
-	defer os.Unsetenv("SESSION_KEY")
+	t.Setenv("SESSION_KEY", "secret-key")
 
 	if got := GetSessionKey(); got != "secret-key" {
 		t.Errorf("GetSessionKey() = %q, want %q", got, "secret-key")
@@ -67,8 +61,7 @@ func TestGetSessionKey(t *testing.T) {
 }
 
 func TestTurnstileSecretKey(t *testing.T) {
-	os.Setenv("TURNSTILE_SECRET_KEY", "secret-123")
-	defer os.Unsetenv("TURNSTILE_SECRET_KEY")
+	t.Setenv("TURNSTILE_SECRET_KEY", "secret-123")
 
 	if got := TurnstileSecretKey(); got != "secret-123" {
 		t.Errorf("TurnstileSecretKey() = %q, want %q", got, "secret-123")
@@ -97,11 +90,11 @@ func TestEnvVarsReturnEmptyWhenUnset(t *testing.T) {
 
 	for _, v := range vars {
 		t.Run(v.name, func(t *testing.T) {
-			os.Unsetenv("APP_ENV")
-			os.Unsetenv("REDIS_URL")
-			os.Unsetenv("SESSION_KEY")
-			os.Unsetenv("MONGODB_URI")
-			os.Unsetenv("PORT")
+			t.Setenv("APP_ENV", "")
+			t.Setenv("REDIS_URL", "")
+			t.Setenv("SESSION_KEY", "")
+			t.Setenv("MONGODB_URI", "")
+			t.Setenv("PORT", "")
 
 			if got := v.fn(); got != "" {
 				t.Errorf("%s() = %q, want empty string when env var is unset", v.name, got)

@@ -39,14 +39,8 @@ func setupIntegrationEnvironment(t *testing.T) (*MongoStore, *RedisFeedCache, *r
 	t.Helper()
 	uri := requireIntegrationMongoURI(t)
 
-	previousURI := os.Getenv("MONGODB_URI")
-	previousEnv := os.Getenv("APP_ENV")
-	os.Setenv("MONGODB_URI", uri)
-	os.Setenv("APP_ENV", "integration-test-"+uuid.New().String())
-	t.Cleanup(func() {
-		os.Setenv("MONGODB_URI", previousURI)
-		os.Setenv("APP_ENV", previousEnv)
-	})
+	t.Setenv("MONGODB_URI", uri)
+	t.Setenv("APP_ENV", "integration-test-"+uuid.New().String())
 
 	configs.ConnectDB()
 	if err := EnsureIndexes(context.Background()); err != nil {

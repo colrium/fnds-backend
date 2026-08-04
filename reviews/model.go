@@ -38,7 +38,7 @@ func ListReviewsContext(ctx context.Context, filter bson.M) ([]Review, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 	var reviews []Review
 	if err := cursor.All(ctx, &reviews); err != nil {
 		return nil, err

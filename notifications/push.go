@@ -61,7 +61,7 @@ func (s *FCMService) SendPush(req PushNotificationRequest) error {
 	if err != nil {
 		return fmt.Errorf("failed to send FCM request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	log.Printf("[FCMService] push sent to %s, status: %d", req.Token, resp.StatusCode)
 	return nil

@@ -84,7 +84,7 @@ func GetAllInstitutions() ([]Institution, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list institutions: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var institutions []Institution
 	if err := cursor.All(ctx, &institutions); err != nil {
@@ -142,7 +142,7 @@ func SearchInstitutions(query string, limit int64, offset int64) ([]Institution,
 	if err != nil {
 		return nil, fmt.Errorf("search institutions (query=%q): %w", query, err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	institutions := []Institution{}
 	if err := cursor.All(ctx, &institutions); err != nil {

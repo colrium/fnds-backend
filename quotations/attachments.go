@@ -116,7 +116,7 @@ func (h *attachmentHandler) list(ctx echo.Context) error {
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to load attachments")
 	}
-	defer cursor.Close(ctx.Request().Context())
+	defer func() { _ = cursor.Close(ctx.Request().Context()) }()
 	if err := cursor.All(ctx.Request().Context(), &attachments); err != nil {
 		return responses.SendError(ctx, 500, "Failed to load attachments")
 	}

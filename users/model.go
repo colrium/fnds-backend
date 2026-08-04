@@ -127,7 +127,7 @@ func GetUsersByIDs(ids []string) ([]User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 	if err := cursor.All(context.TODO(), &users); err != nil {
 		return nil, err
 	}
@@ -233,7 +233,7 @@ func ListArtisans(page, limit int64) ([]User, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	var users []User
 	if err := cursor.All(context.TODO(), &users); err != nil {
@@ -285,7 +285,7 @@ func ListAllUsers(filter bson.M, page, limit int64) ([]User, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	var userList []User
 	if err := cursor.All(context.TODO(), &userList); err != nil {

@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 	_ "time/tzdata"
 
@@ -18,6 +22,7 @@ import (
 	"backend/institutions"
 	"backend/jobrequests"
 	"backend/locations"
+	"backend/logging"
 	"backend/middleware"
 	"backend/notifications"
 	"backend/payments"
@@ -36,6 +41,24 @@ import (
 	echomiddleware "github.com/labstack/echo/v4/middleware"
 	"golang.org/x/time/rate"
 )
+
+func configureApplicationLoggingMiddleware(app *echo.Echo) {
+	app.IPExtractor = echo.ExtractIPDirect()
+	app.Use(middleware.RequestContext())
+	app.Use(echomiddleware.RecoverWithConfig(echomiddleware.RecoverConfig{
+		StackSize:         8192,
+		DisableStackAll:   true,
+		DisablePrintStack: true,
+		LogErrorFunc: func(c echo.Context, err error, _ []byte) error {
+			panicValue, stack := logging.PanicDetails(err)
+			slog.ErrorContext(c.Request().Context(), "panic recovered",
+				slog.String("panic", panicValue),
+				slog.String("stack", stack),
+			)
+			return err
+		},
+	}))
+}
 
 type publicArtisanRouteDependencies struct {
 	registerAPIRoutes func(*echo.Group)
@@ -90,13 +113,28 @@ func registerPublicArtisanRoutes(
 }
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	rawLoggingConfig := logging.RawConfig{
+		SourceToken:  configs.BetterStackSourceToken(),
+		IngestURL:    configs.BetterStackIngestURL(),
+		ServiceName:  configs.BetterStackServiceName(),
+		Environment:  configs.AppEnv(),
+		MinLevel:     configs.BetterStackMinLevel(),
+		BatchSize:    configs.BetterStackBatchSize(),
+		FlushSeconds: configs.BetterStackFlushSeconds(),
+		QueueSize:    configs.BetterStackQueueSize(),
+	}
+	loggingConfig, loggingDiagnostics := logging.ResolveConfig(rawLoggingConfig)
+	loggingConfig.DiagWriter = os.Stdout
+	shipper := logging.NewShipper(loggingConfig)
+	shipper.EmitStartupDiagnostics(loggingDiagnostics)
+	shipper.Start()
+
+	console := slog.NewJSONHandler(os.Stdout, nil)
+	logger := slog.New(logging.NewFanoutHandler(console, shipper.Handler()))
 	slog.SetDefault(logger)
 
 	app := echo.New()
-	app.IPExtractor = echo.ExtractIPDirect()
-	app.Use(echomiddleware.Logger())
-	app.Use(echomiddleware.Recover())
+	configureApplicationLoggingMiddleware(app)
 	app.Use(newCORSMiddleware(configs.AppEnv()))
 
 	configs.ConnectDB()
@@ -266,8 +304,36 @@ func main() {
 	port := fmt.Sprintf(":%s", configs.EnvPort())
 	slog.Info("server starting", "port", port)
 
-	if err := app.Start(port); err != nil {
-		slog.Error("server failed", "error", err)
-		os.Exit(1)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- app.Start(port)
+	}()
+
+	serverExited := false
+	select {
+	case <-ctx.Done():
+	case err := <-serverErr:
+		serverExited = true
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("server failed", "error", err)
+		}
 	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownErr := app.Shutdown(shutdownCtx)
+	cancel()
+	if shutdownErr != nil {
+		slog.Error("graceful shutdown failed", "error", shutdownErr)
+	}
+
+	if !serverExited && shutdownErr == nil {
+		if err := <-serverErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("server failed", "error", err)
+		}
+	}
+
+	shipper.Close()
 }

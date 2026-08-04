@@ -122,8 +122,8 @@ func TestVerifyUserOtp_Wrong(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for wrong OTP, got nil")
 		}
-		if err.Error() != "Invalid OTP" {
-			t.Fatalf("expected 'Invalid OTP', got: %v", err)
+		if err.Error() != "invalid OTP" {
+			t.Fatalf("expected 'invalid OTP', got: %v", err)
 		}
 	}()
 

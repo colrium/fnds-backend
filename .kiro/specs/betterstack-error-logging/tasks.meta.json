@@ -1,0 +1,759 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Create `logging/clock.go` with the time and randomness abstractions": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887004
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781893603
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782171955
+      }
+    ],
+    "1.2 Create `logging/config.go` with `RawConfig`, `Config`, `Diagnostic`, and pure `ResolveConfig`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887017
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781895005
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782173350
+      }
+    ],
+    "1.4 Create `logging/counters.go` with `DropReason`, `counters`, and `Snapshot`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887023
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781895952
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782174789
+      }
+    ],
+    "2.1 Create `logging/event.go` with `Event` and its sub-structs": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887028
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782179934
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782334567
+      }
+    ],
+    "2.2 Implement `convert` in `logging/convert.go` with the two distinctly-typed depth axes": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887032
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782357869
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783230881
+      }
+    ],
+    "2.3 Implement the 64 KiB size cap in `logging/truncate.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887043
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783237616
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783944712
+      }
+    ],
+    "2.4 Implement the `Redactor` in `logging/redact.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887048
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782361397
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783231831
+      }
+    ],
+    "2.6 Build the property-test harness in `logging/pbt_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887057
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783239700
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783946670
+      }
+    ],
+    "3. Checkpoint - conversion and redaction are complete and green": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887062
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785784540295
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785785165607
+      }
+    ],
+    "4.1 Implement `Handler` state, `Enabled`, `WithAttrs`, and `WithGroup` in `logging/handler.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887068
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783961218
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785784536963
+      }
+    ],
+    "4.2 Implement `Handler.Handle` with admission counting and panic recovery in `logging/handler.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887073
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785784543620
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785785167015
+      }
+    ],
+    "4.4 Implement `FanoutHandler` in `logging/fanout.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887078
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785785173786
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785786432410
+      }
+    ],
+    "5.1 Implement `IngestClient` in `logging/ingest.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887084
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785785174884
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785786433105
+      }
+    ],
+    "6.1 Implement the `Shipper` struct, `Start`, `Handler`, `Snapshot`, and non-blocking `enqueue` in `logging/shipper.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887089
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785786436269
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787218295
+      }
+    ],
+    "6.2 Implement the Self_Diagnostic logger and startup diagnostics in `logging/diag.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887094
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787222055
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787892119
+      }
+    ],
+    "6.5 Implement the delivery goroutine loop `Shipper.run` in `logging/shipper.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887100
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787897427
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785788795112
+      }
+    ],
+    "7. Checkpoint - queue and delivery loop are complete and green": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887105
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785789990901
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785791404818
+      }
+    ],
+    "8.1 Implement HTTP status classification in `logging/classify.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887111
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787898284
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785788796574
+      }
+    ],
+    "8.2 Implement retry, backoff, and jitter in `logging/retry.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887121
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787899438
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785788797354
+      }
+    ],
+    "8.3 Implement 402 suspension and 403 permanent disable in `logging/shipper.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887126
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785788801258
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785789984987
+      }
+    ],
+    "8.6 Implement delivery-goroutine panic recovery and the 5-panic disable rule in `logging/shipper.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887130
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785789995405
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785791408124
+      }
+    ],
+    "8.7 Implement `Shipper.Flush` in `logging/flush.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887136
+      }
+    ],
+    "8.8 Implement `Shipper.Close` and `finalDrain` in `logging/close.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887141
+      }
+    ],
+    "8.11 Implement the periodic health summary in `logging/health.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887146
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785789991855
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785791409119
+      }
+    ],
+    "9. Checkpoint - the `logging` package is feature-complete and green under `-race`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887151
+      }
+    ],
+    "10.1 Add the seven `configs/env.go` accessors and the `.env.example` block": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887156
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781897354
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782175703
+      }
+    ],
+    "10.2 Implement request-correlation context helpers in `logging/context.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887161
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781898169
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782176779
+      }
+    ],
+    "10.3 Implement `middleware.RequestContext` in `middleware/requestlog.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887166
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782180846
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782336023
+      }
+    ],
+    "10.4 Extend `contextutil.SetUser` to write the user ID into the request `context.Context`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887171
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782181972
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782336844
+      }
+    ],
+    "10.6 Wire the Shipper and `FanoutHandler` into `main.go` startup": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887176
+      }
+    ],
+    "10.7 Add graceful shutdown to `main.go` — this does not exist today": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887184
+      }
+    ],
+    "10.8 Replace Echo's default `Recover()` with `RecoverWithConfig` in `main.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887189
+      }
+    ],
+    "11. Final checkpoint - full suite, vet, format, and race detector": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785781887194
+      }
+    ],
+    "1. Package foundations: clock, config resolution, counters": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782174794
+      }
+    ],
+    "1.3 Write the `ResolveConfig` decision-table test in `logging/config_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782355071
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783228100
+      }
+    ],
+    "1.5 Write counter saturation and snapshot-consistency unit tests in `logging/counters_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782356474
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783229483
+      }
+    ],
+    "10.5 Write request-correlation middleware tests in `middleware/requestlog_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785782358778
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783232888
+      }
+    ],
+    "2.5 Write the depth-cap relationship guard test in `logging/depth_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783239013
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783945667
+      }
+    ],
+    "2. Pure Log_Event conversion and redaction (no goroutines, no network)": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783946684
+      }
+    ],
+    "2.7 Write property test for conversion round-trip in `logging/event_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783962662
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785784532656
+      }
+    ],
+    "2.8 Write property test for hostile-input safety in `logging/event_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783963570
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785784533613
+      }
+    ],
+    "2.9 Write property test for the size cap in `logging/size_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783965014
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785784534555
+      }
+    ],
+    "2.10 Write property test for redaction idempotence in `logging/redact_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785783965818
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785784535941
+      }
+    ],
+    "2.11 Write property test for redaction structure preservation in `logging/redact_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785784541252
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785785168462
+      }
+    ],
+    "2.12 Write property test for the redaction depth cap in `logging/redact_depth_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785784542647
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785785169254
+      }
+    ],
+    "4.3 Write property test for handler derivation in `logging/handler_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785785172828
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785786431082
+      }
+    ],
+    "4. The `slog.Handler` layer": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785786432415
+      }
+    ],
+    "5. Ingest client": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785786433110
+      }
+    ],
+    "4.5 Write the console byte-identity test in `logging/fanout_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785786437657
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787216570
+      }
+    ],
+    "5.2 Write ingest client example tests in `logging/ingest_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785786438503
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787217150
+      }
+    ],
+    "6.3 Write property test for queue capacity in `logging/shipper_queue_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787224915
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787892128
+      }
+    ],
+    "6.4 Write property test for non-blocking enqueue in `logging/shipper_queue_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787225114
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785787892133
+      }
+    ],
+    "6. Shipper: queue, diagnostics, and the delivery loop": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785788795117
+      }
+    ],
+    "6.6 Write property test for batching confluence in `logging/delivery_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785788802678
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785789986216
+      }
+    ],
+    "6.7 Write property test for the 1 MiB body cap in `logging/delivery_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785788803459
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785789987110
+      }
+    ],
+    "8.4 Write property test for status classification in `logging/retry_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785789993261
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785791405773
+      }
+    ],
+    "8.5 Write property test for retry delay bounds in `logging/retry_test.go`": [
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785789994217
+      },
+      {
+        "executionId": "8b6ef643-222d-42b3-9350-7501ca15bb08",
+        "chatSessionId": "51859424-65ca-4299-a03d-a2cce6348163",
+        "timestamp": 1785791407167
+      }
+    ]
+  }
+}

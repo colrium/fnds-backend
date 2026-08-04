@@ -154,7 +154,7 @@ func ListJobRequests(filter bson.M, page, limit int64) ([]JobRequest, int64, err
 	if err != nil {
 		return nil, 0, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	var requests []JobRequest
 	if err := cursor.All(context.TODO(), &requests); err != nil {
@@ -213,7 +213,7 @@ func ListJobVacancies(filter bson.M, page, limit int64) ([]JobVacancy, int64, er
 	if err != nil {
 		return nil, 0, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	var vacancies []JobVacancy
 	if err := cursor.All(context.TODO(), &vacancies); err != nil {
@@ -243,7 +243,7 @@ func ListJobVacanciesByOwner(ownerID string) ([]JobVacancy, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	vacancies := []JobVacancy{}
 	if err := cursor.All(context.TODO(), &vacancies); err != nil {
@@ -266,7 +266,7 @@ func CountApplicationsByStatusForVacancies(vacancyIDs []string) (map[string]int,
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	applications := []JobApplication{}
 	if err := cursor.All(context.TODO(), &applications); err != nil {
@@ -357,7 +357,7 @@ func ListJobApplicationsByVacancy(vacancyID string) ([]JobApplication, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	applications := []JobApplication{}
 	if err := cursor.All(context.TODO(), &applications); err != nil {
@@ -412,7 +412,7 @@ func ListCompaniesByOwner(ownerID string) ([]Company, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	companies := []Company{}
 	if err := cursor.All(context.TODO(), &companies); err != nil {

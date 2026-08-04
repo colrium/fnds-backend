@@ -125,7 +125,7 @@ func (c *SlackActivityClient) Send(ctx context.Context, msg BlockKitMessage) err
 	if err != nil {
 		return fmt.Errorf("slack activity: sending request: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
 		return nil

@@ -85,7 +85,7 @@ func (r *MongoRepository) ListByUserID(ctx context.Context, userID string) ([]Fi
 	if err != nil {
 		return nil, fmt.Errorf("listing file records: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	fileList := make([]File, 0)
 	if err := cursor.All(ctx, &fileList); err != nil {

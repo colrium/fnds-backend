@@ -30,7 +30,7 @@ func GetAllSkills() ([]Skill, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	var skills []Skill
 	if err := cursor.All(context.TODO(), &skills); err != nil {
@@ -62,7 +62,7 @@ func GetSkillNamesByIDs(ctx context.Context, ids []string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var skills []Skill
 	if err := cursor.All(ctx, &skills); err != nil {

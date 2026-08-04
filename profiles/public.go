@@ -179,7 +179,7 @@ func getPublicWorkingHours(ctx context.Context, userID string) ([]WorkingHourPub
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var items []WorkingHourInput
 	if err := cursor.All(ctx, &items); err != nil {
@@ -202,7 +202,7 @@ func getPublicLanguages(ctx context.Context, userID string) ([]LanguagePublic, e
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var items []LanguageProficiencyInput
 	if err := cursor.All(ctx, &items); err != nil {
@@ -228,7 +228,7 @@ func getPublicPastEmployers(ctx context.Context, userID string) ([]PastEmployerP
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var items []PastEmployerInput
 	if err := cursor.All(ctx, &items); err != nil {

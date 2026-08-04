@@ -134,7 +134,7 @@ func GetActiveSubscriptions(
 	if err != nil {
 		return nil, fmt.Errorf("finding active subscriptions: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	subscriptions := []UserSubscription{}
 	if err := cursor.All(ctx, &subscriptions); err != nil {
@@ -152,7 +152,7 @@ func GetSubscriptionHistory(ctx context.Context, userID string) ([]UserSubscript
 	if err != nil {
 		return nil, fmt.Errorf("finding subscription history: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	history := []UserSubscription{}
 	if err := cursor.All(ctx, &history); err != nil {
@@ -382,7 +382,7 @@ func validateCellulantPayment(
 		event.AmountPaid != float64(purchase.AmountKES) ||
 		!strings.EqualFold(event.CurrencyCode, purchase.Currency) ||
 		event.ServiceCode != serviceCode {
-		return fmt.Errorf("Cellulant payment does not match subscription purchase")
+		return fmt.Errorf("cellulant payment does not match subscription purchase")
 	}
 	return nil
 }

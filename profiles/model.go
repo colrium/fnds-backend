@@ -77,7 +77,7 @@ func ListUserIDsBySkill(
 	if err != nil {
 		return nil, fmt.Errorf("finding profiles by skill: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var matches []struct {
 		UserID string `bson:"user_id"`

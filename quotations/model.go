@@ -160,7 +160,7 @@ func ListQuotations(filter bson.M) ([]Quotation, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 	quotations := make([]Quotation, 0)
 	if err := cursor.All(context.TODO(), &quotations); err != nil {
 		return nil, err
@@ -201,7 +201,7 @@ func ListExternalQuotationsByArtisan(artisanID string) ([]ExternalQuotation, err
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 	var quotations []ExternalQuotation
 	if err := cursor.All(context.TODO(), &quotations); err != nil {
 		return nil, err
@@ -249,7 +249,7 @@ func ListExternalInvoicesByArtisan(artisanID string) ([]ExternalInvoice, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 	var invoices []ExternalInvoice
 	if err := cursor.All(context.TODO(), &invoices); err != nil {
 		return nil, err
@@ -270,7 +270,7 @@ func ListExternalPaymentBillsByArtisan(artisanID string) ([]ExternalPaymentBill,
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 	var bills []ExternalPaymentBill
 	if err := cursor.All(context.TODO(), &bills); err != nil {
 		return nil, err

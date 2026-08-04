@@ -42,7 +42,7 @@ func HandleArtisanSitemap(ctx echo.Context) error {
 	if err != nil {
 		return ctx.XML(http.StatusInternalServerError, nil)
 	}
-	defer cursor.Close(requestCtx)
+	defer func() { _ = cursor.Close(requestCtx) }()
 
 	var artisans []users.User
 	if err := cursor.All(requestCtx, &artisans); err != nil {

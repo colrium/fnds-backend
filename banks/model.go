@@ -22,7 +22,7 @@ func GetAllBanks() ([]Bank, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 
 	var banks []Bank
 	if err := cursor.All(context.TODO(), &banks); err != nil {
@@ -92,7 +92,7 @@ func ListBankAccountsByUser(userID string) ([]BankAccount, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 	var accounts []BankAccount
 	if err := cursor.All(context.TODO(), &accounts); err != nil {
 		return nil, err

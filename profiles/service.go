@@ -218,7 +218,7 @@ func getProfileItems[T any](collectionName, userID string) ([]T, error) {
 	if err != nil {
 		return nil, fmt.Errorf("finding %s: %w", collectionName, err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	items := []T{}
 	if err := cursor.All(ctx, &items); err != nil {

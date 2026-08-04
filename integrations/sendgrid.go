@@ -107,7 +107,7 @@ func (c *SendGridClient) Send(ctx context.Context, to, subject, htmlBody string)
 	if err != nil {
 		return fmt.Errorf("sendgrid: sending request: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
 		return nil

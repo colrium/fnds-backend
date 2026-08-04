@@ -39,7 +39,7 @@ func ListDocumentTypes() ([]DocumentType, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.TODO())
+	defer func() { _ = cursor.Close(context.TODO()) }()
 	var types []DocumentType
 	if err := cursor.All(context.TODO(), &types); err != nil {
 		return nil, err

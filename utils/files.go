@@ -19,7 +19,7 @@ func SaveUploadedFile(file *multipart.FileHeader, uploadDir string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("failed to open uploaded file: %w", err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	ext := filepath.Ext(file.Filename)
 	name := fmt.Sprintf("%d%s", time.Now().UnixNano(), ext)
@@ -29,7 +29,7 @@ func SaveUploadedFile(file *multipart.FileHeader, uploadDir string) (string, err
 	if err != nil {
 		return "", fmt.Errorf("failed to create destination file: %w", err)
 	}
-	defer dst.Close()
+	defer func() { _ = dst.Close() }()
 
 	if _, err := io.Copy(dst, src); err != nil {
 		return "", fmt.Errorf("failed to copy file content: %w", err)
