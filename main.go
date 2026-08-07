@@ -138,6 +138,12 @@ func main() {
 	configureApplicationLoggingMiddleware(app)
 	app.Use(newCORSMiddleware(configs.AppEnv()))
 
+	// Unauthenticated liveness check for the ALB target group and ECS container
+	// healthCheck (both configured in infra to hit this exact path).
+	app.GET("/health", func(c echo.Context) error {
+		return c.String(http.StatusOK, "OK")
+	})
+
 	configs.ConnectDB()
 	if err := configs.ConnectRedis(); err != nil {
 		slog.Error("failed to initialize Redis", "error", err)

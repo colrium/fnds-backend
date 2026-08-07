@@ -204,3 +204,21 @@ func TestRegisterPublicArtisanRoutes(t *testing.T) {
 		})
 	}
 }
+
+func TestHealthEndpointReturnsOK(t *testing.T) {
+	app := echo.New()
+	app.GET("/health", func(c echo.Context) error {
+		return c.String(http.StatusOK, "OK")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	response := httptest.NewRecorder()
+	app.ServeHTTP(response, req)
+
+	if response.Code != http.StatusOK {
+		t.Errorf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if body := response.Body.String(); body != "OK" {
+		t.Errorf("body = %q, want %q", body, "OK")
+	}
+}

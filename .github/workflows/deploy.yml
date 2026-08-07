@@ -23,14 +23,14 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" = "production" ]; then
             echo "environment=production" >> $GITHUB_OUTPUT
-            echo "ecr_repo=fundis-backend-production" >> $GITHUB_OUTPUT
+            echo "ecr_repo=fundis-production-backend" >> $GITHUB_OUTPUT
             echo "ecs_cluster=fundis-production-cluster" >> $GITHUB_OUTPUT
-            echo "ecs_service=fundis-backend-production" >> $GITHUB_OUTPUT
+            echo "ecs_service=fundis-production-backend" >> $GITHUB_OUTPUT
           else
             echo "environment=staging" >> $GITHUB_OUTPUT
-            echo "ecr_repo=fundis-backend-staging" >> $GITHUB_OUTPUT
+            echo "ecr_repo=fundis-staging-backend" >> $GITHUB_OUTPUT
             echo "ecs_cluster=fundis-staging-cluster" >> $GITHUB_OUTPUT
-            echo "ecs_service=fundis-backend-staging" >> $GITHUB_OUTPUT
+            echo "ecs_service=fundis-staging-backend" >> $GITHUB_OUTPUT
           fi
 
   deploy:
