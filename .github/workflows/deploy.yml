@@ -1,0 +1,128 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+      - production
+
+env:
+  AWS_REGION: af-south-1
+
+jobs:
+  set-env:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      ecr_repo: ${{ steps.env.outputs.ecr_repo }}
+      ecs_cluster: ${{ steps.env.outputs.ecs_cluster }}
+      ecs_service: ${{ steps.env.outputs.ecs_service }}
+    steps:
+      - name: Set environment
+        id: env
+        run: |
+          if [ "${{ github.ref_name }}" = "production" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "ecr_repo=fundis-backend-production" >> $GITHUB_OUTPUT
+            echo "ecs_cluster=fundis-production-cluster" >> $GITHUB_OUTPUT
+            echo "ecs_service=fundis-backend-production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "ecr_repo=fundis-backend-staging" >> $GITHUB_OUTPUT
+            echo "ecs_cluster=fundis-staging-cluster" >> $GITHUB_OUTPUT
+            echo "ecs_service=fundis-backend-staging" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    needs: set-env
+    runs-on: ubuntu-latest
+    environment: ${{ needs.set-env.outputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REPO: ${{ needs.set-env.outputs.ecr_repo }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
+
+      - name: Deploy to ECS
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REPO: ${{ needs.set-env.outputs.ecr_repo }}
+          IMAGE_TAG: ${{ github.sha }}
+          ECS_CLUSTER: ${{ needs.set-env.outputs.ecs_cluster }}
+          ECS_SERVICE: ${{ needs.set-env.outputs.ecs_service }}
+        run: |
+          TASK_DEF=$(aws ecs describe-services \
+            --cluster $ECS_CLUSTER \
+            --services $ECS_SERVICE \
+            --query 'services[0].taskDefinition' \
+            --output text \
+            --region $AWS_REGION)
+
+          TASK_FAMILY=$(aws ecs describe-task-definition \
+            --task-definition $TASK_DEF \
+            --query 'taskDefinition.family' \
+            --output text)
+
+          CONTAINER_DEF=$(aws ecs describe-task-definition \
+            --task-definition $TASK_DEF \
+            --query 'taskDefinition.containerDefinitions' \
+            --output json | \
+            jq --arg IMAGE "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG" \
+              '.[0].image = $IMAGE')
+
+          TASK_ROLE=$(aws ecs describe-task-definition \
+            --task-definition $TASK_DEF \
+            --query 'taskDefinition.taskRoleArn' \
+            --output text)
+
+          EXEC_ROLE=$(aws ecs describe-task-definition \
+            --task-definition $TASK_DEF \
+            --query 'taskDefinition.executionRoleArn' \
+            --output text)
+
+          CPU=$(aws ecs describe-task-definition \
+            --task-definition $TASK_DEF \
+            --query 'taskDefinition.cpu' \
+            --output text)
+
+          MEMORY=$(aws ecs describe-task-definition \
+            --task-definition $TASK_DEF \
+            --query 'taskDefinition.memory' \
+            --output text)
+
+          NEW_TASK_DEF=$(aws ecs register-task-definition \
+            --family $TASK_FAMILY \
+            --container-definitions "$CONTAINER_DEF" \
+            --task-role-arn $TASK_ROLE \
+            --execution-role-arn $EXEC_ROLE \
+            --network-mode awsvpc \
+            --requires-compatibilities FARGATE \
+            --cpu $CPU \
+            --memory $MEMORY \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text \
+            --region $AWS_REGION)
+
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_SERVICE \
+            --task-definition $NEW_TASK_DEF \
+            --region $AWS_REGION
