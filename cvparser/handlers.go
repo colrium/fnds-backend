@@ -138,8 +138,8 @@ func (h *Handler) ParseCV(c echo.Context) error {
 		return h.mapParseError(c, fmt.Errorf("%w: object size %d bytes exceeds provider limit", ErrPDFTooLarge, object.Size), userID, req.FileID)
 	}
 
-	// Download the PDF bytes from S3.
-	pdfBytes, err := h.storage.Download(parseCtx, objectKey)
+	// Download the document bytes from S3.
+	docBytes, err := h.storage.Download(parseCtx, objectKey)
 	if err != nil {
 		if parseCtx.Err() != nil {
 			slog.WarnContext(c.Request().Context(), "CV download from storage exceeded the parse timeout",
@@ -153,8 +153,9 @@ func (h *Handler) ParseCV(c echo.Context) error {
 			"parser_unavailable", "CV parsing service is temporarily unavailable", "", "", nil)
 	}
 
-	// Parse the PDF content using the configured parser.
-	result, err := h.parser.Extract(parseCtx, pdfBytes)
+	// Parse using the file's stored MIME type so the document is labeled
+	// with its real format (PDF or DOCX) instead of being assumed to be PDF.
+	result, err := h.parser.Extract(parseCtx, docBytes, file.MimeType)
 	if err != nil {
 		return h.mapParseError(c, err, userID, req.FileID)
 	}
@@ -213,6 +214,14 @@ func (h *Handler) mapParseError(c echo.Context, err error, userID, fileID string
 			"parse_timeout", "CV processing timed out. Please try again", "", "", nil)
 	case errors.Is(err, ErrParserUnavailable):
 		slog.ErrorContext(c.Request().Context(), "CV extraction provider unavailable",
+			"user_id", userID, "file_id", fileID, "error", err)
+		return responses.SendErrorWithCode(c, http.StatusBadGateway,
+			"parser_unavailable", "CV parsing service is temporarily unavailable", "", "", nil)
+	case errors.Is(err, ErrUnsupportedDocumentFormat):
+		// A file made it past upload validation with a MIME type this parser
+		// has no Bedrock format mapping for — an upload/parser contract bug,
+		// not something the artisan did wrong.
+		slog.ErrorContext(c.Request().Context(), "CV file has a MIME type unsupported by the parser",
 			"user_id", userID, "file_id", fileID, "error", err)
 		return responses.SendErrorWithCode(c, http.StatusBadGateway,
 			"parser_unavailable", "CV parsing service is temporarily unavailable", "", "", nil)

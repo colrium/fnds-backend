@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -28,9 +29,25 @@ func NewBedrockClient(ctx context.Context, region string) (*bedrockruntime.Clien
 
 // Parser defines the interface for extracting structured data from CV documents.
 type Parser interface {
-	// Extract parses the given PDF bytes and returns structured extraction results.
-	Extract(ctx context.Context, pdfBytes []byte) (*ExtractionResult, error)
+	// Extract parses the given document bytes and returns structured
+	// extraction results. mimeType is the uploaded file's stored MIME type
+	// (e.g. "application/pdf"), used to tell Bedrock the document's actual
+	// format instead of assuming PDF.
+	Extract(ctx context.Context, docBytes []byte, mimeType string) (*ExtractionResult, error)
 }
+
+// documentFormatByMimeType maps the MIME types CV uploads are validated
+// against (files.ValidateCVUpload) to the Bedrock Converse document formats
+// they actually are, so a DOCX upload is sent to the model labeled as DOCX
+// rather than mislabeled as PDF.
+var documentFormatByMimeType = map[string]types.DocumentFormat{
+	"application/pdf": types.DocumentFormatPdf,
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": types.DocumentFormatDocx,
+}
+
+// ErrUnsupportedDocumentFormat is returned when the given MIME type has no
+// corresponding Bedrock document format.
+var ErrUnsupportedDocumentFormat = errors.New("unsupported document format")
 
 // maxDocumentBytes bounds the PDF sent to Bedrock. The Converse API's
 // document content block accepts documents up to 4.5 MB (Req: Bedrock
@@ -74,24 +91,35 @@ Instructions:
 - If the PDF appears to be password-protected or the content cannot be read, indicate this by setting all confidence scores to 0 and returning null for all fields.
 - Do not guess or fabricate information. Only extract what is explicitly stated in the document.`
 
-// Extract parses the given PDF bytes by sending them to the configured
+// Extract parses the given document bytes by sending them to the configured
 // Claude model via Bedrock's Converse API, forced to call the extraction
-// tool, and returns the extracted CV data. It handles timeouts, API errors,
-// unreadable PDFs, and password-protected PDFs.
-func (p *BedrockParser) Extract(ctx context.Context, pdfBytes []byte) (*ExtractionResult, error) {
-	if len(pdfBytes) == 0 {
+// tool, and returns the extracted CV data. mimeType determines which Bedrock
+// document format the bytes are labeled with (see documentFormatByMimeType);
+// an unrecognized MIME type is a bug in the upload validation layer letting
+// through a type this parser was never told about, not a routine client
+// mistake, so it is reported as ErrUnsupportedDocumentFormat rather than
+// silently treated as PDF. It handles timeouts, API errors, unreadable
+// documents, and password-protected PDFs.
+func (p *BedrockParser) Extract(ctx context.Context, docBytes []byte, mimeType string) (*ExtractionResult, error) {
+	if len(docBytes) == 0 {
 		return nil, ErrPDFUnreadable
+	}
+
+	format, ok := documentFormatByMimeType[strings.ToLower(strings.TrimSpace(mimeType))]
+	if !ok {
+		return nil, fmt.Errorf("%w: %q", ErrUnsupportedDocumentFormat, mimeType)
 	}
 
 	// Check size before scanning for password protection: the size check is
 	// O(1) while the password scan touches the document bytes, so fail fast
 	// on the cheaper constraint first.
-	if len(pdfBytes) > maxDocumentBytes {
-		return nil, fmt.Errorf("%w: document size %d bytes exceeds provider limit", ErrPDFTooLarge, len(pdfBytes))
+	if len(docBytes) > maxDocumentBytes {
+		return nil, fmt.Errorf("%w: document size %d bytes exceeds provider limit", ErrPDFTooLarge, len(docBytes))
 	}
 
-	// Check for PDF password protection by examining PDF trailer bytes.
-	if isPasswordProtected(pdfBytes) {
+	// The password-protection heuristic scans for a PDF-specific trailer
+	// entry, so it only applies when the document actually is a PDF.
+	if format == types.DocumentFormatPdf && isPasswordProtected(docBytes) {
 		return nil, ErrPDFPasswordProtected
 	}
 
@@ -124,8 +152,8 @@ func (p *BedrockParser) Extract(ctx context.Context, pdfBytes []byte) (*Extracti
 					&types.ContentBlockMemberDocument{
 						Value: types.DocumentBlock{
 							Name:   aws.String("cv"),
-							Format: types.DocumentFormatPdf,
-							Source: &types.DocumentSourceMemberBytes{Value: pdfBytes},
+							Format: format,
+							Source: &types.DocumentSourceMemberBytes{Value: docBytes},
 						},
 					},
 					&types.ContentBlockMemberText{
