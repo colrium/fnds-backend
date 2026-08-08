@@ -35,6 +35,17 @@ func NewHandler(repository Repository, storage Storage, maxUploadBytes int64) *H
 	}
 }
 
+// sendValidationError responds with the structured {error: {code, message}}
+// envelope for a *ValidationError so callers (e.g. CVUploader's error-code
+// mapping) can key off a stable code instead of parsing message text.
+func sendValidationError(ctx echo.Context, err error) error {
+	if validationErr, ok := errors.AsType[*ValidationError](err); ok {
+		return responses.SendErrorWithCode(ctx, http.StatusBadRequest,
+			validationErr.Code, validationErr.Message, "", "", nil)
+	}
+	return responses.SendError(ctx, http.StatusBadRequest, err.Error())
+}
+
 func (h *Handler) List(ctx echo.Context) error {
 	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
@@ -86,11 +97,11 @@ func (h *Handler) Presign(ctx echo.Context) error {
 	}
 	req.MimeType = strings.ToLower(strings.TrimSpace(req.MimeType))
 	if err := validateUpload(req, h.maxUploadBytes); err != nil {
-		return responses.SendError(ctx, http.StatusBadRequest, err.Error())
+		return sendValidationError(ctx, err)
 	}
 	if req.DocumentTypeID == CVDocumentTypeID {
 		if err := ValidateCVUpload(req); err != nil {
-			return responses.SendError(ctx, http.StatusBadRequest, err.Error())
+			return sendValidationError(ctx, err)
 		}
 	}
 
@@ -122,11 +133,11 @@ func (h *Handler) Complete(ctx echo.Context) error {
 	}
 	req.MimeType = strings.ToLower(strings.TrimSpace(req.MimeType))
 	if err := validateUpload(req.UploadRequest, h.maxUploadBytes); err != nil {
-		return responses.SendError(ctx, http.StatusBadRequest, err.Error())
+		return sendValidationError(ctx, err)
 	}
 	if req.DocumentTypeID == CVDocumentTypeID {
 		if err := ValidateCVUpload(req.UploadRequest); err != nil {
-			return responses.SendError(ctx, http.StatusBadRequest, err.Error())
+			return sendValidationError(ctx, err)
 		}
 	}
 	if !objectBelongsToUser(req.ObjectKey, userID) {

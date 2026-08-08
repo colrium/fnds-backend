@@ -18,6 +18,24 @@ const CVDocumentTypeID = "cv-document-type"
 // cvMaxUploadBytes is the maximum file size allowed for CV uploads (10 MB).
 const cvMaxUploadBytes int64 = 10 * 1024 * 1024
 
+// ValidationError is a file-upload validation failure with a stable,
+// machine-readable code so callers (the frontend's error-message mapping)
+// can key off Code instead of parsing Message text.
+type ValidationError struct {
+	Code    string
+	Message string
+}
+
+func (e *ValidationError) Error() string {
+	return e.Message
+}
+
+// Unwrap lets errors.Is(err, ErrInvalid) keep working for existing callers
+// that only care whether a request was invalid, not the specific reason.
+func (e *ValidationError) Unwrap() error {
+	return ErrInvalid
+}
+
 var (
 	ErrInvalid  = errors.New("invalid file upload")
 	ErrNotFound = errors.New("file not found")
@@ -68,22 +86,25 @@ type CompleteUploadRequest struct {
 
 func validateUpload(req UploadRequest, maxUploadBytes int64) error {
 	if strings.TrimSpace(req.DocumentTypeID) == "" {
-		return fmt.Errorf("%w: document_type_id is required", ErrInvalid)
+		return &ValidationError{Code: "invalid_request", Message: "document_type_id is required"}
 	}
 	if strings.TrimSpace(req.FileName) == "" || len(req.FileName) > 255 {
-		return fmt.Errorf("%w: file_name is required and must not exceed 255 characters", ErrInvalid)
+		return &ValidationError{Code: "invalid_request", Message: "file_name is required and must not exceed 255 characters"}
 	}
 	if len(req.RelativePath) > 1024 {
-		return fmt.Errorf("%w: relative_path must not exceed 1024 characters", ErrInvalid)
+		return &ValidationError{Code: "invalid_request", Message: "relative_path must not exceed 1024 characters"}
 	}
 	if _, allowed := allowedMimeTypes[strings.ToLower(strings.TrimSpace(req.MimeType))]; !allowed {
-		return fmt.Errorf("%w: unsupported mime_type", ErrInvalid)
+		return &ValidationError{Code: "invalid_file_type", Message: "unsupported mime_type"}
 	}
 	if maxUploadBytes <= 0 {
 		maxUploadBytes = defaultMaxUploadBytes
 	}
-	if req.Size <= 0 || req.Size > maxUploadBytes {
-		return fmt.Errorf("%w: size must be between 1 and %d bytes", ErrInvalid, maxUploadBytes)
+	if req.Size <= 0 {
+		return &ValidationError{Code: "file_empty", Message: "file cannot be empty"}
+	}
+	if req.Size > maxUploadBytes {
+		return &ValidationError{Code: "file_too_large", Message: fmt.Sprintf("size must be at most %d bytes", maxUploadBytes)}
 	}
 	return nil
 }
@@ -94,13 +115,13 @@ func validateUpload(req UploadRequest, maxUploadBytes int64) error {
 func ValidateCVUpload(req UploadRequest) error {
 	mimeType := strings.ToLower(strings.TrimSpace(req.MimeType))
 	if _, allowed := allowedCVMimeTypes[mimeType]; !allowed {
-		return fmt.Errorf("%w: only PDF and DOCX files are accepted for CV upload", ErrInvalid)
+		return &ValidationError{Code: "invalid_file_type", Message: "Only PDF and DOCX files are accepted for CV upload"}
 	}
 	if req.Size <= 0 {
-		return fmt.Errorf("%w: file cannot be empty", ErrInvalid)
+		return &ValidationError{Code: "file_empty", Message: "File cannot be empty"}
 	}
 	if req.Size > cvMaxUploadBytes {
-		return fmt.Errorf("%w: CV file must be smaller than 10 MB", ErrInvalid)
+		return &ValidationError{Code: "file_too_large", Message: "CV file must be smaller than 10 MB"}
 	}
 	return nil
 }
