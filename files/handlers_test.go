@@ -14,14 +14,22 @@ import (
 )
 
 type repositoryStub struct {
-	created *File
-	files   []File
-	file    *File
-	err     error
+	created    *File
+	files      []File
+	file       *File
+	err        error
+	createErr  error
+	existingCV *File
+	findCVErr  error
+	deleteErr  error
+	deleted    []string
 }
 
 func (r *repositoryStub) Create(_ context.Context, file *File) error {
 	r.created = file
+	if r.createErr != nil {
+		return r.createErr
+	}
 	return r.err
 }
 
@@ -33,8 +41,22 @@ func (r *repositoryStub) GetByIDForUser(context.Context, string, string) (*File,
 	return r.file, r.err
 }
 
-func (r *repositoryStub) DeleteByIDForUser(context.Context, string, string) error {
+func (r *repositoryStub) DeleteByIDForUser(_ context.Context, fileID string, _ string) error {
+	r.deleted = append(r.deleted, fileID)
+	if r.deleteErr != nil {
+		return r.deleteErr
+	}
 	return r.err
+}
+
+func (r *repositoryStub) FindByUserAndDocType(context.Context, string, string) (*File, error) {
+	if r.existingCV != nil {
+		return r.existingCV, nil
+	}
+	if r.findCVErr != nil {
+		return nil, r.findCVErr
+	}
+	return nil, ErrNotFound
 }
 
 type storageStub struct {
@@ -50,6 +72,10 @@ func (s *storageStub) PresignUpload(context.Context, string, string, string, int
 
 func (s *storageStub) PresignDownload(_ context.Context, objectKey string) (string, error) {
 	return "https://signed.example.com/" + objectKey, s.err
+}
+
+func (s *storageStub) Download(_ context.Context, _ string) ([]byte, error) {
+	return nil, s.err
 }
 
 func (s *storageStub) Stat(context.Context, string) (*ObjectInfo, error) {
@@ -158,6 +184,117 @@ func TestHandlerDeleteRemovesOwnedObjectAndRecord(t *testing.T) {
 	}
 	if storage.deletedKey != "users/user-1/object/certificate.pdf" {
 		t.Fatalf("Delete() key = %q", storage.deletedKey)
+	}
+}
+
+func TestHandlerCompleteCVReplacementDeletesOldRecordAndS3(t *testing.T) {
+	t.Parallel()
+
+	existingCV := &File{
+		ID:             "old-cv-id",
+		UserID:         "user-1",
+		DocumentTypeID: CVDocumentTypeID,
+		FileURL:        "https://cdn.example.com/users/user-1/object/old-cv.pdf",
+	}
+	repository := &repositoryStub{existingCV: existingCV}
+	storage := &storageStub{object: &ObjectInfo{
+		Size:        2048,
+		ContentType: "application/pdf",
+		UserID:      "user-1",
+	}}
+	handler := NewHandler(repository, storage, cvMaxUploadBytes)
+	body := `{
+		"document_type_id":"` + CVDocumentTypeID + `",
+		"file_name":"new-cv.pdf",
+		"relative_path":"cv/new-cv.pdf",
+		"mime_type":"application/pdf",
+		"size":2048,
+		"object_key":"users/user-1/object/new-cv.pdf"
+	}`
+	ctx, recorder := newFileContext(http.MethodPost, "/files/complete", body, "user-1")
+
+	if err := handler.Complete(ctx); err != nil {
+		t.Fatalf("Complete() unexpected error = %v", err)
+	}
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("Complete() status = %d, want %d", recorder.Code, http.StatusCreated)
+	}
+	if repository.created == nil {
+		t.Fatal("Complete() did not create a new CV record")
+	}
+	if len(repository.deleted) != 1 || repository.deleted[0] != "old-cv-id" {
+		t.Fatalf("Complete() deleted = %v, want [old-cv-id]", repository.deleted)
+	}
+	if storage.deletedKey != "users/user-1/object/old-cv.pdf" {
+		t.Fatalf("Complete() old S3 key deleted = %q, want old-cv.pdf key", storage.deletedKey)
+	}
+}
+
+func TestHandlerCompleteCVDuplicateRaceCleansUpNewS3Object(t *testing.T) {
+	t.Parallel()
+
+	repository := &repositoryStub{createErr: ErrDuplicateCV}
+	storage := &storageStub{object: &ObjectInfo{
+		Size:        2048,
+		ContentType: "application/pdf",
+		UserID:      "user-1",
+	}}
+	handler := NewHandler(repository, storage, cvMaxUploadBytes)
+	body := `{
+		"document_type_id":"` + CVDocumentTypeID + `",
+		"file_name":"new-cv.pdf",
+		"relative_path":"cv/new-cv.pdf",
+		"mime_type":"application/pdf",
+		"size":2048,
+		"object_key":"users/user-1/object/new-cv.pdf"
+	}`
+	ctx, recorder := newFileContext(http.MethodPost, "/files/complete", body, "user-1")
+
+	if err := handler.Complete(ctx); err != nil {
+		t.Fatalf("Complete() unexpected error = %v", err)
+	}
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("Complete() status = %d, want %d", recorder.Code, http.StatusConflict)
+	}
+	if storage.deletedKey != "users/user-1/object/new-cv.pdf" {
+		t.Fatalf("Complete() should clean up new S3 object, deletedKey = %q", storage.deletedKey)
+	}
+}
+
+func TestHandlerCompleteCVNoExistingCVCreatesDirectly(t *testing.T) {
+	t.Parallel()
+
+	repository := &repositoryStub{} // FindByUserAndDocType returns ErrNotFound
+	storage := &storageStub{object: &ObjectInfo{
+		Size:        2048,
+		ContentType: "application/pdf",
+		UserID:      "user-1",
+	}}
+	handler := NewHandler(repository, storage, cvMaxUploadBytes)
+	body := `{
+		"document_type_id":"` + CVDocumentTypeID + `",
+		"file_name":"first-cv.pdf",
+		"relative_path":"cv/first-cv.pdf",
+		"mime_type":"application/pdf",
+		"size":2048,
+		"object_key":"users/user-1/object/first-cv.pdf"
+	}`
+	ctx, recorder := newFileContext(http.MethodPost, "/files/complete", body, "user-1")
+
+	if err := handler.Complete(ctx); err != nil {
+		t.Fatalf("Complete() unexpected error = %v", err)
+	}
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("Complete() status = %d, want %d", recorder.Code, http.StatusCreated)
+	}
+	if repository.created == nil {
+		t.Fatal("Complete() did not create a file record")
+	}
+	if len(repository.deleted) != 0 {
+		t.Fatalf("Complete() should not delete anything, deleted = %v", repository.deleted)
+	}
+	if storage.deletedKey != "" {
+		t.Fatalf("Complete() should not delete any S3 object, deletedKey = %q", storage.deletedKey)
 	}
 }
 

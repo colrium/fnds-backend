@@ -300,9 +300,15 @@ func TestPRFifthDeliveryPanicDisablesDeliveryPermanently(t *testing.T) {
 			// Below the ceiling the Shipper keeps running: still enabled, still
 			// one delivery goroutine, and no disable diagnostic yet.
 			sd.assertState(t, stateEnabled, "below the 5-panic ceiling")
-			if got := len(sd.diag.lines()); got != panics {
+
+			// The ERROR diagnostic is written after the Dropped counter is
+			// updated (discardPanickedBatch runs before diagPanic in
+			// recoverDeliveryPanic), so waitSnapshot succeeding above does not
+			// guarantee the diagnostic has landed yet. Wait for it explicitly
+			// instead of racing the delivery goroutine's write.
+			if !sd.diag.waitRecords(panics) {
 				t.Fatalf("wrote %d Self_Diagnostics after %d recovered panics, want exactly one each (Req 8.3): %q",
-					got, panics, sd.diag.text())
+					len(sd.diag.lines()), panics, sd.diag.text())
 			}
 		}
 	}

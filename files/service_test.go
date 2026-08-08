@@ -90,6 +90,86 @@ func TestBuildObjectKeyHandlesLongExtension(t *testing.T) {
 	}
 }
 
+func TestValidateCVUpload(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		req     UploadRequest
+		wantErr bool
+	}{
+		{
+			name: "valid PDF",
+			req: UploadRequest{
+				MimeType: "application/pdf",
+				Size:     1024,
+			},
+		},
+		{
+			name: "valid DOCX",
+			req: UploadRequest{
+				MimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+				Size:     2048,
+			},
+		},
+		{
+			name: "rejected JPEG",
+			req: UploadRequest{
+				MimeType: "image/jpeg",
+				Size:     1024,
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejected plain text",
+			req: UploadRequest{
+				MimeType: "text/plain",
+				Size:     1024,
+			},
+			wantErr: true,
+		},
+		{
+			name: "zero size",
+			req: UploadRequest{
+				MimeType: "application/pdf",
+				Size:     0,
+			},
+			wantErr: true,
+		},
+		{
+			name: "exceeds 10 MB",
+			req: UploadRequest{
+				MimeType: "application/pdf",
+				Size:     11 * 1024 * 1024,
+			},
+			wantErr: true,
+		},
+		{
+			name: "exactly 10 MB is allowed",
+			req: UploadRequest{
+				MimeType: "application/pdf",
+				Size:     10 * 1024 * 1024,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateCVUpload(tt.req)
+			if tt.wantErr && err == nil {
+				t.Fatal("ValidateCVUpload() expected error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("ValidateCVUpload() unexpected error = %v", err)
+			}
+			if tt.wantErr && err != nil && !errors.Is(err, ErrInvalid) {
+				t.Fatalf("ValidateCVUpload() error = %v, want ErrInvalid", err)
+			}
+		})
+	}
+}
+
 func TestS3StorePublicURLRoundTrip(t *testing.T) {
 	t.Parallel()
 

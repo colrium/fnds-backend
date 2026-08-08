@@ -12,12 +12,30 @@ import (
 
 const defaultMaxUploadBytes int64 = 100 << 20
 
+// CVDocumentTypeID is the stable document type ID for CV uploads.
+const CVDocumentTypeID = "cv-document-type"
+
+// cvMaxUploadBytes is the maximum file size allowed for CV uploads (10 MB).
+const cvMaxUploadBytes int64 = 10 * 1024 * 1024
+
 var (
 	ErrInvalid  = errors.New("invalid file upload")
 	ErrNotFound = errors.New("file not found")
 
+	// ErrDuplicateCV is returned when a concurrent upload has already claimed
+	// the single CV slot for a user, detected via the unique index on
+	// {user_id, document_type_id} for CV records.
+	ErrDuplicateCV = errors.New("cv already exists for user")
+
 	safeFileNamePattern = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
-	allowedMimeTypes    = map[string]struct{}{
+
+	// allowedCVMimeTypes restricts CV uploads to PDF and DOCX files only.
+	allowedCVMimeTypes = map[string]struct{}{
+		"application/pdf": {},
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": {},
+	}
+
+	allowedMimeTypes = map[string]struct{}{
 		"application/msword":       {},
 		"application/pdf":          {},
 		"application/vnd.ms-excel": {},
@@ -66,6 +84,23 @@ func validateUpload(req UploadRequest, maxUploadBytes int64) error {
 	}
 	if req.Size <= 0 || req.Size > maxUploadBytes {
 		return fmt.Errorf("%w: size must be between 1 and %d bytes", ErrInvalid, maxUploadBytes)
+	}
+	return nil
+}
+
+// ValidateCVUpload validates an upload request specifically for CV documents.
+// It enforces that only PDF and DOCX files are accepted and that the file size
+// is greater than 0 and at most 10,485,760 bytes (10 MB).
+func ValidateCVUpload(req UploadRequest) error {
+	mimeType := strings.ToLower(strings.TrimSpace(req.MimeType))
+	if _, allowed := allowedCVMimeTypes[mimeType]; !allowed {
+		return fmt.Errorf("%w: only PDF and DOCX files are accepted for CV upload", ErrInvalid)
+	}
+	if req.Size <= 0 {
+		return fmt.Errorf("%w: file cannot be empty", ErrInvalid)
+	}
+	if req.Size > cvMaxUploadBytes {
+		return fmt.Errorf("%w: CV file must be smaller than 10 MB", ErrInvalid)
 	}
 	return nil
 }

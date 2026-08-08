@@ -31,6 +31,7 @@ type Repository interface {
 	ListByUserID(ctx context.Context, userID string) ([]File, error)
 	GetByIDForUser(ctx context.Context, id, userID string) (*File, error)
 	DeleteByIDForUser(ctx context.Context, id, userID string) error
+	FindByUserAndDocType(ctx context.Context, userID, docTypeID string) (*File, error)
 }
 
 type MongoRepository struct{}
@@ -40,17 +41,34 @@ func NewMongoRepository() *MongoRepository {
 }
 
 func EnsureIndexes(ctx context.Context) error {
-	_, err := configs.MI.DB.Collection("files").Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{
-			{Key: "user_id", Value: 1},
-			{Key: "file_url", Value: 1},
+	_, err := configs.MI.DB.Collection("files").Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "user_id", Value: 1},
+				{Key: "file_url", Value: 1},
+			},
+			Options: options.Index().
+				SetName("files_user_url_unique").
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{
+					"file_url": bson.M{"$type": "string"},
+				}),
 		},
-		Options: options.Index().
-			SetName("files_user_url_unique").
-			SetUnique(true).
-			SetPartialFilterExpression(bson.M{
-				"file_url": bson.M{"$type": "string"},
-			}),
+		{
+			// Enforces at most one CV record per user at the database level,
+			// closing the TOCTOU window between the find-existing-CV check and
+			// the create in the CV replacement flow.
+			Keys: bson.D{
+				{Key: "user_id", Value: 1},
+				{Key: "document_type_id", Value: 1},
+			},
+			Options: options.Index().
+				SetName("files_user_cv_unique").
+				SetUnique(true).
+				SetPartialFilterExpression(bson.M{
+					"document_type_id": CVDocumentTypeID,
+				}),
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("creating file indexes: %w", err)
@@ -75,6 +93,9 @@ func (r *MongoRepository) Create(ctx context.Context, file *File) error {
 			SetReturnDocument(options.After),
 	)
 	if err := result.Decode(file); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return ErrDuplicateCV
+		}
 		return fmt.Errorf("creating file record: %w", err)
 	}
 	return nil
@@ -118,4 +139,18 @@ func (r *MongoRepository) DeleteByIDForUser(ctx context.Context, id, userID stri
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (r *MongoRepository) FindByUserAndDocType(ctx context.Context, userID, docTypeID string) (*File, error) {
+	var file File
+	err := configs.MI.DB.Collection("files").
+		FindOne(ctx, bson.M{"user_id": userID, "document_type_id": docTypeID}).
+		Decode(&file)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("finding file by user and document type: %w", err)
+	}
+	return &file, nil
 }

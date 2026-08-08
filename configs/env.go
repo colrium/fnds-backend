@@ -155,6 +155,36 @@ func SlackWebhookURL() string {
 	return os.Getenv("SLACK_WEBHOOK_URL")
 }
 
+// BedrockModelID returns the Amazon Bedrock model ID (or inference profile
+// ID/ARN) used for CV parsing. Current-generation Claude models on Bedrock
+// require an inference profile ID rather than a bare model ID — invoking one
+// by bare model ID fails with ValidationException: "The provided model
+// identifier is invalid."
+//
+// The fallback below uses a "global." inference profile rather than a
+// region-prefixed one ("eu.", "us.") deliberately: a region-prefixed
+// profile only resolves correctly when the Bedrock client's region matches
+// the profile's prefix, and that region is resolved from AWS_REGION — an
+// env var the AWS CLI/SDK's own config files (~/.aws/config) commonly also
+// export into the process environment, which godotenv (see main.go) will
+// never override. A shell with AWS_REGION already exported to some other
+// region than the one in .env silently wins, and a region-prefixed profile
+// then fails region validation with no indication *why* in the error. The
+// "global." profile has no such region coupling, so this default keeps
+// working regardless of which region actually gets resolved.
+// Region is resolved the same way as the S3 client (see files.NewS3Store).
+// Auth uses the AWS_BEARER_TOKEN_BEDROCK env var (a Bedrock API key) when
+// set; the AWS SDK picks this up automatically and skips the IAM credential
+// chain entirely, so a Bedrock-only bearer token works without granting
+// AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY any Bedrock permissions.
+func BedrockModelID() string {
+	value := os.Getenv("BEDROCK_MODEL_ID")
+	if value == "" {
+		return "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+	}
+	return value
+}
+
 // Better Stack (Logtail) error log forwarding. These accessors deliberately
 // return the raw environment value rather than a parsed one: all parsing,
 // trimming, and range clamping lives in logging.ResolveConfig so that every

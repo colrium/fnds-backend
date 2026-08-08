@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"backend/configs"
+	"backend/files"
 	"backend/subscriptions"
 
 	"github.com/google/uuid"
@@ -33,6 +34,7 @@ func RunAll() {
 		{Name: "skills", Run: SeedSkills},
 		{Name: "banks", Run: SeedBanks},
 		{Name: "institutions", Run: SeedInstitutions},
+		{Name: "document_types", Run: SeedDocumentTypes},
 	}
 
 	for _, s := range seeders {
@@ -190,4 +192,38 @@ func loadInstitutionsData() ([]institutionSeed, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	return items, nil
+}
+
+// SeedDocumentTypes upserts well-known document type records into the
+// document_types collection. Currently seeds only the CV document type.
+func SeedDocumentTypes() error {
+	ctx := context.TODO()
+
+	type docTypeSeed struct {
+		ID   string
+		Name string
+	}
+
+	types := []docTypeSeed{
+		{ID: files.CVDocumentTypeID, Name: "CV"},
+	}
+
+	for _, dt := range types {
+		_, err := configs.MI.DB.Collection("document_types").UpdateOne(
+			ctx,
+			bson.M{"_id": dt.ID},
+			bson.M{
+				"$set": bson.M{
+					"name":       dt.Name,
+					"updated_at": time.Now().UTC(),
+				},
+				"$setOnInsert": bson.M{"created_at": time.Now().UTC()},
+			},
+			options.Update().SetUpsert(true),
+		)
+		if err != nil {
+			return fmt.Errorf("upsert document type %q: %w", dt.Name, err)
+		}
+	}
+	return nil
 }

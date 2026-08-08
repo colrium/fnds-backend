@@ -6,18 +6,18 @@ This plan implements the CV upload and autofill feature in incremental steps. It
 
 ## Tasks
 
-- [ ] 1. Backend: CV document type seed and file upload extensions
-  - [ ] 1.1 Add CV document type seeder
+- [x] 1. Backend: CV document type seed and file upload extensions
+  - [x] 1.1 Add CV document type seeder
     - Create a new seeder function `SeedDocumentTypes` in `seeders/seed.go` that upserts a "CV" document type record into the `document_types` collection with a stable ID (e.g., `"cv-document-type"`)
     - Register the seeder in `RunAll()` so it runs on startup
     - _Requirements: 7.1_
 
-  - [ ] 1.2 Add CV-specific upload validation in the files package
+  - [x] 1.2 Add CV-specific upload validation in the files package
     - Extend `files/service.go` to export a `ValidateCVUpload(req UploadRequest) error` function that enforces: MIME type must be `application/pdf` or `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, size must be > 0 and ≤ 10,485,760 bytes
     - This function is called by the presign/complete handlers when the `document_type_id` equals the CV document type ID
     - _Requirements: 1.2, 1.3, 1.4, 7.3, 7.4_
 
-  - [ ] 1.3 Implement CV file replacement logic in the files package
+  - [x] 1.3 Implement CV file replacement logic in the files package
     - Add a `FindByUserAndDocType(ctx, userID, docTypeID) (*File, error)` method to `Repository` and `MongoRepository`
     - In the files `CompleteUpload` flow, when document_type_id is the CV type: look up existing CV record for the user, delete the old S3 object (log and continue on failure), delete the old record, then create the new record
     - Ensure at most one CV file record per artisan
@@ -28,20 +28,20 @@ This plan implements the CV upload and autofill feature in incremental steps. It
     - Use `rapid` to generate random UploadRequest instances with varied MIME types, sizes (0, 1, 10MB, 10MB+1, MAX_INT), and verify `ValidateCVUpload` correctly rejects/accepts
     - **Validates: Requirements 1.2, 1.3, 1.4, 7.3, 7.4**
 
-- [ ] 2. Backend: CV Parser package — core extraction service
-  - [ ] 2.1 Create `cvparser` package with types and interfaces
+- [x] 2. Backend: CV Parser package — core extraction service
+  - [x] 2.1 Create `cvparser` package with types and interfaces
     - Create `cvparser/types.go` with `ExtractionResult`, `PersonalDetails`, `Education`, `Professional`, `WorkHistoryEntry`, `LanguageEntry`, `ReferenceEntry` structs
     - Create `cvparser/parser.go` with `Parser` interface (`Extract(ctx, pdfBytes) (*ExtractionResult, error)`) and `OpenAIParser` struct
     - Define the OpenAI structured output JSON schema as a constant
     - _Requirements: 2.1, 2.2, 2.3_
 
-  - [ ] 2.2 Implement OpenAI parser with structured output
+  - [x] 2.2 Implement OpenAI parser with structured output
     - Implement `OpenAIParser.Extract()` — sends PDF content (base64-encoded) to OpenAI GPT-4o-mini using the chat completions API with structured output (response_format), using a 30-second HTTP client timeout
     - Parse the structured JSON response into `ExtractionResult`
     - Handle errors: unreadable PDF, password-protected, timeout, API unavailable
     - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8_
 
-  - [ ] 2.3 Implement field mapper (`cvparser/mapper.go`)
+  - [x] 2.3 Implement field mapper (`cvparser/mapper.go`)
     - Create `Mapper` struct with `MapToAutofill(result *ExtractionResult) *AutofillPayload` method
     - Map `ExtractionResult` fields to `AutofillPayload` fields with confidence scores
     - Enforce: only known profile fields are included; type-invalid fields omitted (confidence = 0); collections capped at 10 items (sorted by descending confidence); confidence scores bounded [0, 1]
@@ -55,13 +55,13 @@ This plan implements the CV upload and autofill feature in incremental steps. It
     - Use `rapid` to generate diverse `ExtractionResult` inputs and verify mapper invariants
     - **Validates: Requirements 3.1, 3.2, 3.3, 3.6, 2.3**
 
-  - [ ] 2.5 Implement CV parse handler (`cvparser/handlers.go`)
+  - [x] 2.5 Implement CV parse handler (`cvparser/handlers.go`)
     - Create `Handler` struct with dependencies: `files.Repository`, `files.ObjectStorage`, `Parser`, `Mapper`
     - Implement `POST /api/v1/cv/parse` handler: validate request, verify file ownership (object key prefix + user-id metadata), download PDF from S3, call parser, call mapper, return `ParseCVResponse`
     - Define error types in `cvparser/errors.go`
     - _Requirements: 2.1, 6.2, 6.5, 6.6_
 
-  - [ ] 2.6 Register CV parse route in `main.go`
+  - [x] 2.6 Register CV parse route in `main.go`
     - Instantiate `cvparser.Handler` with required dependencies (OpenAI API key from env, files repository, S3 store)
     - Register `POST /cv/parse` on the artisan-only route group (requires JWT + IsArtisan middleware)
     - _Requirements: 6.2_
@@ -76,11 +76,11 @@ This plan implements the CV upload and autofill feature in incremental steps. It
     - Test handler: successful flow, file not found, ownership mismatch, parse errors
     - _Requirements: 2.5, 2.6, 2.7, 2.8, 2.9, 6.5, 6.6_
 
-- [ ] 3. Checkpoint - Ensure all backend tests pass
+- [x] 3. Checkpoint - Ensure all backend tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Frontend: CV Uploader component
-  - [ ] 4.1 Create the CVUploader component
+- [x] 4. Frontend: CV Uploader component
+  - [x] 4.1 Create the CVUploader component
     - Create `frontend/src/components/profile-setup/CVUploader.tsx`
     - Implement state machine: idle → uploading → parsing → success → error
     - Render a drop-zone/button above the step indicator, visible on ≥ 360px viewports
@@ -93,7 +93,7 @@ This plan implements the CV upload and autofill feature in incremental steps. It
     - Show success state with file name and "remove" option
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.8_
 
-  - [ ] 4.2 Add CV parse API function
+  - [x] 4.2 Add CV parse API function
     - Create `parseCV(fileId: string): Promise<ParseCVResponse>` in a new file `frontend/src/api/cvParser.ts`
     - Define TypeScript types for `AutofillPayload`, `FieldWithConfidence`, `NumericFieldWithConfidence`, collection types, and `ParseCVResponse`
     - _Requirements: 2.1, 3.1_
@@ -105,8 +105,8 @@ This plan implements the CV upload and autofill feature in incremental steps. It
     - Test "proceed with manual entry" flow
     - _Requirements: 1.1–1.8, 5.1–5.8_
 
-- [ ] 5. Frontend: Autofill state management and indicators
-  - [ ] 5.1 Create `useAutofillState` hook
+- [x] 5. Frontend: Autofill state management and indicators
+  - [x] 5.1 Create `useAutofillState` hook
     - Create `frontend/src/hooks/useAutofillState.ts`
     - Implement `AutofillMetadata` tracking: confidence scores map, autofilled fields set, total count, banner dismissed state
     - Implement `applyAutofill(payload, currentDraft)`: merge autofill into draft — scalar fields only populate empty draft fields; collection fields append (capped at 10 appended items)
@@ -123,7 +123,7 @@ This plan implements the CV upload and autofill feature in incremental steps. It
     - Use `fast-check` to generate draft states and autofill payloads, verify invariants
     - **Validates: Requirements 3.5, 4.2, 4.4**
 
-  - [ ] 5.3 Create AutofillIndicator component
+  - [x] 5.3 Create AutofillIndicator component
     - Create `frontend/src/components/profile-setup/AutofillIndicator.tsx`
     - Render a small icon badge next to autofilled fields
     - Show warning icon + tooltip ("This value needs review") when confidence < 0.6
@@ -131,7 +131,7 @@ This plan implements the CV upload and autofill feature in incremental steps. It
     - Hide when field is no longer in autofilled set (after edit)
     - _Requirements: 3.7, 4.1, 4.2_
 
-  - [ ] 5.4 Create AutofillSummaryBanner component
+  - [x] 5.4 Create AutofillSummaryBanner component
     - Create `frontend/src/components/profile-setup/AutofillSummaryBanner.tsx`
     - Display count of auto-filled fields across all steps
     - Visible on every wizard step until dismissed
@@ -143,18 +143,18 @@ This plan implements the CV upload and autofill feature in incremental steps. It
     - Test banner count display, dismiss behavior, clear autofill confirmation/cancel
     - _Requirements: 3.7, 4.3, 4.4, 4.5_
 
-- [ ] 6. Checkpoint - Ensure all frontend tests pass
+- [x] 6. Checkpoint - Ensure all frontend tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. Frontend: Wire CVUploader and autofill into ProfileSetupPage
-  - [ ] 7.1 Integrate CVUploader into ProfileSetupPage
+- [x] 7. Frontend: Wire CVUploader and autofill into ProfileSetupPage
+  - [x] 7.1 Integrate CVUploader into ProfileSetupPage
     - Import and render `CVUploader` above the step indicator in `ProfileSetupPage.tsx`
     - Connect `onParseComplete` to call `useAutofillState.applyAutofill` and update the draft
     - Connect `onError` to display error messages via the existing error handling pattern
     - Ensure artisan can skip upload and proceed to manual entry (no blocking)
     - _Requirements: 1.1, 1.8, 5.6, 5.7_
 
-  - [ ] 7.2 Integrate autofill state into profile wizard steps
+  - [x] 7.2 Integrate autofill state into profile wizard steps
     - Pass autofill metadata into each profile step component
     - Render `AutofillIndicator` next to autofilled fields in Steps 1–6
     - Call `markEdited` when artisan modifies an autofilled field value (remove autofill indicator)
@@ -170,7 +170,7 @@ This plan implements the CV upload and autofill feature in incremental steps. It
     - Test: error during parse → artisan can proceed with manual entry
     - _Requirements: 1.1–1.8, 3.4–3.8, 4.1–4.5, 5.1–5.7_
 
-- [ ] 8. Final checkpoint - Ensure all tests pass
+- [x] 8. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 ## Notes

@@ -3,6 +3,7 @@ package files
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -19,6 +20,7 @@ const defaultPresignTTL = 15 * time.Minute
 type Storage interface {
 	PresignUpload(ctx context.Context, objectKey, contentType, userID string, size int64) (*UploadIntent, error)
 	PresignDownload(ctx context.Context, objectKey string) (string, error)
+	Download(ctx context.Context, objectKey string) ([]byte, error)
 	Stat(ctx context.Context, objectKey string) (*ObjectInfo, error)
 	MarkComplete(ctx context.Context, objectKey string) error
 	Delete(ctx context.Context, objectKey string) error
@@ -128,6 +130,32 @@ func (s *S3Store) PresignDownload(ctx context.Context, objectKey string) (string
 		return "", fmt.Errorf("presigning S3 download: %w", err)
 	}
 	return result.URL, nil
+}
+
+// maxDownloadBytes caps the amount of data read from S3 in a single Download
+// call to prevent an unexpectedly large object from exhausting memory.
+// Matches defaultMaxUploadBytes (service.go) so a file that was accepted at
+// upload time can never fail at download time purely for being too large.
+const maxDownloadBytes = defaultMaxUploadBytes
+
+func (s *S3Store) Download(ctx context.Context, objectKey string) ([]byte, error) {
+	result, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("downloading S3 object: %w", err)
+	}
+	defer func() { _ = result.Body.Close() }()
+
+	data, err := io.ReadAll(io.LimitReader(result.Body, maxDownloadBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("reading S3 object body: %w", err)
+	}
+	if int64(len(data)) > maxDownloadBytes {
+		return nil, fmt.Errorf("S3 object exceeds maximum download size of %d bytes", maxDownloadBytes)
+	}
+	return data, nil
 }
 
 func (s *S3Store) Stat(ctx context.Context, objectKey string) (*ObjectInfo, error) {

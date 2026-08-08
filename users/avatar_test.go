@@ -75,6 +75,10 @@ func (s *avatarStorageStub) PublicURL(objectKey string) string {
 	return "https://cdn.test/" + objectKey
 }
 
+func (s *avatarStorageStub) Download(context.Context, string) ([]byte, error) {
+	return nil, s.err
+}
+
 func (s *avatarStorageStub) KeyFromURL(fileURL string) (string, error) {
 	return strings.TrimPrefix(fileURL, "https://cdn.test/"), nil
 }

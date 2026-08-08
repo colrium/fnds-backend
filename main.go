@@ -17,6 +17,7 @@ import (
 	"backend/banks"
 	"backend/chat"
 	"backend/configs"
+	"backend/cvparser"
 	"backend/documenttypes"
 	"backend/files"
 	"backend/institutions"
@@ -182,6 +183,16 @@ func main() {
 	fileHandler := files.NewHandler(files.NewMongoRepository(), s3Store, maxUploadBytes)
 	avatarHandler := users.NewAvatarHandler(&users.MongoAvatarRepository{}, s3Store)
 
+	// CV parser: instantiate the Bedrock-backed parser and handler.
+	bedrockClient, err := cvparser.NewBedrockClient(context.Background(), configs.AWSRegion())
+	if err != nil {
+		slog.Error("failed to configure Bedrock client", "error", err)
+		os.Exit(1)
+	}
+	cvParser := cvparser.NewBedrockParser(bedrockClient, configs.BedrockModelID())
+	cvMapper := cvparser.NewMapper()
+	cvHandler := cvparser.NewHandler(files.NewMongoRepository(), s3Store, cvParser, cvMapper)
+
 	// Idempotent: each seeder skips when its collection is already populated.
 	seeders.RunAll()
 
@@ -303,6 +314,7 @@ func main() {
 	users.RegisterArtisanRoutes(artisanGroup)
 	jobrequests.RegisterArtisanRoutes(artisanGroup)
 	files.RegisterArtisanRoutes(artisanGroup, fileHandler)
+	artisanGroup.POST("/cv/parse", cvHandler.ParseCV)
 
 	authGroup.GET("/email/resend", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"message": "Verification email sent"})

@@ -56,9 +56,12 @@ package logging
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -321,7 +324,42 @@ func TestProperty7_QueueCapacityIsNeverExceeded(t *testing.T) {
 func p7RunBurst(t *testing.T, seed int64, iteration int, in p7Burst) {
 	t.Helper()
 
-	cfg, _ := newTestShipperConfig(t, true, in.Capacity)
+	var cfg Config
+	if in.Draining {
+		// The draining case starts a real delivery goroutine, which performs
+		// genuine HTTP transmission. newTestShipperConfig points at
+		// testShipperURL, an unresolvable DNS name (Req 12.3 is about *this*
+		// package never reaching the real network, not about a name that
+		// merely looks like a valid endpoint) — dialing it can take an
+		// arbitrarily long time to fail, and with the fake clock never
+		// advanced in this test, backoff waits and the close-drain budget
+		// never expire on their own. That combination leaves the delivery
+		// goroutine, and everything it started (ticker, health monitor,
+		// budget watcher in a close), running past the burst and into
+		// whichever later test samples runtime.NumGoroutine(), which is what
+		// made this property flake on goroutine-count assertions elsewhere in
+		// the package. Pointing at a real loopback httptest.Server, the same
+		// pattern delivery_test.go and prop_p9_enqueue_nonblocking_test.go
+		// use, makes every request resolve immediately so close(s.closeDone)
+		// below is enough to unwind the goroutine within this iteration.
+		//
+		// The server is closed at the end of *this* iteration rather than via
+		// t.Cleanup: p7RunBurst runs pbtIterations times inside one Test
+		// function, not as separate subtests, so a t.Cleanup-registered close
+		// would only run after the whole loop — and its goroutine-count
+		// assertion — has already executed.
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = io.Copy(io.Discard, r.Body)
+			w.WriteHeader(http.StatusAccepted)
+		}))
+		defer server.Close()
+		assertLoopbackEndpoint(t, server.URL) // Req 12.3
+		cfg = deliveryConfig(server.URL, defaultBatchSize, in.Capacity, newFakeClock())
+	} else {
+		// Nothing draining means no delivery goroutine and no request, so the
+		// endpoint is never dialed; the shared test config is fine here.
+		cfg, _ = newTestShipperConfig(t, true, in.Capacity)
+	}
 	s := NewShipper(cfg)
 
 	// The configured capacity must be the channel's capacity, or every bound
