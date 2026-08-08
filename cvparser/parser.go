@@ -82,13 +82,13 @@ func NewBedrockParser(client *bedrockruntime.Client, modelID string) *BedrockPar
 }
 
 // systemPrompt instructs the model how to extract CV data.
-const systemPrompt = `You are a CV/resume data extraction assistant. You will receive a PDF document. Extract structured information from it accurately by calling the ` + extractionToolName + ` tool exactly once.
+const systemPrompt = `You are a CV/resume data extraction assistant. You will receive a PDF or DOCX document. Extract structured information from it accurately by calling the ` + extractionToolName + ` tool exactly once.
 
 Instructions:
 - Extract personal details, education, professional information, work history, languages, and references.
 - If a field cannot be found in the document, return null for that field.
 - Assign confidence scores between 0 and 1 for each section based on how certain you are about the extraction accuracy.
-- If the PDF appears to be password-protected or the content cannot be read, indicate this by setting all confidence scores to 0 and returning null for all fields.
+- If the document appears to be password-protected or the content cannot be read, indicate this by setting all confidence scores to 0 and returning null for all fields.
 - Do not guess or fabricate information. Only extract what is explicitly stated in the document.`
 
 // Extract parses the given document bytes by sending them to the configured
