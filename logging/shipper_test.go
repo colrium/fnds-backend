@@ -338,8 +338,8 @@ func TestEnqueueIsWaitFreeAtCapacity(t *testing.T) {
 	}
 	elapsed := time.Since(start)
 
-	if elapsed > 50*time.Millisecond {
-		t.Errorf("%d enqueues at capacity took %s, want well under 50ms (1 ms per call is the requirement)", attempts, elapsed)
+	if elapsed > enqueueWaitFreeThreshold {
+		t.Errorf("%d enqueues at capacity took %s, want well under %s (1 ms per call is the requirement)", attempts, elapsed, enqueueWaitFreeThreshold)
 	}
 	if got, want := s.Snapshot().Dropped, uint64(attempts-1); got != want {
 		t.Errorf("Dropped = %d, want %d (capacity 1)", got, want)
