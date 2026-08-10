@@ -13,6 +13,7 @@ import (
 	_ "time/tzdata"
 
 	"backend/applications"
+	"backend/assessments"
 	"backend/auth"
 	"backend/banks"
 	"backend/chat"
@@ -21,7 +22,9 @@ import (
 	"backend/documenttypes"
 	"backend/files"
 	"backend/institutions"
+	"backend/integrations"
 	"backend/jobrequests"
+	"backend/jobs"
 	"backend/locations"
 	"backend/logging"
 	"backend/middleware"
@@ -228,7 +231,12 @@ func main() {
 		slog.Error("failed to ensure institution indexes", "error", err)
 		os.Exit(1)
 	}
+	if err := assessments.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to ensure assessment indexes", "error", err)
+		os.Exit(1)
+	}
 	go notifications.NewDefaultDispatcher().Run(context.Background())
+	jobs.NewScheduler().Start()
 
 	api := app.Group("/api/v1")
 
@@ -275,6 +283,20 @@ func main() {
 	quotations.RegisterPublicRoutes(api)
 	jobrequests.RegisterPublicRoutes(api)
 
+	// Unauthenticated and enumerable by code, so it gets its own limiter instance
+	// rather than sharing the public-artisan one: exhausting one must not lock out
+	// the other.
+	assessments.RegisterCertificatePublicRoutes(api, echomiddleware.RateLimiterWithConfig(
+		echomiddleware.RateLimiterConfig{
+			Store: echomiddleware.NewRateLimiterMemoryStoreWithConfig(
+				echomiddleware.RateLimiterMemoryStoreConfig{
+					Rate:      rate.Limit(5),
+					Burst:     20,
+					ExpiresIn: 10 * time.Minute,
+				},
+			),
+		},
+	))
 	documenttypes.RegisterRoutes(api)
 	users.RegisterAvatarPublicRoutes(api, avatarHandler)
 
@@ -308,13 +330,52 @@ func main() {
 	documenttypes.RegisterAuthRoutes(authGroup)
 	users.RegisterAvatarAuthRoutes(authGroup, avatarHandler)
 
-	// Artisan-only routes
+	// Artisan-only routes. These keep the bare /api/v1 prefix because their paths
+	// are already unique and are in use by shipped clients (/cv/parse,
+	// /job-vacancies/..., /artisan/availability).
 	artisanGroup := api.Group("")
 	artisanGroup.Use(middleware.JWTAuth, middleware.IsArtisan)
 	users.RegisterArtisanRoutes(artisanGroup)
 	jobrequests.RegisterArtisanRoutes(artisanGroup)
 	files.RegisterArtisanRoutes(artisanGroup, fileHandler)
 	artisanGroup.POST("/cv/parse", cvHandler.ParseCV)
+
+	// The three assessment role surfaces are namespaced by role. Several
+	// assessment paths (/assessments/appointments, /assessments/centres,
+	// /assessments/practical-tasks) exist for more than one role with different
+	// handlers; without distinct prefixes they collide in echo's router and the
+	// last group registered silently wins for the whole method+path, so callers
+	// of the shadowed route get that group's middleware and 401 instead of their
+	// own handler.
+	// Built once and shared: the service caches its OAuth access token, so a
+	// per-request instance would refresh on every booking and risk Zoho's
+	// refresh rate limit. A missing or partial configuration logs once here and
+	// leaves meetings disabled rather than failing each booking at runtime.
+	var meetingCreator assessments.MeetingCreator
+	if zohoService, err := integrations.NewZohoMeetingService(); err != nil {
+		if errors.Is(err, integrations.ErrZohoNotConfigured) {
+			slog.Warn("zoho meeting disabled; oral bookings will have no video link", "reason", err)
+		} else {
+			slog.Error("zoho meeting misconfigured; oral bookings will have no video link", "error", err)
+		}
+	} else {
+		meetingCreator = assessments.NewZohoMeetingAdapter(zohoService)
+		slog.Info("zoho meeting enabled")
+	}
+
+	artisanAssessmentGroup := api.Group("/artisan")
+	artisanAssessmentGroup.Use(middleware.JWTAuth, middleware.IsArtisan)
+	assessments.RegisterArtisanRoutes(artisanAssessmentGroup, meetingCreator)
+
+	// Assessor-only routes
+	assessorGroup := api.Group("/assessor")
+	assessorGroup.Use(middleware.JWTAuth, middleware.IsAssessor)
+	assessments.RegisterAssessorRoutes(assessorGroup)
+
+	// Admin-only routes
+	adminGroup := api.Group("/admin")
+	adminGroup.Use(middleware.JWTAuth, middleware.IsAdmin)
+	assessments.RegisterAdminRoutes(adminGroup)
 
 	authGroup.GET("/email/resend", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"message": "Verification email sent"})

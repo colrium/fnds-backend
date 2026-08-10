@@ -28,6 +28,7 @@ const (
 	EntitlementBasicApplications     Entitlement = "basic_applications"
 	EntitlementUnlimitedApplications Entitlement = "unlimited_applications"
 	EntitlementVerifiedDiscoverable  Entitlement = "verified_discoverable"
+	EntitlementFeaturedProfile       Entitlement = "featured_profile"
 )
 
 type SubscriptionPlan struct {
@@ -142,15 +143,15 @@ var planCatalog = []SubscriptionPlan{
 	},
 	{
 		ID:           "worker_verified_month",
-		Name:         "Verified and Discoverable",
-		Description:  "Get verified and remain discoverable to employers for 30 days.",
+		Name:         "Featured Profile",
+		Description:  "Get featured and appear at the top of employer browse results for 30 days.",
 		Audience:     AudienceWorker,
 		Group:        GroupWorkerDiscoverable,
 		PriceKES:     1000,
 		Currency:     "KES",
 		DurationDays: 30,
-		Features:     []string{"Verified worker badge", "Discoverable in employer browse results"},
-		Entitlements: []Entitlement{EntitlementVerifiedDiscoverable},
+		Features:     []string{"Featured profile badge", "Top placement in employer browse results"},
+		Entitlements: []Entitlement{EntitlementFeaturedProfile},
 	},
 }
 

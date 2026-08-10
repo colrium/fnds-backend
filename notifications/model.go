@@ -19,6 +19,16 @@ const (
 	TypeSkillMatch        = "skill_match"
 	TypeQuotationReceived = "quotation_received"
 	TypeQuotationDecision = "quotation_decision"
+
+	// Naming convention: Type<Domain><Event>, where the event may itself be
+	// several words (StageUnlocked). The domain prefix groups the constants;
+	// the event half is free-form and is not padded to a single word.
+	TypeAssessmentApproved      = "assessment_approved"
+	TypeAssessmentRejected      = "assessment_rejected"
+	TypeAssessmentStageUnlocked = "assessment_stage_unlocked"
+	TypeAssessmentResult        = "assessment_result"
+	TypeAppointmentScheduled    = "appointment_scheduled"
+	TypeAppointmentReminder     = "appointment_reminder"
 )
 
 type DeliveryChannel string

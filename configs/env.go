@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -197,6 +198,76 @@ func BetterStackMinLevel() string     { return os.Getenv("BETTERSTACK_MIN_LEVEL"
 func BetterStackBatchSize() string    { return os.Getenv("BETTERSTACK_BATCH_SIZE") }
 func BetterStackFlushSeconds() string { return os.Getenv("BETTERSTACK_FLUSH_SECONDS") }
 func BetterStackQueueSize() string    { return os.Getenv("BETTERSTACK_QUEUE_SIZE") }
+
+// Zoho Meeting configuration for oral assessment video calls.
+func ZohoMeetingClientID() string     { return os.Getenv("ZOHO_MEETING_CLIENT_ID") }
+func ZohoMeetingClientSecret() string { return os.Getenv("ZOHO_MEETING_CLIENT_SECRET") }
+func ZohoMeetingRefreshToken() string { return os.Getenv("ZOHO_MEETING_REFRESH_TOKEN") }
+func ZohoMeetingZSOID() string        { return os.Getenv("ZOHO_MEETING_ZSOID") }
+
+// AssessmentRescheduleCutoff is how close to an appointment an artisan may still
+// cancel in order to rebook. Inside the window the assessor has committed the
+// slot. Configurable because it is a business rule, not a technical constant.
+func AssessmentRescheduleCutoff() time.Duration {
+	const fallback = 12 * time.Hour
+	raw := os.Getenv("ASSESSMENT_RESCHEDULE_CUTOFF")
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(raw)
+	// A negative or zero cutoff would let an artisan cancel a session already in
+	// progress, so treat it as misconfiguration and keep the default.
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
+}
+
+// ZohoAccountsBaseURL is the OAuth host for the Zoho datacenter holding the
+// account. Zoho does not replicate accounts across datacenters, so an org
+// created in the EU or India cannot authenticate against the default .com host.
+func ZohoAccountsBaseURL() string {
+	if v := os.Getenv("ZOHO_ACCOUNTS_BASE_URL"); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "https://accounts.zoho.com"
+}
+
+// ZohoMeetingBaseURL is the Meeting API host, which must match the same
+// datacenter as ZohoAccountsBaseURL.
+func ZohoMeetingBaseURL() string {
+	if v := os.Getenv("ZOHO_MEETING_BASE_URL"); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "https://meeting.zoho.com"
+}
+
+// ZohoMeetingTimezone is the IANA zone Zoho should interpret meeting start
+// times in. It must be a zone name, not an offset, so DST is handled by the
+// tzdata rules rather than a fixed guess.
+func ZohoMeetingTimezone() string {
+	if v := os.Getenv("ZOHO_MEETING_TIMEZONE"); v != "" {
+		return v
+	}
+	return "Africa/Nairobi"
+}
+
+// ZohoMeetingPresenterID returns the Zoho user ID of the meeting host.
+// Returns 0 if not configured (the service will fail at meeting creation time).
+func ZohoMeetingPresenterID() int64 {
+	v := os.Getenv("ZOHO_MEETING_PRESENTER_ID")
+	if v == "" {
+		return 0
+	}
+	id, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
+// BedrockRegion is the AWS region used for AI scoring via Bedrock.
+func BedrockRegion() string { return os.Getenv("BEDROCK_REGION") }
 
 const (
 	notificationCacheEnabledDefault = true

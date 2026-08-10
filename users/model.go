@@ -19,32 +19,35 @@ const (
 )
 
 type User struct {
-	ID               string     `json:"id" bson:"_id"`
-	OldID            int        `json:"old_id,omitempty" bson:"old_id,omitempty"`
-	FirstName        string     `json:"first_name" bson:"first_name"`
-	LastName         string     `json:"last_name" bson:"last_name"`
-	Email            string     `json:"email" bson:"email"`
-	Phone            string     `json:"phone" bson:"phone"`
-	Password         []byte     `json:"-" bson:"password"`
-	UserType         string     `json:"user_type" bson:"user_type"`
-	Status           string     `json:"status" bson:"status"`
-	IsActive         bool       `json:"is_active" bson:"is_active"`
-	Otp              string     `json:"-" bson:"otp,omitempty"`
-	OtpExpiresAt     time.Time  `json:"-" bson:"otp_expires_at,omitempty"`
-	OtpAttempts      int        `json:"-" bson:"otp_attempts,omitempty"`
-	PhoneVerified    bool       `json:"phone_verified" bson:"phone_verified"`
-	FundisID         string     `json:"fundis_id,omitempty" bson:"fundis_id,omitempty"`
-	AvatarID         string     `json:"avatar_id,omitempty" bson:"avatar_id,omitempty"`
-	FCMToken         string     `json:"fcm_token,omitempty" bson:"fcm_token,omitempty"`
-	IsAvailable      bool       `json:"is_available" bson:"is_available"`
-	IsVerified       bool       `json:"is_verified" bson:"is_verified"`
-	VerifiedUntil    *time.Time `json:"verified_until,omitempty" bson:"verified_until,omitempty"`
-	Slug             string     `json:"slug,omitempty" bson:"slug,omitempty"`
-	IsProfilePublic  bool       `json:"is_profile_public" bson:"is_profile_public"`
-	ReferralCodeUsed string     `json:"-" bson:"referral_code_used,omitempty"`
-	Migrated         bool       `json:"migrated,omitempty" bson:"migrated,omitempty"`
-	CreatedAt        time.Time  `json:"created_at" bson:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at" bson:"updated_at"`
+	ID                 string     `json:"id" bson:"_id"`
+	OldID              int        `json:"old_id,omitempty" bson:"old_id,omitempty"`
+	FirstName          string     `json:"first_name" bson:"first_name"`
+	LastName           string     `json:"last_name" bson:"last_name"`
+	Email              string     `json:"email" bson:"email"`
+	Phone              string     `json:"phone" bson:"phone"`
+	Password           []byte     `json:"-" bson:"password"`
+	UserType           string     `json:"user_type" bson:"user_type"`
+	Status             string     `json:"status" bson:"status"`
+	IsActive           bool       `json:"is_active" bson:"is_active"`
+	Otp                string     `json:"-" bson:"otp,omitempty"`
+	OtpExpiresAt       time.Time  `json:"-" bson:"otp_expires_at,omitempty"`
+	OtpAttempts        int        `json:"-" bson:"otp_attempts,omitempty"`
+	PhoneVerified      bool       `json:"phone_verified" bson:"phone_verified"`
+	FundisID           string     `json:"fundis_id,omitempty" bson:"fundis_id,omitempty"`
+	AvatarID           string     `json:"avatar_id,omitempty" bson:"avatar_id,omitempty"`
+	FCMToken           string     `json:"fcm_token,omitempty" bson:"fcm_token,omitempty"`
+	IsAvailable        bool       `json:"is_available" bson:"is_available"`
+	IsVerified         bool       `json:"is_verified" bson:"is_verified"`
+	VerifiedUntil      *time.Time `json:"verified_until,omitempty" bson:"verified_until,omitempty"`
+	CertifiedAt        *time.Time `json:"certified_at,omitempty" bson:"certified_at,omitempty"`
+	CertificationGrade int        `json:"certification_grade,omitempty" bson:"certification_grade,omitempty"`
+	FeaturedUntil      *time.Time `json:"featured_until,omitempty" bson:"featured_until,omitempty"`
+	Slug               string     `json:"slug,omitempty" bson:"slug,omitempty"`
+	IsProfilePublic    bool       `json:"is_profile_public" bson:"is_profile_public"`
+	ReferralCodeUsed   string     `json:"-" bson:"referral_code_used,omitempty"`
+	Migrated           bool       `json:"migrated,omitempty" bson:"migrated,omitempty"`
+	CreatedAt          time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at" bson:"updated_at"`
 }
 
 type ArtisanSummary struct {
@@ -55,6 +58,8 @@ type ArtisanSummary struct {
 	AvatarID    string `json:"avatar_id,omitempty"`
 	IsAvailable bool   `json:"is_available"`
 	IsVerified  bool   `json:"is_verified"`
+	IsCertified bool   `json:"is_certified"`
+	IsFeatured  bool   `json:"is_featured"`
 }
 
 func CreateNewUser(user *User) error {
@@ -217,18 +222,24 @@ func IncrementOtpAttempts(id string) error {
 }
 
 func ListArtisans(page, limit int64) ([]User, int64, error) {
-	now := time.Now().UTC()
 	filter := bson.M{
-		"user_type": "artisan",
-		"$or": bson.A{
-			bson.M{"is_available": true},
-			bson.M{"verified_until": bson.M{"$gt": now}},
-		},
+		"user_type":   "artisan",
+		"is_verified": true,
 	}
+
+	// Sort by featured_until DESC (nulls last), then certified_at DESC, then created_at DESC.
+	// MongoDB sorts null/missing fields first in ascending order and last in descending order,
+	// so -1 naturally pushes nulls to the end.
+	sortOrder := bson.D{
+		{Key: "featured_until", Value: -1},
+		{Key: "certified_at", Value: -1},
+		{Key: "created_at", Value: -1},
+	}
+
 	opts := options.Find().
 		SetSkip((page - 1) * limit).
 		SetLimit(limit).
-		SetSort(bson.D{{Key: "verified_until", Value: -1}, {Key: "created_at", Value: -1}})
+		SetSort(sortOrder)
 	cursor, err := configs.MI.DB.Collection("users").Find(context.TODO(), filter, opts)
 	if err != nil {
 		return nil, 0, err
@@ -238,11 +249,6 @@ func ListArtisans(page, limit int64) ([]User, int64, error) {
 	var users []User
 	if err := cursor.All(context.TODO(), &users); err != nil {
 		return nil, 0, err
-	}
-	for i := range users {
-		users[i].IsVerified = users[i].IsVerified &&
-			users[i].VerifiedUntil != nil &&
-			users[i].VerifiedUntil.After(now)
 	}
 
 	total, err := configs.MI.DB.Collection("users").CountDocuments(context.TODO(), filter)
@@ -268,6 +274,8 @@ func ListArtisanSummaries(page, limit int64) ([]ArtisanSummary, int64, error) {
 
 func artisanSummary(user User, at time.Time) ArtisanSummary {
 	verified := user.IsVerified && user.VerifiedUntil != nil && user.VerifiedUntil.After(at)
+	certified := user.CertifiedAt != nil
+	featured := user.FeaturedUntil != nil && user.FeaturedUntil.After(at)
 	return ArtisanSummary{
 		ID:          user.ID,
 		FirstName:   user.FirstName,
@@ -276,6 +284,8 @@ func artisanSummary(user User, at time.Time) ArtisanSummary {
 		AvatarID:    user.AvatarID,
 		IsAvailable: user.IsAvailable,
 		IsVerified:  verified,
+		IsCertified: certified,
+		IsFeatured:  featured,
 	}
 }
 

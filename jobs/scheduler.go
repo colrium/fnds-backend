@@ -49,6 +49,9 @@ func (s *Scheduler) executeJobs() {
 	closeJobVacancies()
 	expireSubscriptions()
 	closeAwaitingConfirmation()
+	CheckReviewSLA()
+	CheckAppointmentReminders()
+	CheckNoShows()
 }
 
 func closeJobVacancies() {

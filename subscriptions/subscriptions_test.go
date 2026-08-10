@@ -24,7 +24,7 @@ func TestPlanCatalogMatchesPublishedPricing(t *testing.T) {
 		{"worker_unlimited_day", AudienceWorker, 100, 1, EntitlementUnlimitedApplications},
 		{"worker_unlimited_week", AudienceWorker, 350, 7, EntitlementUnlimitedApplications},
 		{"worker_unlimited_month", AudienceWorker, 700, 30, EntitlementUnlimitedApplications},
-		{"worker_verified_month", AudienceWorker, 1000, 30, EntitlementVerifiedDiscoverable},
+		{"worker_verified_month", AudienceWorker, 1000, 30, EntitlementFeaturedProfile},
 	}
 
 	for _, tt := range tests {

@@ -285,17 +285,16 @@ func ActivatePurchase(ctx context.Context, event payments.CellulantPaymentEvent)
 		if result.MatchedCount == 0 {
 			return fmt.Errorf("featured vacancy is unavailable")
 		}
-	case plan.HasEntitlement(EntitlementVerifiedDiscoverable):
+	case plan.HasEntitlement(EntitlementFeaturedProfile):
 		if _, err := configs.MI.DB.Collection("users").UpdateOne(
 			ctx,
 			bson.M{"_id": purchase.UserID, "user_type": "artisan"},
 			bson.M{"$set": bson.M{
-				"is_verified":    true,
-				"verified_until": end,
+				"featured_until": end,
 				"updated_at":     now,
 			}},
 		); err != nil {
-			return fmt.Errorf("verifying worker: %w", err)
+			return fmt.Errorf("featuring worker profile: %w", err)
 		}
 	}
 
