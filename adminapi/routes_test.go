@@ -15,6 +15,7 @@ func TestRegisterAdminRoutesRegistersUserEndpoints(t *testing.T) {
 		"GET /admin/users":              false,
 		"GET /admin/users/:id":          false,
 		"PATCH /admin/users/:id/status": false,
+		"GET /admin/stats":              false,
 	}
 	for _, r := range e.Routes() {
 		key := r.Method + " " + r.Path
