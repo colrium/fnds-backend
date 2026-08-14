@@ -555,6 +555,11 @@ func TestSubmitForReviewIncompleteProfile(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	mt.Run("incomplete", func(mt *mtest.T) {
 		useProfileApprovalMockMongo(mt)
+		// SubmitForReview's own pending-check GetUserByID call, then the six
+		// calls profiles.GetFullProfile makes internally (including its own
+		// GetUserByID) — seven total, not six. See this task's note above
+		// queueCompleteProfileLookups/queueIncompleteProfileLookups.
+		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch, userDocument("user-1", "")))
 		queueIncompleteProfileLookups(mt, "user-1", "")
 
 		err := SubmitForReview(context.Background(), "user-1")
@@ -1058,6 +1063,10 @@ func TestHandleCreateJobApplicationRejectsUnapprovedCompleteProfile(t *testing.T
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	mt.Run("complete but not approved", func(mt *mtest.T) {
 		useJobApplicationMockMongo(mt)
+		// The handler's own artisan-type-check GetUserByID call, then the
+		// six calls profiles.GetFullProfile makes internally (including its
+		// own GetUserByID) — seven total, not six.
+		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch, jobApplicationUserDocument("pending_review")))
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch, jobApplicationUserDocument("pending_review")))
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.profiles", mtest.FirstBatch, jobApplicationCompleteProfileDocument()))
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.working_hours", mtest.FirstBatch, bson.D{
@@ -1336,6 +1345,12 @@ func TestHandleSubmitProfileForReviewIncompleteProfile(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	mt.Run("incomplete", func(mt *mtest.T) {
 		useMockMongo(mt)
+		// profileapproval.SubmitForReview's own pending-check GetUserByID
+		// call, then the six calls profiles.GetFullProfile makes internally
+		// (including its own GetUserByID) — seven total, not six.
+		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch, bson.D{
+			{Key: "_id", Value: "user-1"}, {Key: "user_type", Value: "artisan"},
+		}))
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch, bson.D{
 			{Key: "_id", Value: "user-1"}, {Key: "user_type", Value: "artisan"},
 		}))
