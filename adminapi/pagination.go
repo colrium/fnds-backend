@@ -8,7 +8,7 @@ import (
 
 const (
 	defaultAdminPageLimit = 20
-	maxAdminPageLimit      = 100
+	maxAdminPageLimit     = 100
 )
 
 // Page is the shared envelope for every paginated admin list response,
