@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -130,6 +132,54 @@ func TestRedisCacheMissStoresResponseWithCanonicalQueryKey(t *testing.T) {
 	}
 	if got := second.Header().Get("X-Cache"); got != "HIT" {
 		t.Errorf("second X-Cache = %q, want HIT", got)
+	}
+}
+
+func TestRedisCacheCoalescesConcurrentMisses(t *testing.T) {
+	_ = useTestRedis(t)
+	const requestCount = 12
+
+	var calls atomic.Int32
+	handler := RedisCache(CacheConfig{
+		TTL:       time.Minute,
+		KeyPrefix: "artisan-profile",
+	})(func(c echo.Context) error {
+		calls.Add(1)
+		time.Sleep(25 * time.Millisecond)
+		return c.String(http.StatusOK, "profile")
+	})
+
+	start := make(chan struct{})
+	responses := make(chan *httptest.ResponseRecorder, requestCount)
+	errs := make(chan error, requestCount)
+	var workers sync.WaitGroup
+	for range requestCount {
+		workers.Go(func() {
+			<-start
+			e := echo.New()
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/artisans/jane", nil)
+			recorder := httptest.NewRecorder()
+			errs <- handler(e.NewContext(request, recorder))
+			responses <- recorder
+		})
+	}
+	close(start)
+	workers.Wait()
+	close(errs)
+	close(responses)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("cached handler error = %v", err)
+		}
+	}
+	for recorder := range responses {
+		if recorder.Code != http.StatusOK || recorder.Body.String() != "profile" {
+			t.Errorf("response = (%d, %q), want (200, profile)", recorder.Code, recorder.Body.String())
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("downstream handler calls = %d, want 1", got)
 	}
 }
 
@@ -272,16 +322,18 @@ func TestRedisCacheDoesNotStoreNonCacheableResponses(t *testing.T) {
 	}
 }
 
-func TestInvalidateArtisanCacheDeletesExactAndQueryKeys(t *testing.T) {
+func TestInvalidateArtisanCacheSupersedesOnlyTargetResource(t *testing.T) {
 	server := useTestRedis(t)
 	slug := "jane-doe-plumber-nairobi"
-	deletedKeys := []string{
+	exactKeys := []string{
 		"artisan-profile:/api/v1/artisans/" + slug,
-		"artisan-profile:/api/v1/artisans/" + slug + "?a=1",
 		"artisan-share:/artisan/" + slug,
+	}
+	queryKeys := []string{
+		"artisan-profile:/api/v1/artisans/" + slug + "?a=1",
 		"artisan-share:/artisan/" + slug + "?ref=share",
 	}
-	for _, key := range deletedKeys {
+	for _, key := range append(exactKeys, queryKeys...) {
 		mustSetRedis(t, server, key, "cached")
 	}
 	unrelated := "artisan-profile:/api/v1/artisans/another-artisan"
@@ -290,13 +342,71 @@ func TestInvalidateArtisanCacheDeletesExactAndQueryKeys(t *testing.T) {
 	if err := InvalidateArtisanCache(context.Background(), slug); err != nil {
 		t.Fatalf("InvalidateArtisanCache() error = %v", err)
 	}
-	for _, key := range deletedKeys {
+	for _, key := range exactKeys {
 		if server.Exists(key) {
 			t.Errorf("cache key %q was not deleted", key)
 		}
 	}
+	for _, key := range queryKeys {
+		if !server.Exists(key) {
+			t.Errorf("query cache key %q should remain for TTL eviction", key)
+		}
+	}
 	if !server.Exists(unrelated) {
 		t.Errorf("unrelated cache key %q was deleted", unrelated)
+	}
+	for _, generationKey := range []string{
+		cacheGenerationKey("artisan-profile", "/api/v1/artisans/"+slug),
+		cacheGenerationKey("artisan-share", "/artisan/"+slug),
+	} {
+		if generation, err := server.Get(generationKey); err != nil || generation != "1" {
+			t.Errorf("generation %q = %q, %v; want 1, nil", generationKey, generation, err)
+		}
+	}
+}
+
+func TestInvalidateArtisanCachePreservesOtherArtisanHit(t *testing.T) {
+	server := useTestRedis(t)
+	const (
+		invalidatedSlug = "jane-doe-plumber-nairobi"
+		unrelatedSlug   = "john-doe-electrician-nakuru"
+	)
+	unrelatedKey := "artisan-profile:/api/v1/artisans/" + unrelatedSlug
+	payload := mustMarshalCachedResponse(t, cachedResponse{
+		Version:     cachedResponseVersion,
+		Generation:  0,
+		Status:      http.StatusOK,
+		ContentType: echo.MIMETextPlainCharsetUTF8,
+		Body:        []byte("john cached"),
+	})
+	mustSetRedis(t, server, unrelatedKey, string(payload))
+
+	if err := InvalidateArtisanCache(context.Background(), invalidatedSlug); err != nil {
+		t.Fatalf("InvalidateArtisanCache() error = %v", err)
+	}
+
+	called := false
+	recorder, err := runCachedRequest(
+		t,
+		http.MethodGet,
+		"/api/v1/artisans/"+unrelatedSlug,
+		CacheConfig{TTL: time.Minute, KeyPrefix: "artisan-profile"},
+		func(c echo.Context) error {
+			called = true
+			return c.String(http.StatusOK, "fresh")
+		},
+	)
+	if err != nil {
+		t.Fatalf("cached handler error = %v", err)
+	}
+	if called {
+		t.Fatal("unrelated artisan cache entry was superseded")
+	}
+	if got := recorder.Header().Get("X-Cache"); got != "HIT" {
+		t.Errorf("X-Cache = %q, want HIT", got)
+	}
+	if got := recorder.Body.String(); got != "john cached" {
+		t.Errorf("body = %q, want john cached", got)
 	}
 }
 
@@ -671,7 +781,7 @@ func TestRedisCacheRejectsWritePreparedBeforeInvalidation(t *testing.T) {
 	if server.Exists(key) {
 		t.Fatal("response prepared before invalidation was written after invalidation")
 	}
-	if generation, err := server.Get(cacheGenerationKey("artisan-profile")); err != nil || generation != "1" {
+	if generation, err := server.Get(cacheGenerationKey("artisan-profile", "/api/v1/artisans/"+slug)); err != nil || generation != "1" {
 		t.Errorf("profile cache generation = %q, %v; want 1, nil", generation, err)
 	}
 }
@@ -687,7 +797,7 @@ func TestRedisCacheDoesNotServeSupersededGeneration(t *testing.T) {
 		Body:        []byte("stale"),
 	})
 	mustSetRedis(t, server, key, string(payload))
-	mustSetRedis(t, server, cacheGenerationKey("artisan-profile"), "1")
+	mustSetRedis(t, server, cacheGenerationKey("artisan-profile", "/api/v1/artisans/jane"), "1")
 
 	calls := 0
 	recorder, err := runCachedRequest(

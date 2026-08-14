@@ -281,12 +281,18 @@ func TestHandleUpdateProfileInvalidatesPublicProfileCaches(t *testing.T) {
 		}
 		for _, key := range []string{
 			"artisan-profile:/api/v1/artisans/" + slug,
-			"artisan-profile:/api/v1/artisans/" + slug + "?view=compact",
 			"artisan-share:/artisan/" + slug,
-			"artisan-share:/artisan/" + slug + "?ref=profile",
 		} {
 			if server.Exists(key) {
 				mt.Errorf("cache key %q was not invalidated", key)
+			}
+		}
+		for _, key := range []string{
+			"artisan-profile:/api/v1/artisans/" + slug + "?view=compact",
+			"artisan-share:/artisan/" + slug + "?ref=profile",
+		} {
+			if !server.Exists(key) {
+				mt.Errorf("query cache key %q should remain for TTL eviction", key)
 			}
 		}
 		if !server.Exists("artisan-sitemap:/sitemap-artisans.xml") {

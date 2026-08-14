@@ -38,13 +38,10 @@ func invalidateArtisanCache(ctx echo.Context, slug string) {
 }
 
 func invalidateArtisanSitemapCache(ctx echo.Context) {
-	const pattern = "artisan-sitemap:*"
-	if err := middleware.InvalidateArtisanCacheByPattern(ctx.Request().Context(), pattern); err != nil {
+	if err := middleware.InvalidateArtisanSitemapCache(ctx.Request().Context()); err != nil {
 		slog.ErrorContext(
 			ctx.Request().Context(),
 			"failed to invalidate artisan sitemap cache",
-			"pattern",
-			pattern,
 			"error",
 			err,
 		)

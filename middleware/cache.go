@@ -7,20 +7,24 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"backend/configs"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/singleflight"
 )
 
-const cachedResponseVersion = 1
-
-const cacheGenerationPrefix = "cache-generation:"
+const (
+	cachedResponseVersion      = 1
+	cacheGenerationPrefix      = "cache-generation:"
+	cacheTTLJitterPercent      = 10
+	cacheWriteOperationTimeout = 250 * time.Millisecond
+)
 
 // CacheConfig configures the Redis response cache middleware.
 type CacheConfig struct {
@@ -34,6 +38,7 @@ type cachedResponse struct {
 	Version      int    `json:"version"`
 	Generation   int64  `json:"generation"`
 	KeyPrefix    string `json:"-"`
+	Resource     string `json:"-"`
 	Status       int    `json:"status"`
 	ContentType  string `json:"content_type"`
 	CacheControl string `json:"cache_control,omitempty"`
@@ -42,17 +47,26 @@ type cachedResponse struct {
 
 type cacheResponseScheduler func(string, cachedResponse, time.Duration)
 
+type cacheLoadResult struct {
+	owner     *echo.Response
+	response  cachedResponse
+	shareable bool
+	fromCache bool
+}
+
 // RedisCache returns an Echo middleware that caches successful responses in
 // Redis keyed by the request path and canonical query string. Cache misses fall
 // through to the handler. When Redis is unavailable (configs.RDB == nil), the
 // middleware is a no-op.
 func RedisCache(cfg CacheConfig) echo.MiddlewareFunc {
 	return redisCache(cfg, func(key string, cached cachedResponse, ttl time.Duration) {
-		go cacheResponse(key, cached, ttl)
+		cacheResponse(key, cached, jitteredCacheTTL(ttl))
 	})
 }
 
 func redisCache(cfg CacheConfig, schedule cacheResponseScheduler) echo.MiddlewareFunc {
+	var flights singleflight.Group
+
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Skip caching when Redis is not configured.
@@ -66,7 +80,8 @@ func redisCache(cfg CacheConfig, schedule cacheResponseScheduler) echo.Middlewar
 			}
 
 			ctx := c.Request().Context()
-			generation, err := loadCacheGeneration(ctx, cfg.KeyPrefix)
+			resource := c.Request().URL.Path
+			generation, err := loadCacheGeneration(ctx, cfg.KeyPrefix, resource)
 			if err != nil {
 				slog.Error("failed to load cache generation", "cache_prefix", cfg.KeyPrefix, "error", err)
 				return next(c)
@@ -96,36 +111,90 @@ func redisCache(cfg CacheConfig, schedule cacheResponseScheduler) echo.Middlewar
 
 			// Cache miss — capture the response.
 			c.Response().Header().Set("X-Cache", "MISS")
-			body := new(bytes.Buffer)
-			origWriter := c.Response().Writer
-			c.Response().Writer = &captureWriter{
-				ResponseWriter: origWriter,
-				buf:            body,
-			}
+			value, err, _ := flights.Do(key, func() (any, error) {
+				// A previous flight may have filled Redis after the initial miss.
+				currentGeneration, generationErr := loadCacheGeneration(ctx, cfg.KeyPrefix, resource)
+				if generationErr == nil {
+					if currentPayload, getErr := configs.RDB.Get(ctx, key).Bytes(); getErr == nil {
+						if cached, ok := decodeCachedResponse(currentPayload); ok &&
+							cached.Generation == currentGeneration {
+							return cacheLoadResult{
+								response:  cached,
+								shareable: true,
+								fromCache: true,
+							}, nil
+						}
+					}
+					generation = currentGeneration
+				}
 
-			if err := next(c); err != nil {
-				return err
-			}
+				body := new(bytes.Buffer)
+				origWriter := c.Response().Writer
+				c.Response().Writer = &captureWriter{
+					ResponseWriter: origWriter,
+					buf:            body,
+				}
+				defer func() {
+					c.Response().Writer = origWriter
+				}()
 
-			// Only cache successful responses (2xx).
-			if c.Response().Status >= 200 && c.Response().Status < 300 && body.Len() > 0 {
+				if nextErr := next(c); nextErr != nil {
+					return cacheLoadResult{owner: c.Response()}, nextErr
+				}
+
 				responseBody := bytes.Clone(body.Bytes())
 				contentType := c.Response().Header().Get(echo.HeaderContentType)
-				if contentType == "" {
+				if contentType == "" && len(responseBody) > 0 {
 					contentType = http.DetectContentType(responseBody)
 				}
-				schedule(key, cachedResponse{
+				response := cachedResponse{
 					Version:      cachedResponseVersion,
 					Generation:   generation,
 					KeyPrefix:    cfg.KeyPrefix,
+					Resource:     resource,
 					Status:       c.Response().Status,
 					ContentType:  contentType,
 					CacheControl: c.Response().Header().Get("Cache-Control"),
 					Body:         responseBody,
-				}, cfg.TTL)
+				}
+				cacheable := response.Status >= http.StatusOK &&
+					response.Status < http.StatusMultipleChoices &&
+					len(response.Body) > 0
+				if cacheable {
+					schedule(key, response, cfg.TTL)
+				}
+
+				return cacheLoadResult{
+					owner:     c.Response(),
+					response:  response,
+					shareable: cacheable,
+				}, nil
+			})
+			if err != nil {
+				return err
 			}
 
-			return nil
+			result, ok := value.(cacheLoadResult)
+			if !ok {
+				return errors.New("cache load returned an unexpected result")
+			}
+			if result.owner == c.Response() {
+				return nil
+			}
+			if !result.shareable {
+				return next(c)
+			}
+			if result.fromCache {
+				c.Response().Header().Set("X-Cache", "HIT")
+			}
+			if result.response.CacheControl != "" {
+				c.Response().Header().Set("Cache-Control", result.response.CacheControl)
+			}
+			return c.Blob(
+				result.response.Status,
+				result.response.ContentType,
+				result.response.Body,
+			)
 		}
 	}
 }
@@ -173,20 +242,33 @@ end
 return 1
 `)
 
-func cacheGenerationKey(prefix string) string {
-	return cacheGenerationPrefix + prefix
+func cacheGenerationKey(prefix, resource string) string {
+	return cacheGenerationPrefix + prefix + ":" + resource
 }
 
-func loadCacheGeneration(ctx context.Context, prefix string) (int64, error) {
-	generation, err := configs.RDB.Get(ctx, cacheGenerationKey(prefix)).Int64()
+func loadCacheGeneration(ctx context.Context, prefix, resource string) (int64, error) {
+	generation, err := configs.RDB.Get(ctx, cacheGenerationKey(prefix, resource)).Int64()
 	if errors.Is(err, redis.Nil) {
 		return 0, nil
 	}
 	return generation, err
 }
 
+func jitteredCacheTTL(ttl time.Duration) time.Duration {
+	if ttl <= 0 {
+		return ttl
+	}
+	span := ttl * cacheTTLJitterPercent / 100
+	low := ttl - span
+	high := ttl + span
+	return low + time.Duration(rand.Int64N(int64(high-low)+1))
+}
+
 func cacheResponse(key string, cached cachedResponse, ttl time.Duration) {
-	if configs.RDB == nil || len(cached.Body) == 0 || cached.KeyPrefix == "" {
+	if configs.RDB == nil ||
+		len(cached.Body) == 0 ||
+		cached.KeyPrefix == "" ||
+		cached.Resource == "" {
 		return
 	}
 	payload, err := json.Marshal(cached)
@@ -197,12 +279,12 @@ func cacheResponse(key string, cached cachedResponse, ttl time.Duration) {
 
 	// Atomically reject writes prepared before an invalidation advanced this
 	// cache namespace's generation, preventing stale responses from reappearing.
-	cacheCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	cacheCtx, cancel := context.WithTimeout(context.Background(), cacheWriteOperationTimeout)
 	defer cancel()
 	_, err = cacheResponseScript.Run(
 		cacheCtx,
 		configs.RDB,
-		[]string{cacheGenerationKey(cached.KeyPrefix), key},
+		[]string{cacheGenerationKey(cached.KeyPrefix, cached.Resource), key},
 		strconv.FormatInt(cached.Generation, 10),
 		payload,
 		ttl.Milliseconds(),
@@ -226,16 +308,25 @@ func InvalidateArtisanCache(ctx context.Context, slug string) error {
 	defer cancel()
 
 	targets := []struct {
-		prefix  string
-		baseKey string
+		prefix   string
+		resource string
+		baseKey  string
 	}{
-		{prefix: "artisan-profile", baseKey: "artisan-profile:/api/v1/artisans/" + slug},
-		{prefix: "artisan-share", baseKey: "artisan-share:/artisan/" + slug},
+		{
+			prefix:   "artisan-profile",
+			resource: "/api/v1/artisans/" + slug,
+			baseKey:  "artisan-profile:/api/v1/artisans/" + slug,
+		},
+		{
+			prefix:   "artisan-share",
+			resource: "/artisan/" + slug,
+			baseKey:  "artisan-share:/artisan/" + slug,
+		},
 	}
 	var invalidationErrors []error
 	for _, target := range targets {
 		_, err := configs.RDB.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.Incr(ctx, cacheGenerationKey(target.prefix))
+			pipe.Incr(ctx, cacheGenerationKey(target.prefix, target.resource))
 			pipe.Del(ctx, target.baseKey)
 			return nil
 		})
@@ -245,19 +336,38 @@ func InvalidateArtisanCache(ctx context.Context, slug string) error {
 				fmt.Errorf("advancing generation and deleting cache key %q: %w", target.baseKey, err),
 			)
 		}
-		pattern := target.baseKey + "\\?*"
-		if err := invalidateCachePattern(ctx, pattern); err != nil {
-			invalidationErrors = append(
-				invalidationErrors,
-				fmt.Errorf("invalidating cache pattern %q: %w", pattern, err),
-			)
-		}
 	}
 	return errors.Join(invalidationErrors...)
 }
 
+// InvalidateArtisanSitemapCache advances the sitemap generation. Old entries
+// become unreachable immediately and remain only until their TTL expires.
+func InvalidateArtisanSitemapCache(ctx context.Context) error {
+	if configs.RDB == nil {
+		return errors.New("redis client unavailable")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	const (
+		prefix   = "artisan-sitemap"
+		resource = "/sitemap-artisans.xml"
+		baseKey  = "artisan-sitemap:/sitemap-artisans.xml"
+	)
+	_, err := configs.RDB.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.Incr(ctx, cacheGenerationKey(prefix, resource))
+		pipe.Del(ctx, baseKey)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("invalidating artisan sitemap cache: %w", err)
+	}
+	return nil
+}
+
 // InvalidateArtisanCacheByPattern removes all cached artisan responses matching
-// a pattern. Useful for sitemap invalidation.
+// a pattern. Prefer resource-generation invalidation for normal request paths.
 func InvalidateArtisanCacheByPattern(ctx context.Context, pattern string) error {
 	if pattern == "" {
 		return nil
@@ -269,24 +379,7 @@ func InvalidateArtisanCacheByPattern(ctx context.Context, pattern string) error 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	if prefix, ok := exactCachePrefix(pattern); ok {
-		if err := configs.RDB.Incr(ctx, cacheGenerationKey(prefix)).Err(); err != nil {
-			return fmt.Errorf("advancing cache generation for %q: %w", prefix, err)
-		}
-	}
 	return invalidateCachePattern(ctx, pattern)
-}
-
-func exactCachePrefix(pattern string) (string, bool) {
-	separator := strings.IndexByte(pattern, ':')
-	if separator <= 0 {
-		return "", false
-	}
-	prefix := pattern[:separator]
-	if strings.ContainsAny(prefix, `*?[]\\`) {
-		return "", false
-	}
-	return prefix, true
 }
 
 func invalidateCachePattern(ctx context.Context, pattern string) error {
