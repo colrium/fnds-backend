@@ -10,6 +10,7 @@ import (
 
 	"backend/configs"
 	"backend/files"
+	skillcatalog "backend/skills"
 	"backend/subscriptions"
 
 	"github.com/google/uuid"
@@ -109,22 +110,25 @@ func SeedLocations() error {
 }
 
 func SeedSkills() error {
-	if empty, err := collectionEmpty("skills"); err != nil {
-		return err
-	} else if !empty {
-		log.Printf("[seeder] skills already populated, skipping")
-		return nil
+	ctx := context.TODO()
+	for _, name := range skillcatalog.CatalogNames() {
+		_, err := configs.MI.DB.Collection("skills").UpdateOne(
+			ctx,
+			bson.M{"name": name},
+			bson.M{
+				"$setOnInsert": bson.M{
+					"_id":        uuid.New().String(),
+					"name":       name,
+					"created_at": time.Now().UTC(),
+				},
+			},
+			options.Update().SetUpsert(true),
+		)
+		if err != nil {
+			return fmt.Errorf("upsert skill %q: %w", name, err)
+		}
 	}
-	names := []string{
-		"Mason", "Carpenter", "Electrician", "Plumber", "Painter",
-		"Welder", "Tile Fixer", "Gardener", "Cleaner", "General Labourer",
-	}
-	skills := make([]any, 0, len(names))
-	for _, n := range names {
-		skills = append(skills, bson.M{"_id": uuid.New().String(), "name": n, "created_at": time.Now()})
-	}
-	_, err := configs.MI.DB.Collection("skills").InsertMany(context.TODO(), skills)
-	return err
+	return nil
 }
 
 func SeedBanks() error {

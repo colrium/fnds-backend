@@ -45,6 +45,7 @@ func TestValidateCreateJobVacancy(t *testing.T) {
 		errMsg      string
 	}{
 		{"valid vacancy", "Electrician needed", "Need electrician", "Kigali", "Electrician", false, ""},
+		{"valid aluminum vacancy", "Aluminum installer needed", "Fabricate and install aluminum fittings", "Nairobi", "Aluminum Fabrication & Installation", false, ""},
 		{"empty title", "", "Need electrician", "Kigali", "Electrician", true, "title is required"},
 		{"empty description", "Electrician needed", "", "Kigali", "Electrician", true, "description is required"},
 		{"empty location", "Electrician needed", "Need electrician", "", "Electrician", true, "location is required"},

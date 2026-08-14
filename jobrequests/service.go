@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"backend/skills"
 )
 
 func ValidateCreateJobRequest(title, description string) error {
@@ -17,18 +19,7 @@ func ValidateCreateJobRequest(title, description string) error {
 }
 
 // ValidSkills is the fixed set of trades an employer can select for a vacancy.
-var ValidSkills = []string{
-	"Mason",
-	"Carpenter",
-	"Electrician",
-	"Plumber",
-	"Painter",
-	"Welder",
-	"Tile Fixer",
-	"Gardener",
-	"Cleaner",
-	"General Labourer",
-}
+var ValidSkills = skills.CatalogNames()
 
 func IsValidSkill(skill string) bool {
 	return slices.Contains(ValidSkills, skill)
