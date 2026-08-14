@@ -16,38 +16,50 @@ const (
 	StatusPending   = "pending"
 	StatusActive    = "active"
 	StatusSuspended = "suspended"
+
+	// ProfileStatus values gate whether an artisan may start an assessment
+	// journey or apply for jobs. See backend/docs/superpowers/specs/2026-08-14-artisan-profile-review-design.md.
+	ProfileStatusNotSubmitted  = "not_submitted"
+	ProfileStatusPendingReview = "pending_review"
+	ProfileStatusApproved      = "approved"
+	ProfileStatusRejected      = "rejected"
 )
 
 type User struct {
-	ID                 string     `json:"id" bson:"_id"`
-	OldID              int        `json:"old_id,omitempty" bson:"old_id,omitempty"`
-	FirstName          string     `json:"first_name" bson:"first_name"`
-	LastName           string     `json:"last_name" bson:"last_name"`
-	Email              string     `json:"email" bson:"email"`
-	Phone              string     `json:"phone" bson:"phone"`
-	Password           []byte     `json:"-" bson:"password"`
-	UserType           string     `json:"user_type" bson:"user_type"`
-	Status             string     `json:"status" bson:"status"`
-	IsActive           bool       `json:"is_active" bson:"is_active"`
-	Otp                string     `json:"-" bson:"otp,omitempty"`
-	OtpExpiresAt       time.Time  `json:"-" bson:"otp_expires_at,omitempty"`
-	OtpAttempts        int        `json:"-" bson:"otp_attempts,omitempty"`
-	PhoneVerified      bool       `json:"phone_verified" bson:"phone_verified"`
-	FundisID           string     `json:"fundis_id,omitempty" bson:"fundis_id,omitempty"`
-	AvatarID           string     `json:"avatar_id,omitempty" bson:"avatar_id,omitempty"`
-	FCMToken           string     `json:"fcm_token,omitempty" bson:"fcm_token,omitempty"`
-	IsAvailable        bool       `json:"is_available" bson:"is_available"`
-	IsVerified         bool       `json:"is_verified" bson:"is_verified"`
-	VerifiedUntil      *time.Time `json:"verified_until,omitempty" bson:"verified_until,omitempty"`
-	CertifiedAt        *time.Time `json:"certified_at,omitempty" bson:"certified_at,omitempty"`
-	CertificationGrade int        `json:"certification_grade,omitempty" bson:"certification_grade,omitempty"`
-	FeaturedUntil      *time.Time `json:"featured_until,omitempty" bson:"featured_until,omitempty"`
-	Slug               string     `json:"slug,omitempty" bson:"slug,omitempty"`
-	IsProfilePublic    bool       `json:"is_profile_public" bson:"is_profile_public"`
-	ReferralCodeUsed   string     `json:"-" bson:"referral_code_used,omitempty"`
-	Migrated           bool       `json:"migrated,omitempty" bson:"migrated,omitempty"`
-	CreatedAt          time.Time  `json:"created_at" bson:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at" bson:"updated_at"`
+	ID                  string     `json:"id" bson:"_id"`
+	OldID               int        `json:"old_id,omitempty" bson:"old_id,omitempty"`
+	FirstName           string     `json:"first_name" bson:"first_name"`
+	LastName            string     `json:"last_name" bson:"last_name"`
+	Email               string     `json:"email" bson:"email"`
+	Phone               string     `json:"phone" bson:"phone"`
+	Password            []byte     `json:"-" bson:"password"`
+	UserType            string     `json:"user_type" bson:"user_type"`
+	Status              string     `json:"status" bson:"status"`
+	IsActive            bool       `json:"is_active" bson:"is_active"`
+	Otp                 string     `json:"-" bson:"otp,omitempty"`
+	OtpExpiresAt        time.Time  `json:"-" bson:"otp_expires_at,omitempty"`
+	OtpAttempts         int        `json:"-" bson:"otp_attempts,omitempty"`
+	PhoneVerified       bool       `json:"phone_verified" bson:"phone_verified"`
+	FundisID            string     `json:"fundis_id,omitempty" bson:"fundis_id,omitempty"`
+	AvatarID            string     `json:"avatar_id,omitempty" bson:"avatar_id,omitempty"`
+	FCMToken            string     `json:"fcm_token,omitempty" bson:"fcm_token,omitempty"`
+	IsAvailable         bool       `json:"is_available" bson:"is_available"`
+	IsVerified          bool       `json:"is_verified" bson:"is_verified"`
+	VerifiedUntil       *time.Time `json:"verified_until,omitempty" bson:"verified_until,omitempty"`
+	CertifiedAt         *time.Time `json:"certified_at,omitempty" bson:"certified_at,omitempty"`
+	CertificationGrade  int        `json:"certification_grade,omitempty" bson:"certification_grade,omitempty"`
+	FeaturedUntil       *time.Time `json:"featured_until,omitempty" bson:"featured_until,omitempty"`
+	Slug                string     `json:"slug,omitempty" bson:"slug,omitempty"`
+	IsProfilePublic     bool       `json:"is_profile_public" bson:"is_profile_public"`
+	ReferralCodeUsed    string     `json:"-" bson:"referral_code_used,omitempty"`
+	Migrated            bool       `json:"migrated,omitempty" bson:"migrated,omitempty"`
+	ProfileStatus       string     `json:"profile_status" bson:"profile_status"`
+	ProfileSubmittedAt  *time.Time `json:"profile_submitted_at,omitempty" bson:"profile_submitted_at,omitempty"`
+	ProfileReviewedAt   *time.Time `json:"profile_reviewed_at,omitempty" bson:"profile_reviewed_at,omitempty"`
+	ProfileReviewedBy   string     `json:"profile_reviewed_by,omitempty" bson:"profile_reviewed_by,omitempty"`
+	ProfileRejectReason string     `json:"profile_reject_reason,omitempty" bson:"profile_reject_reason,omitempty"`
+	CreatedAt           time.Time  `json:"created_at" bson:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at" bson:"updated_at"`
 }
 
 type ArtisanSummary struct {
@@ -308,4 +320,18 @@ func ListAllUsers(filter bson.M, page, limit int64) ([]User, int64, error) {
 	}
 
 	return userList, total, nil
+}
+
+// EffectiveProfileStatus returns u.ProfileStatus, treating an empty stored
+// value (the Go zero value, which should not occur post-migration but is a
+// legitimate state for any user created before this field existed and not
+// yet backfilled) as ProfileStatusNotSubmitted. Every comparison against
+// ProfileStatus should go through this function rather than comparing the
+// raw field directly, so callers never have to repeat the empty-string
+// fallback themselves.
+func EffectiveProfileStatus(u *User) string {
+	if u == nil || u.ProfileStatus == "" {
+		return ProfileStatusNotSubmitted
+	}
+	return u.ProfileStatus
 }
