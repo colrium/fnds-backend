@@ -310,7 +310,6 @@ func main() {
 	authGroup := api.Group("")
 	authGroup.Use(middleware.JWTAuth)
 
-	auth.RegisterAuthRoutes(authGroup)
 	profiles.RegisterAuthRoutes(authGroup)
 	users.RegisterAuthRoutes(authGroup)
 	reviews.RegisterAuthRoutes(authGroup)

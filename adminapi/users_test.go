@@ -59,6 +59,30 @@ func TestBuildUserFilterEmptyArgsReturnsEmptyFilter(t *testing.T) {
 	}
 }
 
+// Regression test: search must be regex-escaped before it reaches Mongo, or
+// a caller can submit pathological regex syntax (ReDoS risk), matching the
+// escaping convention already used by jobrequests/vacancy_filter.go and
+// profiles/model.go.
+func TestBuildUserFilterEscapesRegexMetacharactersInSearch(t *testing.T) {
+	got := buildUserFilter("", "", "a.*(evil)+")
+	wantRegex := `a\.\*\(evil\)\+`
+	or, ok := got["$or"].([]bson.M)
+	if !ok || len(or) == 0 {
+		t.Fatalf("buildUserFilter() $or = %#v, want non-empty []bson.M", got["$or"])
+	}
+	for _, clause := range or {
+		for _, v := range clause {
+			field, ok := v.(bson.M)
+			if !ok {
+				t.Fatalf("clause value = %#v, want bson.M", v)
+			}
+			if field["$regex"] != wantRegex {
+				t.Errorf("$regex = %q, want %q (metacharacters must be escaped)", field["$regex"], wantRegex)
+			}
+		}
+	}
+}
+
 func TestHandleListUsersReturnsPagedEnvelopeWithoutPassword(t *testing.T) {
 	mt := useAdminMockMongo(t, "users")
 	mt.AddMockResponses(mtest.CreateCursorResponse(
@@ -74,6 +98,10 @@ func TestHandleListUsersReturnsPagedEnvelopeWithoutPassword(t *testing.T) {
 			{Key: "password", Value: []byte("super-secret-hash")},
 		},
 	))
+	// CountDocuments issues an aggregate command internally in mongo-driver
+	// v1.17, so it also needs a cursor-shaped mock response here, not a plain
+	// command-ack response — using CreateSuccessResponse for this call causes
+	// the handler to fail with 500 in this test.
 	mt.AddMockResponses(mtest.CreateCursorResponse(
 		0,
 		"test.users",

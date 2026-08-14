@@ -9,18 +9,8 @@ import (
 // Regression test for the bug where POST /admin/users was registered on the
 // plain JWT-authenticated group instead of the IsAdmin-guarded group, letting
 // any authenticated user create accounts (including, previously, admins).
-func TestAdminUserCreationIsNotOnThePlainAuthGroup(t *testing.T) {
-	e := echo.New()
-	g := e.Group("")
-	RegisterAuthRoutes(g)
-
-	for _, r := range e.Routes() {
-		if r.Method == "POST" && r.Path == "/admin/users" {
-			t.Fatalf("POST /admin/users must not be registered by RegisterAuthRoutes (no IsAdmin guard)")
-		}
-	}
-}
-
+// See adminapi/admin_group_test.go for the end-to-end version of this test
+// that exercises the real JWTAuth+IsAdmin middleware chain.
 func TestAdminUserCreationIsRegisteredOnAdminRoutes(t *testing.T) {
 	e := echo.New()
 	g := e.Group("/admin")

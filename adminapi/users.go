@@ -3,6 +3,7 @@ package adminapi
 import (
 	"errors"
 	"net/http"
+	"regexp"
 
 	"backend/responses"
 	"backend/users"
@@ -24,7 +25,7 @@ func buildUserFilter(userType, status, search string) bson.M {
 		filter["status"] = status
 	}
 	if search != "" {
-		regex := bson.M{"$regex": search, "$options": "i"}
+		regex := bson.M{"$regex": regexp.QuoteMeta(search), "$options": "i"}
 		filter["$or"] = []bson.M{
 			{"first_name": regex},
 			{"last_name": regex},

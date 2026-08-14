@@ -29,9 +29,6 @@ func RegisterPublicRoutes(g *echo.Group) {
 	g.POST("/login/:provider/callback", HandleSocialLogin)
 }
 
-func RegisterAuthRoutes(g *echo.Group) {
-}
-
 // RegisterAdminRoutes registers auth endpoints that require the caller to be
 // an admin (mounted on the IsAdmin-guarded group in main.go).
 func RegisterAdminRoutes(g *echo.Group) {
