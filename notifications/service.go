@@ -29,6 +29,12 @@ type ApplicationDecisionEvent struct {
 	Status       string
 }
 
+type ProfileReviewDecisionEvent struct {
+	UserID   string
+	Approved bool
+	Reason   string
+}
+
 type NewVacancyEvent struct {
 	WorkerIDs    []string
 	VacancyID    string
@@ -116,6 +122,25 @@ func (s *Service) NotifyApplicationDecision(ctx context.Context, event Applicati
 		}
 	}
 	return s.store.Create(ctx, notification)
+}
+
+func (s *Service) NotifyProfileReviewDecision(ctx context.Context, event ProfileReviewDecisionEvent) error {
+	if event.Approved {
+		return s.store.Create(ctx, Notification{
+			UserID:    event.UserID,
+			Type:      TypeProfileReviewApproved,
+			Title:     "Profile approved",
+			Message:   "Your profile has been approved. You can now start assessments or apply for jobs.",
+			ActionURL: "/profile",
+		})
+	}
+	return s.store.Create(ctx, Notification{
+		UserID:    event.UserID,
+		Type:      TypeProfileReviewRejected,
+		Title:     "Profile not approved",
+		Message:   "Your profile was not approved: " + event.Reason,
+		ActionURL: "/profile",
+	})
 }
 
 func (s *Service) NotifyMatchingWorkers(ctx context.Context, event NewVacancyEvent) error {

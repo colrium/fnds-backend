@@ -29,6 +29,8 @@ const (
 	TypeAssessmentResult        = "assessment_result"
 	TypeAppointmentScheduled    = "appointment_scheduled"
 	TypeAppointmentReminder     = "appointment_reminder"
+	TypeProfileReviewApproved   = "profile_review_approved"
+	TypeProfileReviewRejected   = "profile_review_rejected"
 )
 
 type DeliveryChannel string
