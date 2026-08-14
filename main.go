@@ -12,6 +12,7 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"backend/adminapi"
 	"backend/applications"
 	"backend/assessments"
 	"backend/auth"
@@ -377,6 +378,7 @@ func main() {
 	adminGroup.Use(middleware.JWTAuth, middleware.IsAdmin)
 	assessments.RegisterAdminRoutes(adminGroup)
 	auth.RegisterAdminRoutes(adminGroup)
+	adminapi.RegisterAdminRoutes(adminGroup)
 
 	authGroup.GET("/email/resend", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"message": "Verification email sent"})
