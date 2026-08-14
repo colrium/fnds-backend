@@ -61,6 +61,32 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
 
+      # Terraform reads this parameter to decide which image the service should
+      # run, so it must point at the build being deployed here — otherwise the
+      # next `terraform apply` would roll the service back. Storing a digest
+      # rather than a tag keeps the reference immutable.
+      # See infra/docs/digest-pinned-deploys.md.
+      - name: Publish image digest
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REPO: ${{ needs.set-env.outputs.ecr_repo }}
+          IMAGE_TAG: ${{ github.sha }}
+          ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+        run: |
+          DIGEST=$(aws ecr describe-images \
+            --repository-name $ECR_REPO \
+            --image-ids imageTag=$IMAGE_TAG \
+            --query 'imageDetails[0].imageDigest' \
+            --output text \
+            --region $AWS_REGION)
+
+          aws ssm put-parameter \
+            --name "/fundis/$ENVIRONMENT/backend/image" \
+            --value "$ECR_REGISTRY/$ECR_REPO@$DIGEST" \
+            --type String \
+            --overwrite \
+            --region $AWS_REGION
+
       - name: Deploy to ECS
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
