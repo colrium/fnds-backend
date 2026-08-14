@@ -31,6 +31,7 @@ import (
 	"backend/middleware"
 	"backend/notifications"
 	"backend/payments"
+	"backend/profileapproval"
 	"backend/profiles"
 	"backend/quotations"
 	"backend/referrals"
@@ -313,6 +314,7 @@ func main() {
 	authGroup.Use(middleware.JWTAuth)
 
 	profiles.RegisterAuthRoutes(authGroup)
+	profileapproval.RegisterAuthRoutes(authGroup)
 	users.RegisterAuthRoutes(authGroup)
 	reviews.RegisterAuthRoutes(authGroup)
 	jobrequests.RegisterAuthRoutes(authGroup)
