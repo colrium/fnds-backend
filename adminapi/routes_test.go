@@ -12,10 +12,14 @@ func TestRegisterAdminRoutesRegistersUserEndpoints(t *testing.T) {
 	RegisterAdminRoutes(g)
 
 	want := map[string]bool{
-		"GET /admin/users":              false,
-		"GET /admin/users/:id":          false,
-		"PATCH /admin/users/:id/status": false,
-		"GET /admin/stats":              false,
+		"GET /admin/users":                             false,
+		"GET /admin/users/:id":                         false,
+		"PATCH /admin/users/:id/status":                false,
+		"GET /admin/stats":                             false,
+		"GET /admin/profile-reviews":                   false,
+		"GET /admin/profile-reviews/:user_id":          false,
+		"POST /admin/profile-reviews/:user_id/approve": false,
+		"POST /admin/profile-reviews/:user_id/reject":  false,
 	}
 	for _, r := range e.Routes() {
 		key := r.Method + " " + r.Path

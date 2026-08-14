@@ -9,4 +9,8 @@ func RegisterAdminRoutes(g *echo.Group) {
 	g.GET("/users/:id", HandleGetUser)
 	g.PATCH("/users/:id/status", HandleUpdateUserStatus)
 	g.GET("/stats", HandleGetStats)
+	g.GET("/profile-reviews", HandleListProfileReviews)
+	g.GET("/profile-reviews/:user_id", HandleGetProfileReview)
+	g.POST("/profile-reviews/:user_id/approve", HandleApproveProfileReview)
+	g.POST("/profile-reviews/:user_id/reject", HandleRejectProfileReview)
 }
