@@ -14,6 +14,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
 )
 
@@ -217,6 +218,332 @@ func TestHandleUpdateUserStatusUpdatesAndReturnsUser(t *testing.T) {
 
 	if err := HandleUpdateUserStatus(ctx); err != nil {
 		t.Fatalf("HandleUpdateUserStatus() error = %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleUpdateUserTypeRejectsAdmin(t *testing.T) {
+	// No mock responses queued: an invalid user_type must be rejected before
+	// any DB lookup, so a real call here would panic with "no responses
+	// remaining", proving the reject happens up front.
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/user-1/user-type", `{"user_type":"admin"}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleUpdateUserType(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserType() error = %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleUpdateUserTypeUnknownUserReturns404(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch))
+
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/missing/user-type", `{"user_type":"customer"}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("missing")
+
+	if err := HandleUpdateUserType(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserType() error = %v", err)
+	}
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleUpdateUserTypeUpdatesAndReturnsUser(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "user_type", Value: "artisan"}},
+	))
+	mt.AddMockResponses(mtest.CreateSuccessResponse(
+		bson.E{Key: "n", Value: 1},
+		bson.E{Key: "nModified", Value: 1},
+	))
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "user_type", Value: "customer"}},
+	))
+
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/user-1/user-type", `{"user_type":"customer"}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleUpdateUserType(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserType() error = %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleResendUserOtpRejectsAlreadyVerified(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "phone", Value: "+254700000000"}, {Key: "phone_verified", Value: true}},
+	))
+
+	ctx, rec := adminHandlerContext(http.MethodPost, "/users/user-1/resend-otp", "")
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleResendUserOtp(ctx); err != nil {
+		t.Fatalf("HandleResendUserOtp() error = %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleResendUserOtpUnknownUserReturns404(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch))
+
+	ctx, rec := adminHandlerContext(http.MethodPost, "/users/missing/resend-otp", "")
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("missing")
+
+	if err := HandleResendUserOtp(ctx); err != nil {
+		t.Fatalf("HandleResendUserOtp() error = %v", err)
+	}
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleResendUserOtpSendsForUnverifiedUser(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "phone", Value: "+254700000000"}, {Key: "phone_verified", Value: false}},
+	))
+	// issuePhoneOTP persists the new code via UpdateUser; SMS delivery
+	// failure is logged, not surfaced, so no further mock is needed for it.
+	mt.AddMockResponses(mtest.CreateSuccessResponse(
+		bson.E{Key: "n", Value: 1},
+		bson.E{Key: "nModified", Value: 1},
+	))
+
+	ctx, rec := adminHandlerContext(http.MethodPost, "/users/user-1/resend-otp", "")
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleResendUserOtp(ctx); err != nil {
+		t.Fatalf("HandleResendUserOtp() error = %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleUpdateUserContactRequiresPhoneOrEmail(t *testing.T) {
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/user-1/contact", `{}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleUpdateUserContact(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserContact() error = %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleUpdateUserContactRejectsInvalidEmail(t *testing.T) {
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/user-1/contact", `{"email":"not-an-email"}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleUpdateUserContact(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserContact() error = %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleUpdateUserContactUnknownUserReturns404(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch))
+
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/missing/contact", `{"phone":"+254711111111"}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("missing")
+
+	if err := HandleUpdateUserContact(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserContact() error = %v", err)
+	}
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleUpdateUserContactNoOpWhenUnchanged(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "phone", Value: "+254700000000"}},
+	))
+	// No further mock responses queued: an unchanged value must not reach
+	// UpdateUser, so a real call would panic with "no responses remaining".
+
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/user-1/contact", `{"phone":"+254700000000"}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleUpdateUserContact(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserContact() error = %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleUpdateUserContactPhoneChangeResetsVerification(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "phone", Value: "+254700000000"}, {Key: "phone_verified", Value: true}},
+	))
+	mt.AddMockResponses(mtest.CreateSuccessResponse(
+		bson.E{Key: "n", Value: 1},
+		bson.E{Key: "nModified", Value: 1},
+	))
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "phone", Value: "+254711111111"}, {Key: "phone_verified", Value: false}},
+	))
+
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/user-1/contact", `{"phone":"+254711111111"}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleUpdateUserContact(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserContact() error = %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
+	}
+
+	// GetStartedEvent() pops events FIFO (oldest-first) despite its doc
+	// comment claiming "most recent" — a known mongo-driver v1.17 quirk
+	// (see users/profile_status_reversion_test.go for the same workaround).
+	// This handler issues find, update, find (a re-fetch after the write),
+	// so the update is neither the first nor the last recorded event —
+	// scan for it by command name instead of assuming a position.
+	events := mt.GetAllStartedEvents()
+	var updateEvent *event.CommandStartedEvent
+	for _, e := range events {
+		if e.CommandName == "update" {
+			updateEvent = e
+			break
+		}
+	}
+	if updateEvent == nil {
+		t.Fatalf("no update command found among %d recorded events", len(events))
+	}
+	var command struct {
+		Updates []struct {
+			U bson.M `bson:"u"`
+		} `bson:"updates"`
+	}
+	if err := bson.Unmarshal(updateEvent.Command, &command); err != nil {
+		t.Fatalf("decode update command: %v", err)
+	}
+	if len(command.Updates) != 1 {
+		t.Fatalf("updates = %#v, want exactly one update", command.Updates)
+	}
+	set, ok := command.Updates[0].U["$set"].(bson.M)
+	if !ok {
+		t.Fatalf("update $set = %#v, want bson.M", command.Updates[0].U["$set"])
+	}
+	delete(set, "updated_at")
+	want := bson.M{"phone": "+254711111111", "phone_verified": false}
+	if !reflect.DeepEqual(set, want) {
+		t.Errorf("update $set (excluding updated_at) = %#v, want %#v", set, want)
+	}
+}
+
+func TestHandleUpdateUserContactDuplicatePhoneReturns409(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "phone", Value: "+254700000000"}},
+	))
+	mt.AddMockResponses(mtest.CreateWriteErrorsResponse(mtest.WriteError{
+		Code:    11000,
+		Message: "E11000 duplicate key error collection: test.users index: uniq_phone dup key: { phone: \"+254711111111\" }",
+	}))
+
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/user-1/contact", `{"phone":"+254711111111"}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleUpdateUserContact(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserContact() error = %v", err)
+	}
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409; body: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "phone") {
+		t.Errorf("body = %s, want a phone-specific conflict message", rec.Body.String())
+	}
+}
+
+func TestHandleUpdateUserContactDuplicateEmailReturns409(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "email", Value: "old@example.com"}},
+	))
+	mt.AddMockResponses(mtest.CreateWriteErrorsResponse(mtest.WriteError{
+		Code:    11000,
+		Message: "E11000 duplicate key error collection: test.users index: uniq_email dup key: { email: \"new@example.com\" }",
+	}))
+
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/user-1/contact", `{"email":"new@example.com"}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleUpdateUserContact(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserContact() error = %v", err)
+	}
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409; body: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "email") {
+		t.Errorf("body = %s, want an email-specific conflict message", rec.Body.String())
+	}
+}
+
+func TestHandleUpdateUserContactUpdatesAndReturnsUser(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "email", Value: "old@example.com"}},
+	))
+	mt.AddMockResponses(mtest.CreateSuccessResponse(
+		bson.E{Key: "n", Value: 1},
+		bson.E{Key: "nModified", Value: 1},
+	))
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0, "test.users", mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "user-1"}, {Key: "email", Value: "new@example.com"}},
+	))
+
+	ctx, rec := adminHandlerContext(http.MethodPatch, "/users/user-1/contact", `{"email":"new@example.com"}`)
+	ctx.SetParamNames("id")
+	ctx.SetParamValues("user-1")
+
+	if err := HandleUpdateUserContact(ctx); err != nil {
+		t.Fatalf("HandleUpdateUserContact() error = %v", err)
 	}
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200; body: %s", rec.Code, rec.Body.String())
