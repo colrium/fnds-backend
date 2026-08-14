@@ -1293,21 +1293,36 @@ git commit -m "feat(profiles): revert profile_status to pending_review when an a
 
 ### Task 7: Artisan-facing `POST /profile/submit-review` route
 
+**CORRECTED DURING EXECUTION:** this task originally specified placing the handler in
+`backend/profiles/handlers.go`, calling into `profileapproval.SubmitForReview`. A dispatched
+implementer found this creates a real, unconditional import cycle: `profileapproval` already
+imports `profiles` (Task 4, for `GetFullProfile`/`GetProfileCompletion`), so having `profiles`
+import `profileapproval` for this one handler creates `profiles → profileapproval → profiles`.
+Go's cycle detection is per-package, not per-call-site, so no amount of scoping the call to one
+function avoids it — the original plan text's Step 5 reasoning ("since `go build` already
+succeeded, no cycle exists") was itself wrong; `go build` actually fails. The fix below moves
+the handler and its route registration into the `profileapproval` package itself — the package
+that already needs to call `SubmitForReview` internally, so it needs no cross-package call at
+all — and registers its own auth routes from `main.go`, exactly the same multi-package
+`RegisterAuthRoutes` convention `profiles`/`users`/`reviews`/`jobrequests`/`quotations` already
+use there (see `main.go` around the `authGroup := api.Group("")` block).
+
 **Files:**
-- Modify: `backend/profiles/routes.go`
-- Modify: `backend/profiles/handlers.go`
-- Create: `backend/profiles/submit_review_test.go`
+- Create: `backend/profileapproval/handlers.go`
+- Create: `backend/profileapproval/routes.go`
+- Create: `backend/profileapproval/submit_review_test.go`
+- Modify: `backend/main.go` (add one route-registration call)
 
 **Interfaces:**
-- Consumes: `profileapproval.SubmitForReview`, `profileapproval.ErrProfileIncomplete`, `profileapproval.ErrAlreadyPending` (Task 4).
-- Produces: `profiles.HandleSubmitProfileForReview(c echo.Context) error`, route `POST /profile/submit-review` on the authenticated group.
+- Consumes: `profileapproval.SubmitForReview`, `profileapproval.ErrProfileIncomplete`, `profileapproval.ErrAlreadyPending` (Task 4, same package — no cross-package import needed for this call).
+- Produces: `profileapproval.HandleSubmitProfileForReview(c echo.Context) error`, `profileapproval.RegisterAuthRoutes(g *echo.Group)`, route `POST /profile/submit-review` on the authenticated group.
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `backend/profiles/submit_review_test.go`:
+Create `backend/profileapproval/submit_review_test.go`:
 
 ```go
-package profiles
+package profileapproval
 
 import (
 	"net/http"
@@ -1344,10 +1359,10 @@ func TestHandleSubmitProfileForReviewRequiresAuth(t *testing.T) {
 func TestHandleSubmitProfileForReviewIncompleteProfile(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	mt.Run("incomplete", func(mt *mtest.T) {
-		useMockMongo(mt)
-		// profileapproval.SubmitForReview's own pending-check GetUserByID
-		// call, then the six calls profiles.GetFullProfile makes internally
-		// (including its own GetUserByID) — seven total, not six.
+		useProfileApprovalMockMongo(mt)
+		// SubmitForReview's own pending-check GetUserByID call, then the six
+		// calls profiles.GetFullProfile makes internally (including its own
+		// GetUserByID) — seven total, not six. See Task 4's identical note.
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch, bson.D{
 			{Key: "_id", Value: "user-1"}, {Key: "user_type", Value: "artisan"},
 		}))
@@ -1373,7 +1388,7 @@ func TestHandleSubmitProfileForReviewIncompleteProfile(t *testing.T) {
 func TestHandleSubmitProfileForReviewAlreadyPending(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	mt.Run("already pending", func(mt *mtest.T) {
-		useMockMongo(mt)
+		useProfileApprovalMockMongo(mt)
 		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch, bson.D{
 			{Key: "_id", Value: "user-1"}, {Key: "user_type", Value: "artisan"},
 			{Key: "profile_status", Value: "pending_review"},
@@ -1390,32 +1405,42 @@ func TestHandleSubmitProfileForReviewAlreadyPending(t *testing.T) {
 }
 ```
 
-Note this file lives in package `profiles` and reuses that package's existing `useMockMongo`
-test helper (already defined in `backend/profiles/slug_test.go` per the same convention
-other `profiles` test files use — confirm with `grep -n "func useMockMongo" profiles/*.go`
-before writing, since the exact defining file may differ from what is guessed here).
+This reuses `useProfileApprovalMockMongo`, already defined in `backend/profileapproval/service_test.go`
+(Task 4, same package) — do not redefine it here.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd backend && go test ./profiles/... -run TestHandleSubmitProfileForReview -v`
+Run: `cd backend && go test ./profileapproval/... -run TestHandleSubmitProfileForReview -v`
 Expected: FAIL with `undefined: HandleSubmitProfileForReview`
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 3: Implement the handler**
 
-In `backend/profiles/handlers.go`, add near the end of the file (after `HandleUpdateProfile`):
+Create `backend/profileapproval/handlers.go`:
 
 ```go
+package profileapproval
+
+import (
+	"errors"
+	"net/http"
+
+	"backend/contextutil"
+	"backend/responses"
+
+	"github.com/labstack/echo/v4"
+)
+
 func HandleSubmitProfileForReview(ctx echo.Context) error {
 	userID := contextutil.GetUserID(ctx)
 	if userID == "" {
 		return responses.SendError(ctx, 401, "Unauthorized")
 	}
 
-	if err := profileapproval.SubmitForReview(ctx.Request().Context(), userID); err != nil {
-		if errors.Is(err, profileapproval.ErrProfileIncomplete) {
+	if err := SubmitForReview(ctx.Request().Context(), userID); err != nil {
+		if errors.Is(err, ErrProfileIncomplete) {
 			return responses.SendError(ctx, http.StatusBadRequest, err.Error())
 		}
-		if errors.Is(err, profileapproval.ErrAlreadyPending) {
+		if errors.Is(err, ErrAlreadyPending) {
 			return responses.SendError(ctx, http.StatusConflict, err.Error())
 		}
 		return responses.SendError(ctx, http.StatusInternalServerError, "failed to submit profile for review")
@@ -1425,69 +1450,87 @@ func HandleSubmitProfileForReview(ctx echo.Context) error {
 }
 ```
 
-Add `"net/http"` and `"backend/profileapproval"` to `backend/profiles/handlers.go`'s import
-block (the file's current imports are `"errors"`, `"log/slog"`, `"regexp"`, `"backend/contextutil"`,
-`"backend/middleware"`, `"backend/responses"`, `"backend/skills"`, `"backend/users"`, plus the
-`echo`/`bson`/`mongo` third-party imports — `"errors"` is already present, `"net/http"` and
-`"backend/profileapproval"` are not).
+Note `SubmitForReview`/`ErrProfileIncomplete`/`ErrAlreadyPending` are called unqualified — this
+file is in the same package as Task 4's `service.go`, so no import of `profileapproval` itself
+is needed or possible.
 
-In `backend/profiles/routes.go`, change:
+- [ ] **Step 4: Implement route registration**
 
-```go
-func RegisterAuthRoutes(g *echo.Group) {
-	g.GET("/profile", HandleGetProfile)
-	g.POST("/profile", HandleUpdateProfile)
-	g.POST("/profile/public", HandleTogglePublicProfile)
-}
-```
-
-to:
+Create `backend/profileapproval/routes.go`:
 
 ```go
+package profileapproval
+
+import "github.com/labstack/echo/v4"
+
+// RegisterAuthRoutes registers the artisan-facing profile-review routes on
+// the existing JWT-authenticated group (wired in main.go alongside
+// profiles.RegisterAuthRoutes and the other per-domain auth route
+// registrations).
 func RegisterAuthRoutes(g *echo.Group) {
-	g.GET("/profile", HandleGetProfile)
-	g.POST("/profile", HandleUpdateProfile)
-	g.POST("/profile/public", HandleTogglePublicProfile)
 	g.POST("/profile/submit-review", HandleSubmitProfileForReview)
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 5: Wire into `main.go`**
 
-Run: `cd backend && go test ./profiles/... -v`
-Expected: All PASS.
+In `backend/main.go`, find the block (inside the same function that builds `authGroup`):
 
-- [ ] **Step 5: Confirm no import cycle**
+```go
+	authGroup := api.Group("")
+	authGroup.Use(middleware.JWTAuth)
+
+	profiles.RegisterAuthRoutes(authGroup)
+```
+
+Add one line directly after it:
+
+```go
+	authGroup := api.Group("")
+	authGroup.Use(middleware.JWTAuth)
+
+	profiles.RegisterAuthRoutes(authGroup)
+	profileapproval.RegisterAuthRoutes(authGroup)
+```
+
+Add `"backend/profileapproval"` to `main.go`'s import block. Read the current import block
+first (`grep -n '"backend/' main.go`) and insert it in alphabetical position alongside the
+other `backend/*` imports, matching the file's existing ordering convention (this codebase's
+`main.go` groups and alphabetizes `backend/*` imports — e.g. `adminapi` already sits before
+`applications`/`assessments` from the prior admin-dashboard work; `profileapproval` sits
+between `profiles` and `quotations` alphabetically, but check the actual current adjacent
+lines before inserting, since exact surrounding imports may have shifted).
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+Run: `cd backend && go test ./profileapproval/... -v`
+Expected: All PASS — the three new tests plus every pre-existing `profileapproval` test from
+Task 4.
+
+- [ ] **Step 7: Confirm no import cycle and that the whole module builds**
 
 Run: `cd backend && go build ./...`
-Expected: builds cleanly. `profiles` now imports `profileapproval`, and `profileapproval`
-imports `profiles` — check this specific pair carefully:
-
-Run: `cd backend && go list -deps ./profileapproval | grep backend/profiles`
-Expected: prints `backend/profiles`, confirming `profileapproval` depends on `profiles`.
+Expected: builds cleanly. This time `profileapproval` does NOT gain a new import of `profiles`
+beyond what Task 4 already established (it already imports `profiles` for
+`GetFullProfile`/`GetProfileCompletion`), and `profiles` gains no new import at all — the
+cycle risk from the original version of this task is structurally impossible now, since
+nothing new was added to `profiles`.
 
 Run: `cd backend && go list -deps ./profiles | grep backend/profileapproval`
-Expected: **prints nothing** — if this prints `backend/profileapproval`, stop and re-read
-Task 2's design note: something introduced a cycle, most likely by accidentally calling
-`profileapproval` from inside `profiles/handlers.go`'s `HandleUpdateProfile` instead of the
-`users.RevertProfileStatusToPendingIfApproved` helper Task 6 wired in. `profiles` importing
-`profileapproval` is fine in this one new file (`HandleSubmitProfileForReview` calling
-`profileapproval.SubmitForReview`) — the cycle risk is specifically about `profiles` calling
-back into `profileapproval` from the *edit* path, not the *submit* path. Since `go build`
-already succeeded above, Go's own compiler has already ruled out an actual cycle; this
-`go list` check is a documentation/confirmation step, not a new safety net.
+Expected: prints nothing — confirms `profiles` still does not depend on `profileapproval`,
+exactly as it did before this task.
 
-- [ ] **Step 6: Run `gofmt` and `go vet`**
+- [ ] **Step 8: Run `gofmt` and `go vet`**
 
-Run: `cd backend && gofmt -w profiles/ && go vet ./profiles/...`
+Run: `cd backend && gofmt -w profileapproval/ main.go && go vet ./profileapproval/... ./...`
 Expected: gofmt silent, vet clean.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 cd backend
-git add profiles/routes.go profiles/handlers.go profiles/submit_review_test.go
-git commit -m "feat(profiles): add POST /profile/submit-review"
+git add profileapproval/handlers.go profileapproval/routes.go profileapproval/submit_review_test.go main.go
+git commit -m "feat(profileapproval): add POST /profile/submit-review"
 ```
 
 ---
