@@ -10,6 +10,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"backend/configs"
@@ -32,12 +33,16 @@ type CacheConfig struct {
 	TTL time.Duration
 	// KeyPrefix distinguishes different cached route groups.
 	KeyPrefix string
+	// AppEnvironment prevents shared Redis infrastructure from mixing
+	// production, staging, and development responses.
+	AppEnvironment string
 }
 
 type cachedResponse struct {
 	Version      int    `json:"version"`
 	Generation   int64  `json:"generation"`
 	KeyPrefix    string `json:"-"`
+	AppEnvironment string `json:"-"`
 	Resource     string `json:"-"`
 	Status       int    `json:"status"`
 	ContentType  string `json:"content_type"`
@@ -81,16 +86,13 @@ func redisCache(cfg CacheConfig, schedule cacheResponseScheduler) echo.Middlewar
 
 			ctx := c.Request().Context()
 			resource := c.Request().URL.Path
-			generation, err := loadCacheGeneration(ctx, cfg.KeyPrefix, resource)
+			generation, err := loadCacheGeneration(ctx, cfg, resource)
 			if err != nil {
 				slog.Error("failed to load cache generation", "cache_prefix", cfg.KeyPrefix, "error", err)
 				return next(c)
 			}
 
-			key := cfg.KeyPrefix + ":" + c.Request().URL.Path
-			if query := c.Request().URL.Query().Encode(); query != "" {
-				key += "?" + query
-			}
+			key := responseCacheKey(cfg, resource, c.Request().URL.Query().Encode())
 
 			// Try to serve from cache.
 			payload, err := configs.RDB.Get(ctx, key).Bytes()
@@ -113,7 +115,7 @@ func redisCache(cfg CacheConfig, schedule cacheResponseScheduler) echo.Middlewar
 			c.Response().Header().Set("X-Cache", "MISS")
 			value, err, _ := flights.Do(key, func() (any, error) {
 				// A previous flight may have filled Redis after the initial miss.
-				currentGeneration, generationErr := loadCacheGeneration(ctx, cfg.KeyPrefix, resource)
+				currentGeneration, generationErr := loadCacheGeneration(ctx, cfg, resource)
 				if generationErr == nil {
 					if currentPayload, getErr := configs.RDB.Get(ctx, key).Bytes(); getErr == nil {
 						if cached, ok := decodeCachedResponse(currentPayload); ok &&
@@ -151,6 +153,7 @@ func redisCache(cfg CacheConfig, schedule cacheResponseScheduler) echo.Middlewar
 					Version:      cachedResponseVersion,
 					Generation:   generation,
 					KeyPrefix:    cfg.KeyPrefix,
+					AppEnvironment: cfg.AppEnvironment,
 					Resource:     resource,
 					Status:       c.Response().Status,
 					ContentType:  contentType,
@@ -242,12 +245,32 @@ end
 return 1
 `)
 
-func cacheGenerationKey(prefix, resource string) string {
-	return cacheGenerationPrefix + prefix + ":" + resource
+func responseCacheNamespace(cfg CacheConfig) string {
+	environment := strings.TrimSpace(cfg.AppEnvironment)
+	if environment == "" {
+		return cfg.KeyPrefix
+	}
+	return "fundis:" + environment + ":response:" + cfg.KeyPrefix
 }
 
-func loadCacheGeneration(ctx context.Context, prefix, resource string) (int64, error) {
-	generation, err := configs.RDB.Get(ctx, cacheGenerationKey(prefix, resource)).Int64()
+func responseCacheKey(cfg CacheConfig, resource, query string) string {
+	key := responseCacheNamespace(cfg) + ":" + resource
+	if query != "" {
+		key += "?" + query
+	}
+	return key
+}
+
+func cacheGenerationKey(prefix, resource string) string {
+	return cacheGenerationKeyForConfig(CacheConfig{KeyPrefix: prefix}, resource)
+}
+
+func cacheGenerationKeyForConfig(cfg CacheConfig, resource string) string {
+	return cacheGenerationPrefix + responseCacheNamespace(cfg) + ":" + resource
+}
+
+func loadCacheGeneration(ctx context.Context, cfg CacheConfig, resource string) (int64, error) {
+	generation, err := configs.RDB.Get(ctx, cacheGenerationKeyForConfig(cfg, resource)).Int64()
 	if errors.Is(err, redis.Nil) {
 		return 0, nil
 	}
@@ -284,7 +307,10 @@ func cacheResponse(key string, cached cachedResponse, ttl time.Duration) {
 	_, err = cacheResponseScript.Run(
 		cacheCtx,
 		configs.RDB,
-		[]string{cacheGenerationKey(cached.KeyPrefix, cached.Resource), key},
+		[]string{cacheGenerationKeyForConfig(CacheConfig{
+			KeyPrefix:      cached.KeyPrefix,
+			AppEnvironment: cached.AppEnvironment,
+		}, cached.Resource), key},
 		strconv.FormatInt(cached.Generation, 10),
 		payload,
 		ttl.Milliseconds(),
