@@ -545,6 +545,13 @@ func HandleCreateJobApplication(ctx echo.Context) error {
 			"Complete your professional profile before applying for vacancies",
 		)
 	}
+	if users.EffectiveProfileStatus(account) != users.ProfileStatusApproved {
+		return responses.SendError(
+			ctx,
+			http.StatusForbidden,
+			"Your profile must be approved before applying for vacancies",
+		)
+	}
 
 	var app JobApplication
 	if err := ctx.Bind(&app); err != nil {

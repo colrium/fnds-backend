@@ -71,6 +71,9 @@ func HandleStartJourney(c echo.Context) error {
 		if errors.Is(err, ErrProfileIncomplete) {
 			return responses.SendError(c, http.StatusBadRequest, err.Error())
 		}
+		if errors.Is(err, ErrProfileNotApproved) {
+			return responses.SendError(c, http.StatusBadRequest, err.Error())
+		}
 		if errors.Is(err, ErrJourneyExists) {
 			return responses.SendError(c, http.StatusConflict, err.Error())
 		}

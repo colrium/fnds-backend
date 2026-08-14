@@ -11,6 +11,7 @@ import (
 
 	"backend/profiles"
 	"backend/timeutil"
+	"backend/users"
 )
 
 // Tunable policy constants. These are the product knobs most likely to change,
@@ -44,6 +45,7 @@ const (
 
 var (
 	ErrProfileIncomplete   = errors.New("complete your profile before starting assessments")
+	ErrProfileNotApproved  = errors.New("your profile must be approved before starting assessments")
 	ErrStageNotAvailable   = errors.New("this assessment stage is not available yet")
 	ErrCooldownActive      = errors.New("you can retake this assessment later")
 	ErrInsufficientBank    = errors.New("not enough approved questions for this skill yet")
@@ -113,6 +115,9 @@ func StartJourney(ctx context.Context, userID string) (*Journey, error) {
 	}
 	if !profiles.GetProfileCompletion(profile).Complete {
 		return nil, ErrProfileIncomplete
+	}
+	if users.EffectiveProfileStatus(profile.User) != users.ProfileStatusApproved {
+		return nil, ErrProfileNotApproved
 	}
 	// The profile wizard enforces exactly one skill, so index 0 is the trade.
 	skillID := ""
