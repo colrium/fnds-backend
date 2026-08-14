@@ -376,6 +376,7 @@ func main() {
 	adminGroup := api.Group("/admin")
 	adminGroup.Use(middleware.JWTAuth, middleware.IsAdmin)
 	assessments.RegisterAdminRoutes(adminGroup)
+	auth.RegisterAdminRoutes(adminGroup)
 
 	authGroup.GET("/email/resend", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"message": "Verification email sent"})

@@ -30,7 +30,12 @@ func RegisterPublicRoutes(g *echo.Group) {
 }
 
 func RegisterAuthRoutes(g *echo.Group) {
-	g.POST("/admin/users", HandleCreateUserViaAdmin)
+}
+
+// RegisterAdminRoutes registers auth endpoints that require the caller to be
+// an admin (mounted on the IsAdmin-guarded group in main.go).
+func RegisterAdminRoutes(g *echo.Group) {
+	g.POST("/users", HandleCreateUserViaAdmin)
 }
 
 type RegisterRequest struct {
@@ -406,7 +411,7 @@ func HandleCreateUserViaAdmin(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, "user_type is required")
 	}
 
-	_validTypes := map[string]bool{"customer": true, "artisan": true, "assessor": true}
+	_validTypes := map[string]bool{"customer": true, "artisan": true, "assessor": true, "admin": true}
 	if !_validTypes[req.UserType] {
 		return responses.SendError(ctx, 400, "invalid user_type")
 	}
