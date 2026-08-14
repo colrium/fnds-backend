@@ -151,6 +151,19 @@ func TestSubmitForReviewHappyPath(t *testing.T) {
 	})
 }
 
+func TestApproveUserNotFound(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+	mt.Run("user not found", func(mt *mtest.T) {
+		useProfileApprovalMockMongo(mt)
+		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch))
+
+		err := Approve(context.Background(), "missing", "admin-1")
+		if !errors.Is(err, ErrUserNotFound) {
+			mt.Errorf("Approve() error = %v, want ErrUserNotFound", err)
+		}
+	})
+}
+
 func TestApproveNotPending(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
 	mt.Run("not pending", func(mt *mtest.T) {
@@ -181,6 +194,19 @@ func TestRejectRequiresReason(t *testing.T) {
 	if err := Reject(context.Background(), "user-1", "admin-1", "   "); !errors.Is(err, ErrReasonRequired) {
 		t.Errorf("Reject() error = %v, want ErrReasonRequired", err)
 	}
+}
+
+func TestRejectUserNotFound(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+	mt.Run("user not found", func(mt *mtest.T) {
+		useProfileApprovalMockMongo(mt)
+		mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch))
+
+		err := Reject(context.Background(), "missing", "admin-1", "missing documents")
+		if !errors.Is(err, ErrUserNotFound) {
+			mt.Errorf("Reject() error = %v, want ErrUserNotFound", err)
+		}
+	})
 }
 
 func TestRejectNotPending(t *testing.T) {

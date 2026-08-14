@@ -18,6 +18,7 @@ import (
 	"backend/users"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 var (
@@ -25,6 +26,7 @@ var (
 	ErrAlreadyPending    = errors.New("your profile is already pending review")
 	ErrNotPending        = errors.New("this profile is not currently pending review")
 	ErrReasonRequired    = errors.New("a rejection reason is required")
+	ErrUserNotFound      = errors.New("user not found")
 )
 
 // SubmitForReview moves an artisan's profile into pending_review. The
@@ -61,6 +63,9 @@ func SubmitForReview(ctx context.Context, userID string) error {
 func Approve(ctx context.Context, userID, reviewedBy string) error {
 	user, err := users.GetUserByID(ctx, userID)
 	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return ErrUserNotFound
+		}
 		return fmt.Errorf("loading user: %w", err)
 	}
 	if users.EffectiveProfileStatus(user) != users.ProfileStatusPendingReview {
@@ -86,6 +91,9 @@ func Reject(ctx context.Context, userID, reviewedBy, reason string) error {
 
 	user, err := users.GetUserByID(ctx, userID)
 	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return ErrUserNotFound
+		}
 		return fmt.Errorf("loading user: %w", err)
 	}
 	if users.EffectiveProfileStatus(user) != users.ProfileStatusPendingReview {

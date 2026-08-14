@@ -78,6 +78,9 @@ func CreateNewUser(user *User) error {
 	user.ID = uuid.New().String()
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
+	if user.ProfileStatus == "" {
+		user.ProfileStatus = ProfileStatusNotSubmitted
+	}
 	_, err := configs.MI.DB.Collection("users").InsertOne(context.TODO(), user)
 	return err
 }

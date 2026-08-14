@@ -11,7 +11,7 @@ import "context"
 // resubmit (see profileapproval.SubmitForReview) rather than being silently
 // re-queued on every edit.
 func RevertProfileStatusToPendingIfApproved(ctx context.Context, user *User) error {
-	if user == nil || user.ProfileStatus != ProfileStatusApproved {
+	if user == nil || EffectiveProfileStatus(user) != ProfileStatusApproved {
 		return nil
 	}
 	return UpdateUser(user.ID, map[string]interface{}{

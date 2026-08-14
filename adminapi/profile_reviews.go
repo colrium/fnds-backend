@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"backend/contextutil"
 	"backend/notifications"
@@ -18,14 +19,35 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+var validProfileReviewStatuses = map[string]bool{
+	users.ProfileStatusNotSubmitted:  true,
+	users.ProfileStatusPendingReview: true,
+	users.ProfileStatusApproved:      true,
+	users.ProfileStatusRejected:      true,
+}
+
+// buildProfileReviewFilter builds the Mongo filter for the admin
+// profile-review list. not_submitted must match both the literal empty
+// string (users created before profile_status existed or the backfill ran)
+// and the literal "not_submitted" value; every other status is an exact
+// match since a user is never accidentally in one of those states.
+func buildProfileReviewFilter(status string) bson.M {
+	if status == users.ProfileStatusNotSubmitted {
+		return bson.M{"profile_status": bson.M{"$in": bson.A{"", users.ProfileStatusNotSubmitted}}}
+	}
+	return bson.M{"profile_status": status}
+}
+
 func HandleListProfileReviews(c echo.Context) error {
 	page, limit := parsePageLimit(c)
 	status := c.QueryParam("status")
 	if status == "" {
 		status = users.ProfileStatusPendingReview
+	} else if !validProfileReviewStatuses[status] {
+		return responses.SendError(c, http.StatusBadRequest, "invalid status")
 	}
 
-	list, total, err := users.ListAllUsers(bson.M{"profile_status": status}, page, limit)
+	list, total, err := users.ListAllUsers(buildProfileReviewFilter(status), page, limit)
 	if err != nil {
 		return responses.SendError(c, http.StatusInternalServerError, "failed to list profile reviews")
 	}
@@ -85,6 +107,9 @@ func HandleApproveProfileReview(c echo.Context) error {
 	reviewedBy := contextutil.GetUserID(c)
 
 	if err := profileapproval.Approve(c.Request().Context(), userID, reviewedBy); err != nil {
+		if errors.Is(err, profileapproval.ErrUserNotFound) {
+			return responses.SendError(c, http.StatusNotFound, "user not found")
+		}
 		if errors.Is(err, profileapproval.ErrNotPending) {
 			return responses.SendError(c, http.StatusConflict, err.Error())
 		}
@@ -104,7 +129,16 @@ func HandleRejectProfileReview(c echo.Context) error {
 		return responses.SendError(c, http.StatusBadRequest, "invalid request body")
 	}
 
+	// Fast-fail at the HTTP layer too (defense in depth) — the domain layer
+	// in profileapproval.Reject still checks this via ErrReasonRequired below.
+	if strings.TrimSpace(req.Reason) == "" {
+		return responses.SendError(c, http.StatusBadRequest, "a rejection reason is required")
+	}
+
 	if err := profileapproval.Reject(c.Request().Context(), userID, reviewedBy, req.Reason); err != nil {
+		if errors.Is(err, profileapproval.ErrUserNotFound) {
+			return responses.SendError(c, http.StatusNotFound, "user not found")
+		}
 		if errors.Is(err, profileapproval.ErrReasonRequired) {
 			return responses.SendError(c, http.StatusBadRequest, err.Error())
 		}

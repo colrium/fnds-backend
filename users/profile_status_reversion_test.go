@@ -2,6 +2,7 @@ package users
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"backend/configs"
@@ -58,6 +59,30 @@ func TestRevertProfileStatusToPendingIfApprovedRevertsWhenApproved(t *testing.T)
 		event := mt.GetStartedEvent()
 		if event == nil || event.CommandName != "update" {
 			mt.Fatalf("started event = %#v, want an update command", event)
+		}
+
+		var command struct {
+			Updates []struct {
+				U bson.M `bson:"u"`
+			} `bson:"updates"`
+		}
+		if err := bson.Unmarshal(event.Command, &command); err != nil {
+			mt.Fatalf("decode update command: %v", err)
+		}
+		if len(command.Updates) != 1 {
+			mt.Fatalf("updates = %#v, want exactly one update", command.Updates)
+		}
+		set, ok := command.Updates[0].U["$set"].(bson.M)
+		if !ok {
+			mt.Fatalf("update $set = %#v, want bson.M", command.Updates[0].U["$set"])
+		}
+		// UpdateUser always injects updated_at itself; beyond that, the $set
+		// must contain ONLY profile_status — not profile_submitted_at,
+		// profile_reviewed_by, or profile_reviewed_at.
+		delete(set, "updated_at")
+		want := bson.M{"profile_status": ProfileStatusPendingReview}
+		if !reflect.DeepEqual(set, want) {
+			mt.Errorf("update $set (excluding updated_at) = %#v, want %#v (must not also set profile_submitted_at/profile_reviewed_by/profile_reviewed_at)", set, want)
 		}
 	})
 }
