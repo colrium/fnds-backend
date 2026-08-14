@@ -363,6 +363,48 @@ func TestHandleUpdateProfileValidationFailureDoesNotInvalidateCache(t *testing.T
 	}
 }
 
+func artisanDocumentWithProfileStatus(slug, profileStatus string) bson.D {
+	return bson.D{
+		{Key: "_id", Value: "user-1"},
+		{Key: "first_name", Value: "Alice"},
+		{Key: "last_name", Value: "Kamau"},
+		{Key: "user_type", Value: "artisan"},
+		{Key: "slug", Value: slug},
+		{Key: "profile_status", Value: profileStatus},
+	}
+}
+
+func TestHandleUpdateProfileRevertsApprovedStatusToPendingReview(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+	mt.Run("approved reverts on edit", func(mt *mtest.T) {
+		useMockMongo(mt)
+		server := useProfileTestRedis(mt.T)
+		const slug = "alice-kamau-plumber-nairobi"
+		seedPublicProfileCaches(mt.T, server, slug)
+		mt.AddMockResponses(
+			userCursorResponse(mt, artisanDocumentWithProfileStatus(slug, "approved")),
+			userCursorResponse(mt, artisanDocumentWithProfileStatus(slug, "approved")),
+			mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}, bson.E{Key: "nModified", Value: 1}),
+		)
+
+		recorder, err := runUpdateProfileRequest("user-1", `{}`)
+		if err != nil {
+			mt.Fatalf("HandleUpdateProfile() error = %v", err)
+		}
+		if recorder.Code != http.StatusOK {
+			mt.Fatalf("status = %d, want 200; body: %s", recorder.Code, recorder.Body.String())
+		}
+		events := mt.GetAllStartedEvents()
+		if len(events) == 0 {
+			mt.Fatal("no MongoDB commands were recorded")
+		}
+		lastEvent := events[len(events)-1]
+		if lastEvent.CommandName != "update" {
+			mt.Fatalf("last started event = %#v, want the profile_status revert update", lastEvent)
+		}
+	})
+}
+
 func runUpdateProfileRequest(userID, body string) (*httptest.ResponseRecorder, error) {
 	app := echo.New()
 	request := httptest.NewRequest(http.MethodPatch, "/profile", strings.NewReader(body))

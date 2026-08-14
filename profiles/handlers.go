@@ -95,6 +95,19 @@ func HandleUpdateProfile(ctx echo.Context) error {
 		invalidateArtisanCache(ctx, user.Slug)
 	}
 
+	if user != nil {
+		if err := users.RevertProfileStatusToPendingIfApproved(ctx.Request().Context(), user); err != nil {
+			slog.ErrorContext(
+				ctx.Request().Context(),
+				"failed to revert profile_status after edit",
+				"user_id",
+				userID,
+				"error",
+				err,
+			)
+		}
+	}
+
 	return responses.SendOK(ctx, nil, "Profile updated successfully")
 }
 
