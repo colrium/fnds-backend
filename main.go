@@ -95,8 +95,9 @@ func registerPublicArtisanRoutes(
 		deps.shareHandler,
 		crawlerLimiter,
 		deps.newCache(middleware.CacheConfig{
-			TTL:       5 * time.Minute,
-			KeyPrefix: "artisan-share",
+			TTL:            5 * time.Minute,
+			KeyPrefix:      "artisan-share",
+			AppEnvironment: configs.AppEnv(),
 		}),
 	)
 	app.GET(
@@ -104,16 +105,18 @@ func registerPublicArtisanRoutes(
 		deps.sitemapHandler,
 		crawlerLimiter,
 		deps.newCache(middleware.CacheConfig{
-			TTL:       10 * time.Minute,
-			KeyPrefix: "artisan-sitemap",
+			TTL:            10 * time.Minute,
+			KeyPrefix:      "artisan-sitemap",
+			AppEnvironment: configs.AppEnv(),
 		}),
 	)
 
 	artisanPublicGroup := api.Group("")
 	artisanPublicGroup.Use(deps.newLimiter())
 	artisanPublicGroup.Use(deps.newCache(middleware.CacheConfig{
-		TTL:       5 * time.Minute,
-		KeyPrefix: "artisan-profile",
+		TTL:            5 * time.Minute,
+		KeyPrefix:      "artisan-profile",
+		AppEnvironment: configs.AppEnv(),
 	}))
 	deps.registerAPIRoutes(artisanPublicGroup)
 }

@@ -39,15 +39,15 @@ type CacheConfig struct {
 }
 
 type cachedResponse struct {
-	Version      int    `json:"version"`
-	Generation   int64  `json:"generation"`
-	KeyPrefix    string `json:"-"`
+	Version        int    `json:"version"`
+	Generation     int64  `json:"generation"`
+	KeyPrefix      string `json:"-"`
 	AppEnvironment string `json:"-"`
-	Resource     string `json:"-"`
-	Status       int    `json:"status"`
-	ContentType  string `json:"content_type"`
-	CacheControl string `json:"cache_control,omitempty"`
-	Body         []byte `json:"body"`
+	Resource       string `json:"-"`
+	Status         int    `json:"status"`
+	ContentType    string `json:"content_type"`
+	CacheControl   string `json:"cache_control,omitempty"`
+	Body           []byte `json:"body"`
 }
 
 type cacheResponseScheduler func(string, cachedResponse, time.Duration)
@@ -150,15 +150,15 @@ func redisCache(cfg CacheConfig, schedule cacheResponseScheduler) echo.Middlewar
 					contentType = http.DetectContentType(responseBody)
 				}
 				response := cachedResponse{
-					Version:      cachedResponseVersion,
-					Generation:   generation,
-					KeyPrefix:    cfg.KeyPrefix,
+					Version:        cachedResponseVersion,
+					Generation:     generation,
+					KeyPrefix:      cfg.KeyPrefix,
 					AppEnvironment: cfg.AppEnvironment,
-					Resource:     resource,
-					Status:       c.Response().Status,
-					ContentType:  contentType,
-					CacheControl: c.Response().Header().Get("Cache-Control"),
-					Body:         responseBody,
+					Resource:       resource,
+					Status:         c.Response().Status,
+					ContentType:    contentType,
+					CacheControl:   c.Response().Header().Get("Cache-Control"),
+					Body:           responseBody,
 				}
 				cacheable := response.Status >= http.StatusOK &&
 					response.Status < http.StatusMultipleChoices &&
@@ -334,25 +334,30 @@ func InvalidateArtisanCache(ctx context.Context, slug string) error {
 	defer cancel()
 
 	targets := []struct {
-		prefix   string
+		cfg      CacheConfig
 		resource string
 		baseKey  string
 	}{
 		{
-			prefix:   "artisan-profile",
+			cfg: CacheConfig{
+				KeyPrefix:      "artisan-profile",
+				AppEnvironment: configs.AppEnv(),
+			},
 			resource: "/api/v1/artisans/" + slug,
-			baseKey:  "artisan-profile:/api/v1/artisans/" + slug,
 		},
 		{
-			prefix:   "artisan-share",
+			cfg: CacheConfig{
+				KeyPrefix:      "artisan-share",
+				AppEnvironment: configs.AppEnv(),
+			},
 			resource: "/artisan/" + slug,
-			baseKey:  "artisan-share:/artisan/" + slug,
 		},
 	}
 	var invalidationErrors []error
 	for _, target := range targets {
+		target.baseKey = responseCacheKey(target.cfg, target.resource, "")
 		_, err := configs.RDB.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-			pipe.Incr(ctx, cacheGenerationKey(target.prefix, target.resource))
+			pipe.Incr(ctx, cacheGenerationKeyForConfig(target.cfg, target.resource))
 			pipe.Del(ctx, target.baseKey)
 			return nil
 		})
@@ -377,12 +382,15 @@ func InvalidateArtisanSitemapCache(ctx context.Context) error {
 	defer cancel()
 
 	const (
-		prefix   = "artisan-sitemap"
 		resource = "/sitemap-artisans.xml"
-		baseKey  = "artisan-sitemap:/sitemap-artisans.xml"
 	)
+	cfg := CacheConfig{
+		KeyPrefix:      "artisan-sitemap",
+		AppEnvironment: configs.AppEnv(),
+	}
+	baseKey := responseCacheKey(cfg, resource, "")
 	_, err := configs.RDB.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
-		pipe.Incr(ctx, cacheGenerationKey(prefix, resource))
+		pipe.Incr(ctx, cacheGenerationKeyForConfig(cfg, resource))
 		pipe.Del(ctx, baseKey)
 		return nil
 	})
