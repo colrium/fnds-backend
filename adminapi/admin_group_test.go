@@ -128,3 +128,48 @@ func TestAdminUsersCreateEndpointRejectsNonAdminCallerEndToEnd(t *testing.T) {
 		t.Errorf("status = %d, want 401 for a non-admin JWT; body: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestAdminGroupRejectsNonAdminJWTOnProfileReviewApprove(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	queueUserLookup(mt, "artisan-1", "artisan") // JWTAuth's lookup
+	queueUserLookup(mt, "artisan-1", "artisan") // IsAdmin's lookup
+
+	token, _, err := jwtutil.GenerateToken("artisan-1")
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+
+	app := buildAdminGroup()
+	req := httptest.NewRequest(http.MethodPost, "/admin/profile-reviews/user-2/approve", nil)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want 401 for a non-admin JWT; body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAdminGroupAllowsAdminJWTOnProfileReviewList(t *testing.T) {
+	mt := useAdminMockMongo(t, "users")
+	queueUserLookup(mt, "admin-1", "admin") // JWTAuth's lookup
+	queueUserLookup(mt, "admin-1", "admin") // IsAdmin's lookup
+	// HandleListProfileReviews' own Find + CountDocuments:
+	mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch))
+	mt.AddMockResponses(mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch))
+
+	token, _, err := jwtutil.GenerateToken("admin-1")
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+
+	app := buildAdminGroup()
+	req := httptest.NewRequest(http.MethodGet, "/admin/profile-reviews", nil)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	rec := httptest.NewRecorder()
+	app.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200 for an admin JWT; body: %s", rec.Code, rec.Body.String())
+	}
+}
