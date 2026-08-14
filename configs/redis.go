@@ -15,8 +15,8 @@ import (
 var RDB *redis.Client
 
 // ConnectRedis parses REDIS_URL and verifies the connection. An empty URL
-// intentionally disables caching; configured but invalid or unreachable Redis
-// returns an error so the application can fail fast.
+// intentionally disables caching. Invalid or unreachable Redis returns an
+// error with RDB left nil so the application can choose to degrade gracefully.
 func ConnectRedis() error {
 	url := GetRedisUrl()
 	if url == "" {

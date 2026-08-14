@@ -135,6 +135,48 @@ func TestRedisCacheMissStoresResponseWithCanonicalQueryKey(t *testing.T) {
 	}
 }
 
+func TestRedisCacheNamespacesConfiguredEnvironment(t *testing.T) {
+	server := useTestRedis(t)
+	cfg := CacheConfig{
+		TTL:            time.Minute,
+		KeyPrefix:      "artisan-profile",
+		AppEnvironment: "staging",
+	}
+
+	if _, err := runCachedRequest(
+		t,
+		http.MethodGet,
+		"/api/v1/artisans/jane",
+		cfg,
+		func(c echo.Context) error {
+			return c.String(http.StatusOK, "profile")
+		},
+	); err != nil {
+		t.Fatalf("cached handler error = %v", err)
+	}
+
+	namespacedKey := "fundis:staging:response:artisan-profile:/api/v1/artisans/jane"
+	if !server.Exists(namespacedKey) {
+		t.Fatalf("namespaced cache key %q was not written", namespacedKey)
+	}
+	if server.Exists("artisan-profile:/api/v1/artisans/jane") {
+		t.Fatal("unqualified cache key was written despite configured environment")
+	}
+}
+
+func TestJitteredCacheTTLStaysWithinTenPercent(t *testing.T) {
+	const ttl = 10 * time.Minute
+	minimum := ttl * 90 / 100
+	maximum := ttl * 110 / 100
+
+	for range 100 {
+		got := jitteredCacheTTL(ttl)
+		if got < minimum || got > maximum {
+			t.Fatalf("jitteredCacheTTL(%s) = %s, want within [%s, %s]", ttl, got, minimum, maximum)
+		}
+	}
+}
+
 func TestRedisCacheCoalescesConcurrentMisses(t *testing.T) {
 	_ = useTestRedis(t)
 	const requestCount = 12

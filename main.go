@@ -154,8 +154,7 @@ func main() {
 
 	configs.ConnectDB()
 	if err := configs.ConnectRedis(); err != nil {
-		slog.Error("failed to initialize Redis", "error", err)
-		os.Exit(1)
+		slog.Warn("Redis unavailable; continuing with caching disabled", "error", err)
 	}
 	slog.Info("database connected", "env", configs.AppEnv())
 
