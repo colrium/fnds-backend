@@ -12,6 +12,7 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"backend/adminapi"
 	"backend/applications"
 	"backend/assessments"
 	"backend/auth"
@@ -309,7 +310,6 @@ func main() {
 	authGroup := api.Group("")
 	authGroup.Use(middleware.JWTAuth)
 
-	auth.RegisterAuthRoutes(authGroup)
 	profiles.RegisterAuthRoutes(authGroup)
 	users.RegisterAuthRoutes(authGroup)
 	reviews.RegisterAuthRoutes(authGroup)
@@ -376,6 +376,8 @@ func main() {
 	adminGroup := api.Group("/admin")
 	adminGroup.Use(middleware.JWTAuth, middleware.IsAdmin)
 	assessments.RegisterAdminRoutes(adminGroup)
+	auth.RegisterAdminRoutes(adminGroup)
+	adminapi.RegisterAdminRoutes(adminGroup)
 
 	authGroup.GET("/email/resend", func(c echo.Context) error {
 		return c.JSON(200, map[string]string{"message": "Verification email sent"})
