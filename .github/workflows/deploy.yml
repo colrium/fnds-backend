@@ -152,3 +152,28 @@ jobs:
             --service $ECS_SERVICE \
             --task-definition $NEW_TASK_DEF \
             --region $AWS_REGION
+
+      # CI has just moved this service's image pointer in SSM, so Terraform's
+      # recorded state is now one revision behind what is running. Ask the infra
+      # repo to converge instead of leaving the drift until someone notices.
+      #
+      # Needs a PAT with contents:write on fundisapp/infra — the built-in
+      # GITHUB_TOKEN cannot trigger workflows in another repository. When the
+      # token is absent this is skipped rather than failed: the deploy itself
+      # succeeded, and infra's nightly schedule will converge regardless.
+      - name: Request infra converge
+        env:
+          INFRA_DISPATCH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          ENVIRONMENT: ${{ needs.set-env.outputs.environment }}
+        run: |
+          if [ -z "$INFRA_DISPATCH_TOKEN" ]; then
+            echo "::warning::INFRA_DISPATCH_TOKEN not set; skipping converge request. Infra will converge on its nightly schedule."
+            exit 0
+          fi
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer $INFRA_DISPATCH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/fundisapp/infra/dispatches \
+            -d "$(jq -nc --arg env "$ENVIRONMENT" \
+              '{event_type:"service-deployed",client_payload:{environment:$env}}')"
+          echo "Converge requested for $ENVIRONMENT"
