@@ -120,7 +120,7 @@ resource "aws_iam_role_policy" "secrets_access" {
 }
 
 resource "aws_iam_role_policy" "s3_access" {
-  name = "${local.name_prefix}-s3-access"
+  name = "${var.project_name}-${var.environment}-ecs-task-s3-access"
   role = data.aws_ssm_parameter.task_role_name.value
 
   policy = jsonencode({

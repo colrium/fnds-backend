@@ -10,7 +10,7 @@ terraform {
 data "aws_region" "current" {}
 
 resource "aws_cloudwatch_log_group" "this" {
-  name              = "/ecs/${var.name_prefix}"
+  name              = "/ecs/${substr(var.name_prefix, 0, length(var.name_prefix) - length(var.container_name) - 1)}/${var.container_name}"
   retention_in_days = var.log_retention_days
   tags              = var.tags
 }
