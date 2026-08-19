@@ -10,3 +10,10 @@ tmp/*
 scripts/data/*
 importusers
 .worktrees/
+
+# Terraform (infra/ stack) — infra repo's own .gitignore also ignores
+# .terraform.lock.hcl, so we match that precedent here.
+infra/.terraform/
+infra/*.tfplan
+infra/tfplan
+infra/.terraform.lock.hcl
