@@ -30,6 +30,7 @@ var ErrApplicationLimitReached = errors.New("monthly application limit reached")
 type UserSubscription struct {
 	ID                 string     `json:"id" bson:"_id"`
 	UserID             string     `json:"user_id" bson:"user_id"`
+	WorkspaceID        string     `json:"workspace_id,omitempty" bson:"workspace_id,omitempty"`
 	SubscriptionPlanID string     `json:"subscription_plan_id" bson:"subscription_plan_id"`
 	Audience           Audience   `json:"audience" bson:"audience"`
 	Status             string     `json:"status" bson:"status"`
@@ -71,6 +72,16 @@ func EnsureIndexes(ctx context.Context) error {
 				{Key: "end_date", Value: 1},
 			},
 			Options: options.Index().SetName("active_user_subscriptions"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "workspace_id", Value: 1},
+				{Key: "status", Value: 1},
+				{Key: "end_date", Value: 1},
+			},
+			Options: options.Index().
+				SetName("user_subscriptions_workspace").
+				SetPartialFilterExpression(bson.M{"workspace_id": bson.M{"$exists": true}}),
 		},
 	})
 	if err != nil {

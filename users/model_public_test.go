@@ -66,19 +66,62 @@ func TestGetPublicUserByFundisIDUsesExactPublicArtisanFilter(t *testing.T) {
 
 func TestEnsureIndexesIncludesUniquePublicSlugIndex(t *testing.T) {
 	mt := useMockMongo(t, "users")
-	mt.AddMockResponses(mtest.CreateSuccessResponse(
-		bson.E{Key: "numIndexesBefore", Value: 1},
-		bson.E{Key: "numIndexesAfter", Value: 4},
-	))
+	mt.AddMockResponses(
+		// Migration lock: findOneAndUpdate finds no expired lock to take over.
+		mtest.CreateSuccessResponse(bson.E{Key: "value", Value: nil}),
+		// Migration lock: insertOne creates a fresh lock document.
+		mtest.CreateSuccessResponse(),
+		// Step 1: aggregate for phone duplicate pre-check — empty cursor (no duplicates)
+		mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch),
+		// Step 2: updateMany to $unset empty/whitespace phone values
+		mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 0}, bson.E{Key: "nModified", Value: 0}),
+		// uniq_phone: listIndexes (not found, needs create) + dropOne + createOne
+		mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch),
+		mtest.CreateSuccessResponse(bson.E{Key: "nIndexesWas", Value: 1}),
+		mtest.CreateSuccessResponse(bson.E{Key: "numIndexesBefore", Value: 1}, bson.E{Key: "numIndexesAfter", Value: 2}),
+		// uniq_email: listIndexes (not found, needs create) + dropOne + createOne
+		mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch),
+		mtest.CreateSuccessResponse(bson.E{Key: "nIndexesWas", Value: 1}),
+		mtest.CreateSuccessResponse(bson.E{Key: "numIndexesBefore", Value: 2}, bson.E{Key: "numIndexesAfter", Value: 3}),
+		// uniq_slug_public: listIndexes (not found, needs create) + dropOne + createOne
+		mtest.CreateCursorResponse(0, "test.users", mtest.FirstBatch),
+		mtest.CreateSuccessResponse(bson.E{Key: "nIndexesWas", Value: 1}),
+		mtest.CreateSuccessResponse(bson.E{Key: "numIndexesBefore", Value: 3}, bson.E{Key: "numIndexesAfter", Value: 4}),
+		// createIndexes for users_email_ci
+		mtest.CreateSuccessResponse(bson.E{Key: "numIndexesBefore", Value: 4}, bson.E{Key: "numIndexesAfter", Value: 5}),
+		// Migration lock: release via deleteOne
+		mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}),
+	)
 
 	if err := EnsureIndexes(context.Background()); err != nil {
 		t.Fatalf("EnsureIndexes() error = %v", err)
 	}
 
-	event := mt.GetStartedEvent()
-	if event == nil || event.CommandName != "createIndexes" {
-		t.Fatalf("started event = %#v, want createIndexes", event)
+	// Find the createOne event for uniq_slug_public specifically, since each
+	// partial index is now created in its own createIndexes call.
+	var slugCreateIndexes *bson.Raw
+	for {
+		event := mt.GetStartedEvent()
+		if event == nil {
+			break
+		}
+		if event.CommandName != "createIndexes" {
+			continue
+		}
+		var probe struct {
+			Indexes []struct {
+				Name string `bson:"name"`
+			} `bson:"indexes"`
+		}
+		cmd := event.Command
+		if bson.Unmarshal(cmd, &probe) == nil && len(probe.Indexes) == 1 && probe.Indexes[0].Name == "uniq_slug_public" {
+			slugCreateIndexes = &cmd
+		}
 	}
+	if slugCreateIndexes == nil {
+		t.Fatal("no createIndexes event found for uniq_slug_public")
+	}
+
 	var command struct {
 		Indexes []struct {
 			Key                     bson.D `bson:"key"`
@@ -87,14 +130,14 @@ func TestEnsureIndexesIncludesUniquePublicSlugIndex(t *testing.T) {
 			PartialFilterExpression bson.M `bson:"partialFilterExpression"`
 		} `bson:"indexes"`
 	}
-	if err := bson.Unmarshal(event.Command, &command); err != nil {
+	if err := bson.Unmarshal(*slugCreateIndexes, &command); err != nil {
 		t.Fatalf("decode createIndexes command: %v", err)
 	}
-	if len(command.Indexes) != 3 {
-		t.Fatalf("index count = %d, want 3", len(command.Indexes))
+	if len(command.Indexes) != 1 {
+		t.Fatalf("index count = %d, want 1", len(command.Indexes))
 	}
 
-	slugIndex := command.Indexes[2]
+	slugIndex := command.Indexes[0]
 	if slugIndex.Name != "uniq_slug_public" {
 		t.Errorf("slug index name = %q, want uniq_slug_public", slugIndex.Name)
 	}

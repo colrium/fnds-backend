@@ -199,6 +199,16 @@ func BetterStackBatchSize() string    { return os.Getenv("BETTERSTACK_BATCH_SIZE
 func BetterStackFlushSeconds() string { return os.Getenv("BETTERSTACK_FLUSH_SECONDS") }
 func BetterStackQueueSize() string    { return os.Getenv("BETTERSTACK_QUEUE_SIZE") }
 
+// Stytch B2B employer authentication. Parsing and validation live in stytch.New
+// so they are unit-testable without t.Setenv.
+func StytchProjectID() string           { return os.Getenv("STYTCH_PROJECT_ID") }
+func StytchSecret() string              { return os.Getenv("STYTCH_SECRET") }
+func StytchPublicToken() string         { return os.Getenv("STYTCH_PUBLIC_TOKEN") }
+func StytchEnvironment() string         { return os.Getenv("STYTCH_ENV") }
+func StytchWebhookSecret() string       { return os.Getenv("STYTCH_WEBHOOK_SECRET") }
+func StytchEmployerAuthEnabled() string { return os.Getenv("STYTCH_EMPLOYER_AUTH_ENABLED") }
+func LegacyEmployerAuthEnabled() string { return os.Getenv("LEGACY_EMPLOYER_AUTH_ENABLED") }
+
 // Zoho Meeting configuration for oral assessment video calls.
 func ZohoMeetingClientID() string     { return os.Getenv("ZOHO_MEETING_CLIENT_ID") }
 func ZohoMeetingClientSecret() string { return os.Getenv("ZOHO_MEETING_CLIENT_SECRET") }

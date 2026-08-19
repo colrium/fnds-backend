@@ -57,6 +57,33 @@ func StoreRequestInDb(request any, collection string) (string, error) {
 	return uuid.Hex(), nil
 }
 
+// TransactionsSupported reports whether the connected deployment can run
+// multi-document transactions, determined once at startup from the hello
+// command: a replica set reports setName, mongos reports msg == "isdbgrid".
+func TransactionsSupported(ctx context.Context) (bool, error) {
+	var result bson.M
+	if err := MI.Client.Database("admin").RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}).Decode(&result); err != nil {
+		return false, fmt.Errorf("running hello command: %w", err)
+	}
+
+	// A replica set member reports a non-empty "setName" field.
+	if setName, ok := result["setName"]; ok {
+		if s, isStr := setName.(string); isStr && s != "" {
+			return true, nil
+		}
+	}
+
+	// A mongos instance reports msg == "isdbgrid".
+	if msg, ok := result["msg"]; ok {
+		if s, isStr := msg.(string); isStr && s == "isdbgrid" {
+			return true, nil
+		}
+	}
+
+	// Standalone mongod — transactions are not supported.
+	return false, nil
+}
+
 func UpdateRequestInDb(ID string, request any, collection string) (string, error) {
 	coll := MI.DB.Collection(collection)
 	filter := bson.M{"_id": ID}

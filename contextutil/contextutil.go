@@ -39,3 +39,36 @@ func GetUserID(c echo.Context) string {
 	}
 	return id
 }
+
+// SetWorkspaceID records the active workspace identifier for the current
+// request in two places.
+//
+// The echo store entry is what GetWorkspaceID reads, and it mirrors the
+// SetUser/GetUserID pattern so every existing caller convention keeps working.
+// The request context entry is what the Better_Stack_Handler reads:
+// slog.Handler.Handle receives a context.Context, not an echo.Context, so
+// echo's c.Set store is invisible to it. Writing the id into the stdlib context
+// is what makes workspace.id appear on Log_Events emitted downstream of
+// session resolution (Req 16.11). Routes that have not resolved a workspace
+// never call SetWorkspaceID, so their Log_Events carry no workspace object.
+//
+// No import cycle is created: contextutil imports logging (stdlib-only), and
+// never imports workspaces.
+func SetWorkspaceID(c echo.Context, id string) {
+	c.Set("workspace_id", id)
+
+	r := c.Request()
+	if r == nil {
+		return
+	}
+	c.SetRequest(r.WithContext(logging.ContextWithWorkspaceID(r.Context(), id)))
+}
+
+// GetWorkspaceID retrieves the workspace identifier from the echo context.
+func GetWorkspaceID(c echo.Context) string {
+	id, ok := c.Get("workspace_id").(string)
+	if !ok {
+		return ""
+	}
+	return id
+}

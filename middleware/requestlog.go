@@ -95,8 +95,9 @@ func RequestContext() echo.MiddlewareFunc {
 
 // AccessLog emits exactly one structured Log_Record per request, through the
 // same slog pipeline every other call site uses, so completed requests are
-// visible in Better Stack and carry the request/user correlation that
-// RequestContext and contextutil.SetUser attach to the context.
+// visible in Better Stack and carry the request/user/workspace correlation that
+// RequestContext, contextutil.SetUser, and contextutil.SetWorkspaceID attach to
+// the context.
 //
 // It replaces echo's built-in Logger() middleware, which writes its own text
 // line straight to stdout, bypassing slog entirely — invisible to the
@@ -104,13 +105,13 @@ func RequestContext() echo.MiddlewareFunc {
 //
 // Register after RequestContext() (and after JWTAuth on authenticated groups,
 // so user.id is already on the context) so the emitted record carries both.
-// The Better_Stack_Handler reads request/user straight off ctx regardless of
-// attrs (Req 4.5, 4.6), so Log_Events shipped to Better Stack are already
-// correlated by ctx alone. logging.FromContext additionally binds the same
-// request/user groups onto the *logger* used here, so the plain
-// slog.JSONHandler writing to stdout carries them too — otherwise console
-// output would show a request completed with no way to tie it to the rest of
-// that request's Log_Records.
+// The Better_Stack_Handler reads request/user/workspace straight off ctx
+// regardless of attrs (Req 4.5, 4.6, 16.11), so Log_Events shipped to Better
+// Stack are already correlated by ctx alone. logging.FromContext additionally
+// binds the same request/user/workspace groups onto the *logger* used here, so
+// the plain slog.JSONHandler writing to stdout carries them too — otherwise
+// console output would show a request completed with no way to tie it to the
+// rest of that request's Log_Records.
 //
 // The level split keeps ordinary traffic at INFO and error responses at WARN
 // without a second call site: a 5xx status is the server's own fault and
@@ -136,12 +137,23 @@ func AccessLog() echo.MiddlewareFunc {
 			if status >= http.StatusInternalServerError {
 				level = slog.LevelWarn
 			}
-			logging.FromContext(ctx).Log(ctx, level, "request completed",
+
+			attrs := []slog.Attr{
 				slog.String("method", c.Request().Method),
 				slog.Int("status", status),
 				slog.Duration("duration", time.Since(start)),
 				slog.String("remote_ip", c.RealIP()),
-			)
+			}
+
+			// Emit workspace.id when the request resolved a workspace
+			// (Req 16.11). Public routes and routes that have not yet resolved
+			// a workspace carry no workspace identifier on the context, so
+			// their access log records omit it.
+			if wsID, ok := logging.WorkspaceIDFromContext(ctx); ok {
+				attrs = append(attrs, slog.Group("workspace", slog.String("id", wsID)))
+			}
+
+			logging.FromContext(ctx).LogAttrs(ctx, level, "request completed", attrs...)
 
 			return err
 		}

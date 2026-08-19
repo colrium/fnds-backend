@@ -14,7 +14,7 @@ import (
 func useStartJourneyMockMongo(mt *mtest.T) {
 	previous := configs.MI
 	configs.MI = configs.MongoInstance{Client: mt.Client, DB: mt.Client.Database("test")}
-	mt.T.Cleanup(func() { configs.MI = previous })
+	mt.Cleanup(func() { configs.MI = previous })
 }
 
 func startJourneyUserDocument(profileStatus string) bson.D {

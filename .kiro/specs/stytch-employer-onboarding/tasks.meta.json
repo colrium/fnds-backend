@@ -1,0 +1,688 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add the seven Stytch configuration accessors and declare them in `.env.example`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049296
+      },
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055063840
+      }
+    ],
+    "1.2 Implement startup validation for the five required Stytch variables": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049306
+      }
+    ],
+    "1.3 Implement the `configs.TransactionsSupported` startup probe": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049312
+      },
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055064738
+      }
+    ],
+    "1.4 Add `pgregory.net/rapid` and `github.com/stytchauth/stytch-go/v18` to `go.mod`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049317
+      }
+    ],
+    "2.1 Rebuild `uniq_phone` as a partial unique index in `users.EnsureIndexes`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049323
+      },
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055066191
+      }
+    ],
+    "2.2 Add `users_email_ci` and `GetUsersByNormalizedEmail`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049338
+      }
+    ],
+    "2.3 Add the `workspace_id` field and its partial index to the five existing collections": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049344
+      }
+    ],
+    "3.1 Define the `stytch` package types, `Config`, and the `Client` interface": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049350
+      }
+    ],
+    "3.2 Implement error classification and the `Adapter.Do` retry policy": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049356
+      }
+    ],
+    "3.3 Implement the JWKS cache, `VerifySessionJWT`, and `Health`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049368
+      }
+    ],
+    "3.4 Implement `VerifyWebhook` as a pure function": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049376
+      }
+    ],
+    "3.5 Implement the HTTP client in `stytch/client_http.go`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049384
+      }
+    ],
+    "3.6 Implement `stytch.Fake` with call recording, `FailAt`, and RSA session-JWT minting": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049392
+      }
+    ],
+    "3.7 Implement `fakeClock` and the shared test helpers": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049403
+      }
+    ],
+    "4.1 Implement the Permission_Matrix as a bitmask declaration": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049409
+      },
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055067589
+      }
+    ],
+    "4.2 Implement `VerifyMatrix()` as a startup assertion": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049415
+      }
+    ],
+    "4.5 Implement `ScopedGroup`, `RouteRegistry`, and `workspaceScopedRoutes`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049428
+      }
+    ],
+    "4.6 Implement `RouteRegistry.Verify` and call it from `main.go` after all registration": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049434
+      }
+    ],
+    "5.1 Implement the `workspaces` and `memberships` models with `EnsureIndexes`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049439
+      }
+    ],
+    "5.2 Implement the `invitations`, `account_links`, and `onboarding_states` models": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049445
+      }
+    ],
+    "5.3 Implement the `audit_log_entries`, `processed_webhook_events`, and migration-run models": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049449
+      }
+    ],
+    "5.4 Create the `invoices` collection": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049454
+      }
+    ],
+    "5.5 Wire every new `EnsureIndexes` into `main.go`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049459
+      }
+    ],
+    "6.1 Implement email normalization, masking, and the onboarding stage machine": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049465
+      }
+    ],
+    "6.2 Implement `InitiateMagicLink` and `OAuthStartURL`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049470
+      }
+    ],
+    "6.3 Implement `Authenticate`, candidate discovery, and the `users` document insert": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049475
+      }
+    ],
+    "6.4 Implement the Onboarding_Ticket and its allow-list": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049481
+      }
+    ],
+    "6.5 Implement `SubmitName` and the candidate-exclusion rules on `DecideLink`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049488
+      }
+    ],
+    "7.1 Implement `SessionContext` and the credential chain": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049494
+      }
+    ],
+    "7.2 Implement member-to-user resolution through `memberships.stytch_member_id`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049500
+      }
+    ],
+    "7.3 Implement the 30-second context cache and its invalidation": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049506
+      }
+    ],
+    "7.4 Implement `RequirePermission` in the design's exact evaluation order": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049521
+      }
+    ],
+    "7.5 Add `contextutil.SetWorkspaceID`/`GetWorkspaceID` and emit `workspace.id` from `AccessLog`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049526
+      }
+    ],
+    "7.6 Implement the session, permission-matrix, and self-revocation endpoints": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049532
+      }
+    ],
+    "8.1 Implement `ValidateName`, `NormalizeName`, and `DeriveSlug` as pure functions": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049537
+      }
+    ],
+    "8.2 Implement `CreateForOnboarding` with lease, organization reuse, and slug allocation": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049542
+      }
+    ],
+    "8.3 Implement `Rename`, `CreateAdditional`, and `ListForUser`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049548
+      }
+    ],
+    "8.4 Implement `SelectChallenge`, `Issue`, and `Verify` in `identity.LinkService`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049553
+      }
+    ],
+    "8.5 Implement `Link`, `Unlink`, and `ApplyEmailChange`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049558
+      }
+    ],
+    "8.6 Implement `RescopeUserData` and the import-personal-data endpoint": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049563
+      }
+    ],
+    "9. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049568
+      }
+    ],
+    "10.1 Implement `MembershipService.Create` and `List`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049574
+      }
+    ],
+    "10.2 Implement `ChangeRole` and `SetStatus` as single-document authority writes": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049579
+      }
+    ],
+    "10.3 Implement the eleven-row guard table": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049591
+      }
+    ],
+    "10.4 Implement `TransferOwnership` inside a MongoDB transaction": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049597
+      }
+    ],
+    "10.5 Implement `AdminTransferOwnership` and the zero-owner detector": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049602
+      }
+    ],
+    "10.6 Implement Stytch mirroring, session revocation, and the delete-retry state": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049608
+      }
+    ],
+    "10.7 Implement the membership notification and audit writes": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049614
+      }
+    ],
+    "11.1 Implement the invitation model, token handling, and `EffectiveStatus`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049619
+      }
+    ],
+    "11.2 Implement `Create` as an upsert on the partial unique index": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049625
+      }
+    ],
+    "11.3 Implement the invitation email and `List`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049630
+      }
+    ],
+    "11.4 Implement `Resolve` and `Decline`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049635
+      }
+    ],
+    "11.5 Implement `Accept`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049641
+      }
+    ],
+    "11.6 Implement `Resend`, `Revoke`, and `SweepExpired`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049647
+      }
+    ],
+    "12.1 Implement the workspace switch endpoint": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049652
+      }
+    ],
+    "12.2 Implement post-authentication workspace selection": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049658
+      }
+    ],
+    "13.1 Re-scope the `jobrequests` employer read paths": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049663
+      }
+    ],
+    "13.2 Re-scope the `jobrequests` employer write paths": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049668
+      }
+    ],
+    "13.3 Scope applications and the notification fan-out": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049674
+      }
+    ],
+    "13.4 Add `workspace_id` to quotation attachments": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049681
+      }
+    ],
+    "13.5 Move the employer route surface onto `ScopedGroup`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049687
+      }
+    ],
+    "14.1 Add `WorkspaceID` to `user_subscriptions` and scope entitlement reads": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049693
+      }
+    ],
+    "14.2 Scope subscription purchase, cancellation, and history to the workspace": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049698
+      }
+    ],
+    "14.3 Implement the invoice endpoints and workspace-name snapshot": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049704
+      }
+    ],
+    "15.1 Implement `ScheduleDeletion` with its blockers and confirmation": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049710
+      }
+    ],
+    "15.2 Implement `CancelDeletion` and the scheduled-state write denial": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049715
+      }
+    ],
+    "15.3 Implement `EffectDueDeletions`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049720
+      }
+    ],
+    "16.1 Implement `Handle` with raw-body reading, verification, and the processed-event insert": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049725
+      }
+    ],
+    "16.2 Implement event classification and application through the services": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049730
+      }
+    ],
+    "17.1 Implement `audit.Logger.Write` and the closed action set": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049736
+      }
+    ],
+    "17.2 Implement `audit.Logger.List` and the read endpoint": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049741
+      }
+    ],
+    "18.1 Implement the named-limit table and the fixed-window `Allow`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049747
+      },
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055068259
+      }
+    ],
+    "18.2 Implement the `Guard` middleware": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049752
+      }
+    ],
+    "19.1 Start `jobs.NewScheduler()` from `main.go` and add the faster ticker": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049764
+      }
+    ],
+    "19.2 Register the invitation expiry sweep": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049770
+      }
+    ],
+    "19.3 Register the abandoned-onboarding reaper": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049775
+      }
+    ],
+    "19.4 Register the workspace-deletion effector and the Stytch delete retry": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049780
+      }
+    ],
+    "19.5 Implement the orphan report endpoint": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049786
+      }
+    ],
+    "20.1 Implement `Candidates` and `DeriveWorkspaceName` as pure functions": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049791
+      }
+    ],
+    "20.2 Implement `Run` driving the same `Workspace_Service` code path": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049796
+      }
+    ],
+    "20.3 Implement the dry-run mode and the report": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049801
+      }
+    ],
+    "20.4 Implement the two admin migration routes": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049806
+      }
+    ],
+    "20.5 Implement the dual-auth window and the cutover response": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049812
+      }
+    ],
+    "21.1 Construct and inject every new component": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049818
+      }
+    ],
+    "21.2 Implement `GET /health/identity`": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049824
+      }
+    ],
+    "21.3 Implement the outage degradation branches": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049829
+      }
+    ],
+    "22. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049835
+      }
+    ],
+    "23.1 Add the Stytch dependency, feature flag, and workspace types": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049840
+      }
+    ],
+    "23.2 Create the five API modules": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049846
+      }
+    ],
+    "23.3 Create `workspaceStore` and update the axios interceptors": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049851
+      }
+    ],
+    "23.4 Build the onboarding and invitation screens": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049857
+      }
+    ],
+    "23.5 Build the workspace selector and the settings screens": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049862
+      }
+    ],
+    "23.6 Update the existing employer screens": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049867
+      }
+    ],
+    "25. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "38cbc499-7570-4a2f-b100-9f376e5a6cf4",
+        "chatSessionId": "b09abae9-567c-4102-9d78-02c1f5eff0c6",
+        "timestamp": 1786055049873
+      }
+    ]
+  }
+}

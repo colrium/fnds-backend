@@ -10,48 +10,102 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
+// JobFunc is a function that can be registered with the scheduler.
+type JobFunc func()
+
+// Scheduler runs registered jobs on two tickers: an hourly ticker for
+// general maintenance and a 15-minute ticker for faster-cycle work such
+// as the Stytch member-delete retry.
 type Scheduler struct {
-	stop chan struct{}
+	stop         chan struct{}
+	hourlyJobs   []JobFunc
+	frequentJobs []JobFunc
 }
 
 func NewScheduler() *Scheduler {
-	return &Scheduler{stop: make(chan struct{})}
+	s := &Scheduler{stop: make(chan struct{})}
+	// Register the original hourly jobs by default.
+	s.hourlyJobs = []JobFunc{
+		closeJobVacancies,
+		expireSubscriptions,
+		closeAwaitingConfirmation,
+		CheckReviewSLA,
+		CheckAppointmentReminders,
+		CheckNoShows,
+	}
+	return s
+}
+
+// RegisterHourly adds a job that runs on the 1-hour ticker.
+func (s *Scheduler) RegisterHourly(fn JobFunc) {
+	s.hourlyJobs = append(s.hourlyJobs, fn)
+}
+
+// RegisterFrequent adds a job that runs on the 15-minute ticker.
+func (s *Scheduler) RegisterFrequent(fn JobFunc) {
+	s.frequentJobs = append(s.frequentJobs, fn)
 }
 
 func (s *Scheduler) Start() {
-	go s.run()
+	go s.runHourly()
+	go s.runFrequent()
 }
 
 func (s *Scheduler) Stop() {
 	close(s.stop)
 }
 
-func (s *Scheduler) run() {
+func (s *Scheduler) runHourly() {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
-	slog.Info("job scheduler started")
-	s.executeJobs()
+	slog.Info("job scheduler started", "ticker", "hourly")
+	s.executeHourlyJobs()
 
 	for {
 		select {
 		case <-ticker.C:
-			s.executeJobs()
+			s.executeHourlyJobs()
 		case <-s.stop:
-			slog.Info("job scheduler stopped")
+			slog.Info("job scheduler stopped", "ticker", "hourly")
 			return
 		}
 	}
 }
 
-func (s *Scheduler) executeJobs() {
-	slog.Info("executing scheduled jobs")
-	closeJobVacancies()
-	expireSubscriptions()
-	closeAwaitingConfirmation()
-	CheckReviewSLA()
-	CheckAppointmentReminders()
-	CheckNoShows()
+func (s *Scheduler) runFrequent() {
+	ticker := time.NewTicker(15 * time.Minute)
+	defer ticker.Stop()
+
+	slog.Info("job scheduler started", "ticker", "15m")
+	s.executeFrequentJobs()
+
+	for {
+		select {
+		case <-ticker.C:
+			s.executeFrequentJobs()
+		case <-s.stop:
+			slog.Info("job scheduler stopped", "ticker", "15m")
+			return
+		}
+	}
+}
+
+func (s *Scheduler) executeHourlyJobs() {
+	slog.Info("executing hourly scheduled jobs", "count", len(s.hourlyJobs))
+	for _, fn := range s.hourlyJobs {
+		fn()
+	}
+}
+
+func (s *Scheduler) executeFrequentJobs() {
+	if len(s.frequentJobs) == 0 {
+		return
+	}
+	slog.Info("executing frequent scheduled jobs", "count", len(s.frequentJobs))
+	for _, fn := range s.frequentJobs {
+		fn()
+	}
 }
 
 func closeJobVacancies() {

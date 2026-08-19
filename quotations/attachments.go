@@ -21,6 +21,7 @@ type QuotationAttachment struct {
 	ID          string    `json:"id" bson:"_id"`
 	QuotationID string    `json:"quotation_id" bson:"quotation_id"`
 	OwnerID     string    `json:"owner_id" bson:"owner_id"`
+	WorkspaceID string    `json:"workspace_id,omitempty" bson:"workspace_id,omitempty"`
 	FileName    string    `json:"file_name" bson:"file_name"`
 	ObjectKey   string    `json:"-" bson:"object_key"`
 	MimeType    string    `json:"mime_type" bson:"mime_type"`

@@ -32,6 +32,7 @@ type Event struct {
 	Source      *SourceInfo    `json:"source,omitempty"`
 	Request     *RequestInfo   `json:"request,omitempty"`
 	User        *UserInfo      `json:"user,omitempty"`
+	Workspace   *WorkspaceInfo `json:"workspace,omitempty"`
 	Context     map[string]any `json:"context,omitempty"`
 
 	// serializedLen caches the byte length of this event's JSON encoding,
@@ -75,6 +76,12 @@ type RequestInfo struct {
 
 // UserInfo carries the authenticated user identifier byte-for-byte (Req 4.6).
 type UserInfo struct {
+	ID string `json:"id"`
+}
+
+// WorkspaceInfo carries the active workspace identifier for the request
+// (Req 16.11). The object is omitted when no workspace is resolved.
+type WorkspaceInfo struct {
 	ID string `json:"id"`
 }
 

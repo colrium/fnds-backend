@@ -24,6 +24,8 @@ type requestContextKey struct{}
 
 type userIDContextKey struct{}
 
+type workspaceIDContextKey struct{}
+
 // requestInfo is the correlation triple carried by a request context. It is
 // stored as one value so a single context lookup yields all three fields.
 type requestInfo struct {
@@ -65,6 +67,36 @@ func ContextWithUserID(ctx context.Context, id string) context.Context {
 		return ctx
 	}
 	return context.WithValue(ctx, userIDContextKey{}, id)
+}
+
+// ContextWithWorkspaceID returns a copy of ctx carrying the active workspace
+// identifier (Req 16.11).
+//
+// An empty id is treated as "no workspace": ctx is returned unchanged so
+// that the handler omits the workspace object. Public routes and routes
+// that have not yet resolved a workspace carry no workspace identifier.
+func ContextWithWorkspaceID(ctx context.Context, id string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if id == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, workspaceIDContextKey{}, id)
+}
+
+// WorkspaceIDFromContext returns the active workspace identifier carried by ctx.
+// ok is false when no workspace identifier is present, which is the normal case
+// on public routes and routes that have not resolved a workspace.
+func WorkspaceIDFromContext(ctx context.Context) (string, bool) {
+	if ctx == nil {
+		return "", false
+	}
+	id, ok := ctx.Value(workspaceIDContextKey{}).(string)
+	if !ok || id == "" {
+		return "", false
+	}
+	return id, true
 }
 
 // RequestFromContext returns the request correlation triple carried by ctx.
@@ -113,7 +145,7 @@ func FromContext(ctx context.Context) *slog.Logger {
 		return logger
 	}
 
-	attrs := make([]any, 0, 2)
+	attrs := make([]any, 0, 3)
 	if id, method, path, ok := RequestFromContext(ctx); ok {
 		attrs = append(attrs, slog.Group("request",
 			slog.String("id", id),
@@ -123,6 +155,9 @@ func FromContext(ctx context.Context) *slog.Logger {
 	}
 	if userID, ok := UserIDFromContext(ctx); ok {
 		attrs = append(attrs, slog.Group("user", slog.String("id", userID)))
+	}
+	if wsID, ok := WorkspaceIDFromContext(ctx); ok {
+		attrs = append(attrs, slog.Group("workspace", slog.String("id", wsID)))
 	}
 	if len(attrs) == 0 {
 		return logger

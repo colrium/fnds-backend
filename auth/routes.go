@@ -126,6 +126,18 @@ func HandleUserLogin(ctx echo.Context) error {
 	}, "User login successfully.")
 }
 
+func validateRegistrationRequiredFields(req RegisterRequest) string {
+	if req.Phone == "" || req.Password == "" {
+		return "phone and password are required"
+	}
+
+	if req.UserType == "" {
+		return "user_type is required"
+	}
+
+	return ""
+}
+
 func HandleUserRegistration(ctx echo.Context) error {
 	var req RegisterRequest
 	if err := ctx.Bind(&req); err != nil {
@@ -136,12 +148,8 @@ func HandleUserRegistration(ctx echo.Context) error {
 		return sendTurnstileError(ctx, err)
 	}
 
-	if req.FirstName == "" || req.LastName == "" || req.Phone == "" || req.Password == "" {
-		return responses.SendError(ctx, 400, "first_name, last_name, phone, and password are required")
-	}
-
-	if req.UserType == "" {
-		return responses.SendError(ctx, 400, "user_type is required")
+	if message := validateRegistrationRequiredFields(req); message != "" {
+		return responses.SendError(ctx, 400, message)
 	}
 
 	_validTypes := map[string]bool{"customer": true, "artisan": true}

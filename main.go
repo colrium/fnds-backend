@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 	_ "time/tzdata"
@@ -15,6 +16,7 @@ import (
 	"backend/adminapi"
 	"backend/applications"
 	"backend/assessments"
+	"backend/audit"
 	"backend/auth"
 	"backend/banks"
 	"backend/chat"
@@ -22,25 +24,31 @@ import (
 	"backend/cvparser"
 	"backend/documenttypes"
 	"backend/files"
+	"backend/identity"
 	"backend/institutions"
 	"backend/integrations"
+	"backend/invitations"
 	"backend/jobrequests"
 	"backend/jobs"
 	"backend/locations"
 	"backend/logging"
 	"backend/middleware"
 	"backend/notifications"
+	"backend/onboarding"
 	"backend/payments"
 	"backend/profileapproval"
 	"backend/profiles"
 	"backend/quotations"
+	"backend/ratelimit"
 	"backend/referrals"
 	"backend/reviews"
 	"backend/seeders"
 	"backend/skills"
+	"backend/stytch"
 	"backend/subscriptions"
 	"backend/transactions"
 	"backend/users"
+	"backend/workspaces"
 
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/labstack/echo/v4"
@@ -159,6 +167,26 @@ func main() {
 	}
 	slog.Info("database connected", "env", configs.AppEnv())
 
+	// Validate required Stytch configuration when employer auth is enabled.
+	if flag := strings.TrimSpace(configs.StytchEmployerAuthEnabled()); flag == "true" || flag == "1" {
+		required := []struct {
+			name  string
+			value string
+		}{
+			{"STYTCH_PROJECT_ID", configs.StytchProjectID()},
+			{"STYTCH_SECRET", configs.StytchSecret()},
+			{"STYTCH_PUBLIC_TOKEN", configs.StytchPublicToken()},
+			{"STYTCH_ENV", configs.StytchEnvironment()},
+			{"STYTCH_WEBHOOK_SECRET", configs.StytchWebhookSecret()},
+		}
+		for _, v := range required {
+			if strings.TrimSpace(v.value) == "" {
+				slog.Error("required Stytch configuration variable is empty", "variable", v.name)
+				os.Exit(1)
+			}
+		}
+	}
+
 	notificationCacheSettings, err := configs.LoadNotificationCacheSettings()
 	if err != nil {
 		slog.Error("invalid notification cache configuration", "error", err)
@@ -235,12 +263,131 @@ func main() {
 		slog.Error("failed to ensure institution indexes", "error", err)
 		os.Exit(1)
 	}
+	if err := workspaces.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to create workspace indexes", "error", err)
+		os.Exit(1)
+	}
+	if err := workspaces.EnsureWebhookIndexes(context.Background()); err != nil {
+		slog.Error("failed to create webhook indexes", "error", err)
+		os.Exit(1)
+	}
+	if err := workspaces.EnsureMigrationIndexes(context.Background()); err != nil {
+		slog.Error("failed to create migration indexes", "error", err)
+		os.Exit(1)
+	}
+	if err := workspaces.EnsureInvoiceIndexes(context.Background()); err != nil {
+		slog.Error("failed to create invoice indexes", "error", err)
+		os.Exit(1)
+	}
+	if err := identity.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to create identity indexes", "error", err)
+		os.Exit(1)
+	}
+	if err := invitations.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to create invitation indexes", "error", err)
+		os.Exit(1)
+	}
+	if err := onboarding.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to create onboarding indexes", "error", err)
+		os.Exit(1)
+	}
+	if err := audit.EnsureIndexes(context.Background()); err != nil {
+		slog.Error("failed to create audit indexes", "error", err)
+		os.Exit(1)
+	}
 	if err := assessments.EnsureIndexes(context.Background()); err != nil {
 		slog.Error("failed to ensure assessment indexes", "error", err)
 		os.Exit(1)
 	}
 	go notifications.NewDefaultDispatcher().Run(context.Background())
-	jobs.NewScheduler().Start()
+	scheduler := jobs.NewScheduler()
+
+	// ─── Construct Stytch adapter and workspace-related components (Task 21.1) ───
+	// The adapter and services are built regardless of the feature flag so that
+	// the health endpoint, migration endpoints, and route registry verification
+	// are always available. The feature flag gates whether sessions resolve through
+	// Stytch, not whether the components exist.
+	stytchClock := stytch.SystemClock()
+
+	stytchConfig := stytch.Config{
+		ProjectID:     configs.StytchProjectID(),
+		Secret:        configs.StytchSecret(),
+		PublicToken:   configs.StytchPublicToken(),
+		Environment:   configs.StytchEnvironment(),
+		WebhookSecret: configs.StytchWebhookSecret(),
+		Clock:         stytchClock,
+	}
+
+	var stytchAdapter *stytch.Adapter
+	if flag := strings.TrimSpace(configs.StytchEmployerAuthEnabled()); flag == "true" || flag == "1" {
+		httpClient, err := stytch.NewHTTPClient(stytchConfig)
+		if err != nil {
+			slog.Error("failed to construct stytch http client", "error", err)
+			os.Exit(1)
+		}
+		stytchAdapter = stytch.NewWithJWKSFetch(stytchConfig, httpClient, stytch.FetchJWKS(stytchConfig))
+	} else {
+		// Employer Stytch auth is disabled: the components still need to
+		// exist (health endpoint, migration report, route registry
+		// verification), but nothing calls out to Stytch, so the in-memory
+		// fake is safe here — it is never reached by a real request.
+		stytchAdapter = stytch.NewWithClient(stytchConfig, stytch.NewFake(stytchClock))
+	}
+
+	auditLogger := audit.NewLogger()
+	rateLimiter := ratelimit.NewSlidingWindowLimiter(configs.RDB, stytchClock)
+
+	// Probe transaction support (Req 14.3, 14.4). A probe failure does not mean
+	// transactions are unsupported — it can also mean a transient network blip
+	// or primary stepdown. Treating it as "unsupported" would silently disable
+	// atomic operations for ownership transfer and membership changes, so a
+	// failed probe fails startup instead of guessing.
+	txSupported, txErr := configs.TransactionsSupported(context.Background())
+	if txErr != nil {
+		slog.Error("transaction probe failed", "error", txErr)
+		os.Exit(1)
+	}
+	slog.Info("transaction support probed", "supported", txSupported)
+
+	workspaceService := workspaces.NewWorkspaceService(stytchAdapter, auditLogger, stytchClock, rateLimiter)
+	membershipService := workspaces.NewMembershipService(stytchAdapter, auditLogger, stytchClock, txSupported)
+	invitationService := invitations.NewService(rateLimiter, auditLogger, stytchClock, membershipService)
+	onboardingService := onboarding.NewService(stytchAdapter, rateLimiter)
+	webhookConsumer := workspaces.NewWebhookConsumer(stytchAdapter, stytchClock, membershipService, workspaceService, auditLogger)
+	healthHandler := workspaces.NewHealthHandler(stytchAdapter, txSupported)
+	migrationJob := workspaces.NewMigrationJob(workspaceService, auditLogger, stytchClock)
+	migrationHandler := workspaces.NewMigrationHandler(migrationJob)
+	routeRegistry := workspaces.NewRouteRegistry()
+
+	// Verify the permission matrix at startup (Req 7.3, 7.13).
+	if err := workspaces.VerifyMatrix(); err != nil {
+		slog.Error("permission matrix verification failed", "error", err)
+		os.Exit(1)
+	}
+
+	// Register workspace-related routes (Task 13.5, 21.1).
+	workspaces.RegisterRoutes(workspaces.RouteConfig{
+		App:               app,
+		Adapter:           stytchAdapter,
+		AuditLogger:       auditLogger,
+		RateLimiter:       rateLimiter,
+		WorkspaceService:  workspaceService,
+		MembershipService: membershipService,
+		InvitationService: invitationService,
+		OnboardingService: onboardingService,
+		WebhookConsumer:   webhookConsumer,
+		HealthHandler:     healthHandler,
+		MigrationHandler:  migrationHandler,
+		Registry:          routeRegistry,
+		Clock:             stytchClock,
+	})
+
+	// Verify route registry (Req 8.6): all declared workspace-scoped routes
+	// match workspaceScopedRoutes and vice versa; fails startup on drift.
+	if err := routeRegistry.Verify(); err != nil {
+		slog.Error("route registry verification failed", "error", err)
+		os.Exit(1)
+	}
 
 	api := app.Group("/api/v1")
 
@@ -387,6 +534,24 @@ func main() {
 		return c.JSON(200, map[string]string{"message": "Verification email sent"})
 	})
 
+	// Register the workspace background jobs (invitation expiry sweep,
+	// deletion effector, abandoned-onboarding reaper, Stytch member-delete
+	// retry) before starting the scheduler's tickers.
+	schedulerJobs := workspaces.NewSchedulerJobs(
+		invitationService.SweepExpired,
+		workspaceService,
+		membershipService,
+		stytchAdapter,
+		stytchClock,
+	)
+	scheduler.RegisterHourly(schedulerJobs.SweepExpiredInvitations)
+	scheduler.RegisterHourly(schedulerJobs.EffectDueDeletions)
+	scheduler.RegisterHourly(schedulerJobs.ReapAbandonedOnboarding)
+	scheduler.RegisterFrequent(schedulerJobs.RetryPendingStytchDeletes)
+
+	// Start the background job scheduler with hourly and 15-minute tickers.
+	scheduler.Start()
+
 	port := fmt.Sprintf(":%s", configs.EnvPort())
 	slog.Info("server starting", "port", port)
 
@@ -421,5 +586,6 @@ func main() {
 		}
 	}
 
+	scheduler.Stop()
 	shipper.Close()
 }

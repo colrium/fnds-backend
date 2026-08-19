@@ -40,6 +40,7 @@ type JobRequest struct {
 type JobVacancy struct {
 	ID                   string     `json:"id" bson:"_id"`
 	OwnerID              string     `json:"owner_id" bson:"owner_id"`
+	WorkspaceID          string     `json:"workspace_id,omitempty" bson:"workspace_id,omitempty"`
 	CompanyID            string     `json:"company_id" bson:"company_id"`
 	Title                string     `json:"title" bson:"title"`
 	Level                string     `json:"level" bson:"level"`
@@ -80,14 +81,67 @@ func EnsureIndexes(ctx context.Context) error {
 				SetUnique(true),
 		},
 	)
-	// Performance-only indexes are applied operationally. Building them during
-	// startup can make the API unavailable when MongoDB is near its disk limit.
+	if err != nil {
+		return err
+	}
+
+	// companies indexes: workspace scoping and owner lookup.
+	_, err = configs.MI.DB.Collection("companies").Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "workspace_id", Value: 1},
+				{Key: "created_at", Value: -1},
+			},
+			Options: options.Index().
+				SetName("companies_workspace").
+				SetPartialFilterExpression(bson.M{"workspace_id": bson.M{"$exists": true}}),
+		},
+		{
+			Keys: bson.D{
+				{Key: "owner_id", Value: 1},
+				{Key: "created_at", Value: -1},
+			},
+			Options: options.Index().
+				SetName("companies_owner"),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	// job_vacancies workspace index.
+	_, err = configs.MI.DB.Collection("job_vacancies").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "workspace_id", Value: 1},
+			{Key: "status", Value: 1},
+			{Key: "created_at", Value: -1},
+		},
+		Options: options.Index().
+			SetName("job_vacancies_workspace").
+			SetPartialFilterExpression(bson.M{"workspace_id": bson.M{"$exists": true}}),
+	})
+	if err != nil {
+		return err
+	}
+
+	// job_applications workspace index.
+	_, err = configs.MI.DB.Collection("job_applications").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "workspace_id", Value: 1},
+			{Key: "status", Value: 1},
+			{Key: "created_at", Value: -1},
+		},
+		Options: options.Index().
+			SetName("job_applications_workspace").
+			SetPartialFilterExpression(bson.M{"workspace_id": bson.M{"$exists": true}}),
+	})
 	return err
 }
 
 type JobApplication struct {
 	ID          string    `json:"id" bson:"_id"`
 	VacancyID   string    `json:"vacancy_id" bson:"vacancy_id"`
+	WorkspaceID string    `json:"workspace_id,omitempty" bson:"workspace_id,omitempty"`
 	ApplicantID string    `json:"applicant_id" bson:"applicant_id"`
 	Status      string    `json:"status" bson:"status"`
 	CoverLetter string    `json:"cover_letter" bson:"cover_letter"`
@@ -120,6 +174,7 @@ type JobApplicationWithApplicant struct {
 type Company struct {
 	ID                 string    `json:"id" bson:"_id"`
 	OwnerID            string    `json:"owner_id" bson:"owner_id"`
+	WorkspaceID        string    `json:"workspace_id,omitempty" bson:"workspace_id,omitempty"`
 	Name               string    `json:"name" bson:"name"`
 	Website            string    `json:"website" bson:"website"`
 	Location           string    `json:"location" bson:"location"`

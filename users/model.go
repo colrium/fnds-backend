@@ -2,6 +2,10 @@ package users
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	"backend/configs"
@@ -31,7 +35,8 @@ type User struct {
 	FirstName           string     `json:"first_name" bson:"first_name"`
 	LastName            string     `json:"last_name" bson:"last_name"`
 	Email               string     `json:"email" bson:"email"`
-	Phone               string     `json:"phone" bson:"phone"`
+	EmailNormalized     string     `json:"-" bson:"email_normalized,omitempty"`
+	Phone               string     `json:"phone" bson:"phone,omitempty"`
 	Password            []byte     `json:"-" bson:"password"`
 	UserType            string     `json:"user_type" bson:"user_type"`
 	Status              string     `json:"status" bson:"status"`
@@ -78,6 +83,9 @@ func CreateNewUser(user *User) error {
 	user.ID = uuid.New().String()
 	user.CreatedAt = time.Now()
 	user.UpdatedAt = time.Now()
+	if user.Email != "" {
+		user.EmailNormalized = strings.ToLower(strings.TrimSpace(user.Email))
+	}
 	if user.ProfileStatus == "" {
 		user.ProfileStatus = ProfileStatusNotSubmitted
 	}
@@ -89,31 +97,242 @@ func CreateNewUser(user *User) error {
 // Phone and email are globally unique: a phone number or email belongs to
 // exactly one account regardless of user_type. Email is enforced only when
 // present, since it is optional at registration.
+//
+// The uniq_phone index is rebuilt as a partial unique index so that documents
+// without a phone field are excluded from the uniqueness constraint. This
+// permits multiple phone-less employer accounts created through Stytch.
+// The migration is a 4-step ordered operation executed in this function.
+// indexMigrationLockTTL bounds how long a migration lock is held before it is
+// considered abandoned (e.g. the holder crashed) and can be reacquired.
+const indexMigrationLockTTL = 5 * time.Minute
+
+// acquireIndexMigrationLock takes an exclusive, TTL-bounded lock on the given
+// name using an upsert-based findAndModify against a dedicated migrations
+// collection, so concurrent instances racing through EnsureIndexes at startup
+// serialize instead of both mutating indexes at once. Returns locked=false
+// (not an error) when another instance already holds the lock.
+func acquireIndexMigrationLock(ctx context.Context, name string) (release func(context.Context), locked bool, err error) {
+	coll := configs.MI.DB.Collection("migration_locks")
+	now := time.Now()
+
+	res := coll.FindOneAndUpdate(ctx,
+		bson.M{
+			"_id":        name,
+			"expires_at": bson.M{"$lt": now},
+		},
+		bson.M{"$set": bson.M{"expires_at": now.Add(indexMigrationLockTTL), "locked_at": now}},
+		options.FindOneAndUpdate().SetUpsert(false),
+	)
+	if res.Err() != nil && res.Err() != mongo.ErrNoDocuments {
+		return nil, false, res.Err()
+	}
+	if res.Err() == nil {
+		// Reacquired an expired lock.
+		return func(releaseCtx context.Context) {
+			_, _ = coll.DeleteOne(releaseCtx, bson.M{"_id": name})
+		}, true, nil
+	}
+
+	// No expired lock to take over — try to create a fresh one.
+	_, insertErr := coll.InsertOne(ctx, bson.M{
+		"_id":        name,
+		"expires_at": now.Add(indexMigrationLockTTL),
+		"locked_at":  now,
+	})
+	if insertErr != nil {
+		if mongo.IsDuplicateKeyError(insertErr) {
+			return nil, false, nil
+		}
+		return nil, false, insertErr
+	}
+	return func(releaseCtx context.Context) {
+		_, _ = coll.DeleteOne(releaseCtx, bson.M{"_id": name})
+	}, true, nil
+}
+
 func EnsureIndexes(ctx context.Context) error {
-	_, err := configs.MI.DB.Collection("users").Indexes().CreateMany(ctx, []mongo.IndexModel{
+	// Acquire a distributed lock before touching indexes. Without it, every
+	// instance in a multi-replica deployment races through the drop+create
+	// sequence concurrently: between one instance's DropOne and CreateOne
+	// there is no unique constraint on phone at all, so concurrent signups
+	// can insert duplicates that make the next instance's CreateOne fail.
+	release, locked, err := acquireIndexMigrationLock(ctx, "users_phone_index_migration")
+	if err != nil {
+		return fmt.Errorf("users.EnsureIndexes: failed to acquire migration lock: %w", err)
+	}
+	if !locked {
+		slog.Info("users.EnsureIndexes: migration lock held by another instance, skipping")
+		return nil
+	}
+	defer release(ctx)
+
+	coll := configs.MI.DB.Collection("users")
+
+	// ─── Step 1: Pre-check for duplicate phone values ───────────────────
+	// Aggregate users grouped by phone where phone is a non-empty string.
+	// If any group has count > 1, startup must fail — we cannot safely drop
+	// a unique index over data that already has duplicates.
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"phone": bson.M{"$type": "string", "$gt": ""}}}},
+		{{Key: "$group", Value: bson.M{"_id": "$phone", "count": bson.M{"$sum": 1}}}},
+		{{Key: "$match", Value: bson.M{"count": bson.M{"$gt": 1}}}},
+		{{Key: "$count", Value: "duplicate_count"}},
+	}
+	cursor, err := coll.Aggregate(ctx, pipeline)
+	if err != nil {
+		return fmt.Errorf("users.EnsureIndexes: phone duplicate pre-check aggregate failed: %w", err)
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		return fmt.Errorf("users.EnsureIndexes: phone duplicate pre-check cursor read failed: %w", err)
+	}
+	if len(results) > 0 {
+		dupCount, _ := results[0]["duplicate_count"].(int32)
+		slog.Error("users.EnsureIndexes: cannot rebuild uniq_phone — duplicate phone values exist",
+			"duplicate_count", dupCount)
+		return fmt.Errorf("users.EnsureIndexes: %d phone values have duplicates; resolve before restarting", dupCount)
+	}
+
+	// ─── Step 2: Normalize empty phone values ───────────────────────────
+	// Unset phone on any document where phone is empty OR whitespace-only, so
+	// the partial index filter (which matches any non-empty string, including
+	// "   ") correctly excludes them. Without the whitespace match, two
+	// whitespace-only phones would both pass the pre-check and the partial
+	// index build in Step 3/4 would fail with a duplicate key error.
+	_, err = coll.UpdateMany(ctx,
+		bson.M{"phone": bson.M{"$regex": "^\\s*$"}},
+		bson.M{"$unset": bson.M{"phone": ""}},
+	)
+	if err != nil {
+		return fmt.Errorf("users.EnsureIndexes: failed to unset empty phone values: %w", err)
+	}
+
+	// ─── Step 3 & 4: Rebuild the three partial unique indexes (idempotent) ──
+	// Read existing indexes and only drop+recreate one when its current
+	// definition differs from the target, so a restart is a no-op. Blasting
+	// CreateMany unconditionally (as uniq_email/uniq_slug_public previously
+	// did) fails the entire startup with IndexOptionsConflict the moment an
+	// existing index's options differ even slightly from the target.
+	partialIndexes := []struct {
+		name string
+		keys bson.D
+		pfe  bson.M
+	}{
 		{
-			Keys:    bson.D{{Key: "phone", Value: 1}},
-			Options: options.Index().SetName("uniq_phone").SetUnique(true),
+			name: "uniq_phone",
+			keys: bson.D{{Key: "phone", Value: 1}},
+			pfe:  bson.M{"phone": bson.M{"$type": "string", "$gt": ""}},
 		},
 		{
-			Keys: bson.D{{Key: "email", Value: 1}},
-			Options: options.Index().
-				SetName("uniq_email").
-				SetUnique(true).
-				SetPartialFilterExpression(bson.M{"email": bson.M{"$type": "string", "$gt": ""}}),
+			name: "uniq_email",
+			keys: bson.D{{Key: "email", Value: 1}},
+			pfe:  bson.M{"email": bson.M{"$type": "string", "$gt": ""}},
 		},
 		{
-			Keys: bson.D{{Key: "slug", Value: 1}},
+			name: "uniq_slug_public",
+			keys: bson.D{{Key: "slug", Value: 1}},
+			pfe: bson.M{
+				"slug":              bson.M{"$type": "string", "$gt": ""},
+				"is_profile_public": true,
+			},
+		},
+	}
+
+	for _, idx := range partialIndexes {
+		needsRebuild, err := partialIndexNeedsRebuild(ctx, coll, idx.name, idx.pfe)
+		if err != nil {
+			return fmt.Errorf("users.EnsureIndexes: failed to inspect existing index %s: %w", idx.name, err)
+		}
+		if !needsRebuild {
+			continue
+		}
+		// Drop the old index (may fail if it doesn't exist; that's acceptable).
+		_, _ = coll.Indexes().DropOne(ctx, idx.name)
+		if _, err := coll.Indexes().CreateOne(ctx, mongo.IndexModel{
+			Keys: idx.keys,
 			Options: options.Index().
-				SetName("uniq_slug_public").
+				SetName(idx.name).
 				SetUnique(true).
-				SetPartialFilterExpression(bson.M{
-					"slug":              bson.M{"$type": "string", "$gt": ""},
-					"is_profile_public": true,
-				}),
+				SetPartialFilterExpression(idx.pfe),
+		}); err != nil {
+			return fmt.Errorf("users.EnsureIndexes: failed to create partial index %s: %w", idx.name, err)
+		}
+	}
+
+	// ─── Remaining index (unchanged, not a unique partial index) ────────
+	_, err = coll.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "email_normalized", Value: 1}},
+			Options: options.Index().SetName("users_email_ci"),
 		},
 	})
 	return err
+}
+
+// partialIndexNeedsRebuild inspects the existing indexes on the collection and
+// returns true when the named index either does not exist or its
+// partialFilterExpression does not match the target, meaning it must be
+// dropped and recreated. The PFE comparison uses a canonical JSON encoding
+// (sorted keys) rather than a raw BSON byte comparison, because MongoDB can
+// store a semantically identical filter with different field ordering.
+func partialIndexNeedsRebuild(ctx context.Context, coll *mongo.Collection, indexName string, targetPFE bson.M) (bool, error) {
+	cursor, err := coll.Indexes().List(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+
+	for cursor.Next(ctx) {
+		var idx bson.M
+		if err := cursor.Decode(&idx); err != nil {
+			return false, err
+		}
+		name, _ := idx["name"].(string)
+		if name != indexName {
+			continue
+		}
+		// Index exists — check whether it already has the correct partial filter.
+		pfe, hasPFE := idx["partialFilterExpression"]
+		if !hasPFE {
+			// Non-partial index exists — needs rebuild.
+			return true, nil
+		}
+		pfeMap, ok := pfe.(bson.M)
+		if !ok {
+			return true, nil
+		}
+		if !canonicalJSONEqual(pfeMap, targetPFE) {
+			return true, nil
+		}
+		// Index exists with correct partial filter — no rebuild needed.
+		return false, nil
+	}
+	// Index not found at all — needs creation.
+	return true, nil
+}
+
+// canonicalJSONEqual compares two BSON documents structurally via a
+// marshal-to-canonical-JSON round trip, which sorts object keys and
+// normalizes numeric representations — unlike a raw BSON byte comparison,
+// this treats field-order differences as equal rather than as a mismatch.
+func canonicalJSONEqual(a, b bson.M) bool {
+	aJSON, errA := bson.MarshalExtJSON(a, true, false)
+	bJSON, errB := bson.MarshalExtJSON(b, true, false)
+	if errA != nil || errB != nil {
+		return false
+	}
+	var aCanon, bCanon any
+	if json.Unmarshal(aJSON, &aCanon) != nil || json.Unmarshal(bJSON, &bCanon) != nil {
+		return false
+	}
+	aSorted, errA := json.Marshal(aCanon)
+	bSorted, errB := json.Marshal(bCanon)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return string(aSorted) == string(bSorted)
 }
 
 func GetUserByID(ctx context.Context, id string) (*User, error) {
@@ -161,6 +380,24 @@ func GetUserByEmail(email string) (*User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// GetUsersByNormalizedEmail returns ALL users whose email_normalized field
+// matches the given email after normalization. This is needed because the
+// existing GetUserByEmail does an exact match and can't find case-variant
+// duplicates. (Req 4.1, 4.8, 21.7)
+func GetUsersByNormalizedEmail(ctx context.Context, normalizedEmail string) ([]User, error) {
+	coll := configs.MI.DB.Collection("users")
+	cursor, err := coll.Find(ctx, bson.M{"email_normalized": normalizedEmail})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+	var users []User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, err
+	}
+	return users, nil
 }
 
 func GetUserByPhone(phone string) (*User, error) {

@@ -174,6 +174,9 @@ func convertRecord(ctx context.Context, r slog.Record, cfg convertConfig, frames
 	if userID, ok := UserIDFromContext(ctx); ok {
 		ev.User = &UserInfo{ID: sanitizeString(userID)}
 	}
+	if wsID, ok := WorkspaceIDFromContext(ctx); ok {
+		ev.Workspace = &WorkspaceInfo{ID: sanitizeString(wsID)}
+	}
 
 	// Every attribute lands under `context`, so an attr whose key collides with
 	// a reserved top-level key needs no special case at all: `context` is a
