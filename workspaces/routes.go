@@ -173,7 +173,7 @@ func handleRenameWorkspace(cfg RouteConfig) echo.HandlerFunc {
 		}
 
 		var request struct {
-			Name string `json:"name"`
+			Name string `json:"workspace_name"`
 		}
 		if err := c.Bind(&request); err != nil {
 			return responses.SendErrorWithCode(c, http.StatusBadRequest, "invalid_request", "invalid request body", "", "", nil)
@@ -701,7 +701,7 @@ func RegisterRoutes(cfg RouteConfig) {
 		}
 
 		var request struct {
-			Name string `json:"name"`
+			Name string `json:"workspace_name"`
 		}
 		if err := c.Bind(&request); err != nil {
 			return responses.SendErrorWithCode(
@@ -1122,8 +1122,16 @@ func handleListWorkspaces(cfg RouteConfig) echo.HandlerFunc {
 
 // createWorkspaceRequest is the body for POST /workspaces (create an
 // additional workspace for a user who already holds at least one).
+// createWorkspaceRequest and the two inline equivalents (rename, onboarding
+// workspace submit) all read workspace_name, not name. That is the field
+// design.md's onboarding sequence specifies, the field all three frontend
+// callers send, and the field the rejection message names. Binding "name"
+// instead bound nothing: every submission arrived as the empty string and was
+// rejected with "workspace_name must be at least 2 characters" — an error that
+// pointed at a field the handler was not reading, so the typed value looked
+// long enough while the check saw none of it.
 type createWorkspaceRequest struct {
-	Name string `json:"name"`
+	Name string `json:"workspace_name"`
 }
 
 // createWorkspaceResponse mirrors the shape of PostAuthResult / SwitchResult

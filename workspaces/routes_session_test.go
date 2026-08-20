@@ -175,7 +175,7 @@ func TestHandleListWorkspaces_Unauthenticated(t *testing.T) {
 
 func TestHandleCreateWorkspace_InvalidName(t *testing.T) {
 	cfg := RouteConfig{}
-	c, rec := newEchoContextForRoutes(http.MethodPost, "/api/v1/workspaces", `{"name":"a"}`, "token")
+	c, rec := newEchoContextForRoutes(http.MethodPost, "/api/v1/workspaces", `{"workspace_name":"a"}`, "token")
 	SetSessionContext(c, SessionContext{UserID: "user-1"})
 
 	if err := handleCreateWorkspace(cfg)(c); err != nil {
@@ -210,7 +210,7 @@ func TestHandleCreateWorkspace_HappyPath(t *testing.T) {
 		)
 
 		cfg, _, _ := newTestRouteConfig(mt)
-		c, rec := newEchoContextForRoutes(http.MethodPost, "/api/v1/workspaces", `{"name":"Second Company"}`, "session-token-1")
+		c, rec := newEchoContextForRoutes(http.MethodPost, "/api/v1/workspaces", `{"workspace_name":"Second Company"}`, "session-token-1")
 		SetSessionContext(c, SessionContext{UserID: "user-1"})
 
 		if err := handleCreateWorkspace(cfg)(c); err != nil {
@@ -240,7 +240,7 @@ func TestHandleCreateWorkspace_HappyPath(t *testing.T) {
 
 func TestHandleCreateWorkspace_Unauthenticated(t *testing.T) {
 	cfg := RouteConfig{}
-	c, rec := newEchoContextForRoutes(http.MethodPost, "/api/v1/workspaces", `{"name":"Second Company"}`, "")
+	c, rec := newEchoContextForRoutes(http.MethodPost, "/api/v1/workspaces", `{"workspace_name":"Second Company"}`, "")
 
 	if err := handleCreateWorkspace(cfg)(c); err != nil {
 		t.Fatalf("unexpected error: %v", err)

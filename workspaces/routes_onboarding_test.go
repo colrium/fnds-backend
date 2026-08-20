@@ -340,7 +340,7 @@ func TestWorkspaceProvisionRoute(t *testing.T) {
 		request := httptest.NewRequest(
 			http.MethodPost,
 			"/api/v1/employer/onboarding/workspace",
-			bytes.NewBufferString(`{"name":"Acme Ltd"}`),
+			bytes.NewBufferString(`{"workspace_name":"Acme Ltd"}`),
 		)
 		request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		recorder := httptest.NewRecorder()
@@ -360,7 +360,7 @@ func TestWorkspaceProvisionRoute(t *testing.T) {
 		request := httptest.NewRequest(
 			http.MethodPost,
 			"/api/v1/employer/onboarding/workspace",
-			bytes.NewBufferString(`{"name":"a"}`),
+			bytes.NewBufferString(`{"workspace_name":"a"}`),
 		)
 		request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		request.Header.Set(echo.HeaderAuthorization, "Bearer "+ticket)
@@ -386,7 +386,7 @@ func TestWorkspaceProvisionRoute(t *testing.T) {
 		request := httptest.NewRequest(
 			http.MethodPost,
 			"/api/v1/employer/onboarding/workspace",
-			bytes.NewBufferString(`{"name":"Acme Ltd"}`),
+			bytes.NewBufferString(`{"workspace_name":"Acme Ltd"}`),
 		)
 		request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		request.Header.Set(echo.HeaderAuthorization, "Bearer "+ticket)
@@ -459,7 +459,7 @@ func TestWorkspaceProvisionRoute(t *testing.T) {
 			request := httptest.NewRequest(
 				http.MethodPost,
 				"/api/v1/employer/onboarding/workspace",
-				bytes.NewBufferString(`{"name":"Acme Ltd"}`),
+				bytes.NewBufferString(`{"workspace_name":"Acme Ltd"}`),
 			)
 			request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			request.Header.Set(echo.HeaderAuthorization, "Bearer "+ticket)
