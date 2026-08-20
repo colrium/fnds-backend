@@ -564,7 +564,10 @@ func RegisterRoutes(cfg RouteConfig) {
 				)
 			}
 
-			postAuth, postAuthErr := cfg.WorkspaceService.ResolvePostAuth(c.Request().Context(), result.UserID, result.WorkspaceID)
+			// ResolvePostAuth's second argument is the email, which it needs to
+			// find pending invitations addressed to this person — passing the
+			// workspace ID here silently matched zero invitations.
+			postAuth, postAuthErr := cfg.WorkspaceService.ResolvePostAuth(c.Request().Context(), result.UserID, result.Email)
 			if postAuthErr != nil {
 				slog.ErrorContext(c.Request().Context(), "employer authentication: resolve post-auth failed", "error", postAuthErr)
 				return responses.SendErrorWithCode(

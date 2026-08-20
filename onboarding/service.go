@@ -164,6 +164,9 @@ type AuthResult struct {
 	WorkspaceID              string `json:"-"`
 	StytchOrganizationID     string `json:"-"`
 	IntermediateSessionToken string `json:"-"`
+	// Email is the authenticated, normalized address. ResolvePostAuth needs it
+	// to find pending invitations addressed to this person.
+	Email string `json:"-"`
 }
 
 // LinkCandidateView is the masked public representation of a link candidate.
@@ -305,6 +308,7 @@ func (s *Service) Authenticate(ctx context.Context, in AuthenticateInput) (AuthR
 			authResult.WorkspaceID = state.WorkspaceID
 			authResult.StytchOrganizationID = state.StytchOrganizationID
 			authResult.IntermediateSessionToken = result.IntermediateSessionToken
+			authResult.Email = normalizedEmail
 		}
 		return authResult, nil
 	}
@@ -328,6 +332,13 @@ func (s *Service) Authenticate(ctx context.Context, in AuthenticateInput) (AuthR
 	// index — email is globally unique across every user_type.
 	var withheldNonEmployer, withheldSuspended bool
 
+	// An already-linked users document is not a candidate to link *to* — it is
+	// the returning Employer themselves (Req 5.12). Captured so they can be
+	// signed in below instead of falling through to the create path, where the
+	// globally unique email index would reject the insert.
+	var linkedUser *users.User
+	var linkedOrgID string
+
 	for i := range allUsers {
 		u := allUsers[i]
 
@@ -347,7 +358,14 @@ func (s *Service) Authenticate(ctx context.Context, in AuthenticateInput) (AuthR
 		var link identity.AccountLink
 		linkErr := accountLinksColl.FindOne(ctx, bson.M{"user_id": u.ID}).Decode(&link)
 		if linkErr == nil {
-			// Has an account_link — exclude.
+			// Has an account_link — not a link target, but a sign-in target.
+			// First match wins: at most one link exists per users document, so
+			// with legacy case-variant duplicates any linked one identifies
+			// the same person.
+			if linkedUser == nil {
+				linkedUser = &u
+				linkedOrgID = link.StytchOrganizationID
+			}
 			continue
 		}
 		if !errors.Is(linkErr, mongo.ErrNoDocuments) {
@@ -389,6 +407,31 @@ func (s *Service) Authenticate(ctx context.Context, in AuthenticateInput) (AuthR
 			Stage:          string(StageAwaitingLinkDecision),
 			OnboardingID:   state.ID,
 			LinkCandidates: views,
+		}, nil
+	}
+
+	// An existing Account_Link means this person already completed onboarding:
+	// sign them in and create zero additional users documents (Req 5.12).
+	// Checked before the withheld cases so a returning Employer always signs
+	// in, even when a legacy case-variant duplicate of their address also
+	// exists as an artisan/assessor/admin or suspended record.
+	//
+	// This is the path a returning Employer takes whenever their
+	// onboarding_states document no longer resumes them at StageComplete —
+	// previously they fell through to the create path and hit a raw duplicate
+	// key on the unique email index, which is why signing in could look like a
+	// failed attempt to register an account that already existed.
+	//
+	// The stale onboarding_states document is deliberately left alone: it only
+	// drives in-progress onboarding, and this person has none left to do.
+	if linkedUser != nil {
+		return AuthResult{
+			Stage:                    string(StageComplete),
+			OnboardingID:             state.ID,
+			UserID:                   linkedUser.ID,
+			Email:                    normalizedEmail,
+			StytchOrganizationID:     linkedOrgID,
+			IntermediateSessionToken: result.IntermediateSessionToken,
 		}, nil
 	}
 
