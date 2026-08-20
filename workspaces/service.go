@@ -220,12 +220,26 @@ type WorkspaceSummary struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// ByID returns the workspace with the given ID, or a *WorkspaceError with
+// Status 404 when it does not exist.
+func (w *WorkspaceService) ByID(ctx context.Context, workspaceID string) (Workspace, error) {
+	var ws Workspace
+	err := configs.MI.DB.Collection("workspaces").FindOne(ctx, bson.M{"_id": workspaceID}).Decode(&ws)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return Workspace{}, &WorkspaceError{Status: 404, Code: "workspace_not_found", Message: "workspace not found"}
+		}
+		return Workspace{}, fmt.Errorf("get workspace: %w", err)
+	}
+	return ws, nil
+}
+
 // Rename changes the workspace name. Retains the existing slug, propagates
 // the new name to the Stytch organization. (Req 2.15, 2.16)
 func (w *WorkspaceService) Rename(ctx context.Context, workspaceID, rawName, actorUserID string) error {
 	// Step 1: Validate the new name.
 	if err := ValidateName(rawName); err != nil {
-		return fmt.Errorf("validation: %w", err)
+		return &WorkspaceError{Status: 400, Code: "invalid_workspace_name", Message: err.Error()}
 	}
 
 	// Step 2: Normalize the name.
@@ -250,7 +264,7 @@ func (w *WorkspaceService) Rename(ctx context.Context, workspaceID, rawName, act
 	).Decode(&previous)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return fmt.Errorf("workspace not found")
+			return &WorkspaceError{Status: 404, Code: "workspace_not_found", Message: "workspace not found"}
 		}
 		return fmt.Errorf("update workspace name: %w", err)
 	}

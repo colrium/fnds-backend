@@ -53,6 +53,259 @@ type authenticateResponse struct {
 	PostAuth   *PostAuthResult `json:"post_auth,omitempty"`
 }
 
+// respondServiceError maps a structured service-layer error (*WorkspaceError,
+// *DeletionError, or *MembershipError) to its declared HTTP status and code.
+// Any other error is logged and reported as a generic 500 so a bug in a
+// service method never leaks an internal error string to the client.
+func respondServiceError(c echo.Context, err error) error {
+	var wsErr *WorkspaceError
+	if errors.As(err, &wsErr) {
+		return responses.SendErrorWithCode(c, wsErr.Status, wsErr.Code, wsErr.Message, "", "", nil)
+	}
+	var delErr *DeletionError
+	if errors.As(err, &delErr) {
+		return responses.SendErrorWithCode(c, delErr.Status, delErr.Code, delErr.Message, "", "", delErr.Details)
+	}
+	var memErr *MembershipError
+	if errors.As(err, &memErr) {
+		return responses.SendErrorWithCode(c, memErr.Status, memErr.Code, memErr.Message, "", "", nil)
+	}
+	slog.ErrorContext(c.Request().Context(), "workspace route: unexpected service error", "error", err)
+	return responses.SendErrorWithCode(c, http.StatusInternalServerError, "internal_error", "an unexpected error occurred", "", "", nil)
+}
+
+// handleGetWorkspace is the handler for GET /workspaces/:workspaceID.
+func handleGetWorkspace(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		ws, err := cfg.WorkspaceService.ByID(c.Request().Context(), c.Param("workspaceID"))
+		if err != nil {
+			return respondServiceError(c, err)
+		}
+		return responses.SendOK(c, ws, "Workspace retrieved")
+	}
+}
+
+// handleRenameWorkspace is the handler for PATCH /workspaces/:workspaceID.
+func handleRenameWorkspace(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sc, ok := FromEcho(c)
+		if !ok {
+			return unauthorized(c)
+		}
+
+		var request struct {
+			Name string `json:"name"`
+		}
+		if err := c.Bind(&request); err != nil {
+			return responses.SendErrorWithCode(c, http.StatusBadRequest, "invalid_request", "invalid request body", "", "", nil)
+		}
+
+		workspaceID := c.Param("workspaceID")
+		ctx := c.Request().Context()
+		if err := cfg.WorkspaceService.Rename(ctx, workspaceID, request.Name, sc.UserID); err != nil {
+			return respondServiceError(c, err)
+		}
+
+		ws, err := cfg.WorkspaceService.ByID(ctx, workspaceID)
+		if err != nil {
+			return respondServiceError(c, err)
+		}
+		return responses.SendOK(c, ws, "Workspace renamed")
+	}
+}
+
+// handleScheduleDeletion is the handler for POST /workspaces/:workspaceID/deletion.
+func handleScheduleDeletion(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sc, ok := FromEcho(c)
+		if !ok {
+			return unauthorized(c)
+		}
+
+		var request struct {
+			Confirmation string `json:"confirmation"`
+		}
+		if err := c.Bind(&request); err != nil {
+			return responses.SendErrorWithCode(c, http.StatusBadRequest, "invalid_request", "invalid request body", "", "", nil)
+		}
+
+		workspaceID := c.Param("workspaceID")
+		if err := cfg.WorkspaceService.ScheduleDeletion(c.Request().Context(), workspaceID, request.Confirmation, sc.UserID, sc.Role); err != nil {
+			return respondServiceError(c, err)
+		}
+		return responses.SendOK(c, nil, "Workspace deletion scheduled")
+	}
+}
+
+// handleCancelDeletion is the handler for DELETE /workspaces/:workspaceID/deletion.
+func handleCancelDeletion(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sc, ok := FromEcho(c)
+		if !ok {
+			return unauthorized(c)
+		}
+		workspaceID := c.Param("workspaceID")
+		if err := cfg.WorkspaceService.CancelDeletion(c.Request().Context(), workspaceID, sc.UserID); err != nil {
+			return respondServiceError(c, err)
+		}
+		return responses.SendOK(c, nil, "Workspace deletion cancelled")
+	}
+}
+
+// workspacePermissionsResponse is the payload for GET /workspaces/:workspaceID/permissions.
+type workspacePermissionsResponse struct {
+	Role        Role         `json:"role"`
+	Permissions []Permission `json:"permissions"`
+}
+
+// handleGetWorkspacePermissions is the handler for GET
+// /workspaces/:workspaceID/permissions. It reports the caller's own granted
+// permissions for this workspace, derived from the already-resolved
+// SessionContext — GrantedPermissions(sc.Role) is the same computation the
+// resolver used to build sc.Permissions, so no bitset-to-slice helper is
+// needed on top of it.
+func handleGetWorkspacePermissions(c echo.Context) error {
+	sc, ok := FromEcho(c)
+	if !ok {
+		return unauthorized(c)
+	}
+	return responses.SendOK(c, workspacePermissionsResponse{
+		Role:        sc.Role,
+		Permissions: GrantedPermissions(sc.Role),
+	}, "Permissions retrieved")
+}
+
+// handleImportPersonalData is the handler for POST
+// /workspaces/:workspaceID/import-personal-data. RescopeUserData (Req 6.1-6.10)
+// moves the caller's own unscoped companies, job_vacancies, and
+// user_subscriptions documents into this workspace — it is a re-scoping of
+// legacy pre-workspace data, not a GDPR-style export/import. It tolerates
+// partial failure per collection (see rescope.go), so a partial failure here
+// still reports the partial report rather than discarding it.
+func handleImportPersonalData(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sc, ok := FromEcho(c)
+		if !ok {
+			return unauthorized(c)
+		}
+		workspaceID := c.Param("workspaceID")
+		report, err := cfg.WorkspaceService.RescopeUserData(c.Request().Context(), sc.UserID, workspaceID)
+		if err != nil {
+			slog.ErrorContext(c.Request().Context(), "import personal data: partial failure",
+				"workspace_id", workspaceID, "error", err)
+			return responses.SendErrorWithCode(c, http.StatusInternalServerError,
+				"rescope_partial_failure",
+				"some personal data could not be imported into this workspace",
+				"", "retry",
+				map[string]any{"report": report},
+			)
+		}
+		return responses.SendOK(c, report, "Personal data imported into workspace")
+	}
+}
+
+// handleListMembers is the handler for GET /workspaces/:workspaceID/members.
+func handleListMembers(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		workspaceID := c.Param("workspaceID")
+		members, err := cfg.MembershipService.List(c.Request().Context(), workspaceID)
+		if err != nil {
+			slog.ErrorContext(c.Request().Context(), "list members: failed", "workspace_id", workspaceID, "error", err)
+			return responses.SendErrorWithCode(c, http.StatusInternalServerError, "internal_error", "could not load members", "", "", nil)
+		}
+		return responses.SendOK(c, members, "Members retrieved")
+	}
+}
+
+// handleChangeMemberRole is the handler for PATCH
+// /workspaces/:workspaceID/members/:membershipID. ChangeRole runs the guard
+// table (ValidateRoleChange) internally before writing, so the handler does
+// not need to call it separately.
+func handleChangeMemberRole(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sc, ok := FromEcho(c)
+		if !ok {
+			return unauthorized(c)
+		}
+
+		var request struct {
+			Role string `json:"role"`
+		}
+		if err := c.Bind(&request); err != nil {
+			return responses.SendErrorWithCode(c, http.StatusBadRequest, "invalid_request", "invalid request body", "", "", nil)
+		}
+
+		workspaceID := c.Param("workspaceID")
+		membershipID := c.Param("membershipID")
+		err := cfg.MembershipService.ChangeRole(
+			c.Request().Context(), workspaceID, membershipID, sc.MembershipID, sc.Role, Role(request.Role), sc.UserID,
+		)
+		if err != nil {
+			return respondServiceError(c, err)
+		}
+		return responses.SendOK(c, nil, "Member role changed")
+	}
+}
+
+// handleSetMemberStatus builds a handler for the three status-transition
+// routes (remove, suspend, reactivate). SetStatus takes the target
+// membership's current role as an explicit parameter rather than looking it
+// up itself, so the handler fetches it first via MembershipService.ByID.
+func handleSetMemberStatus(cfg RouteConfig, newStatus MembershipStatus, successMessage string) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sc, ok := FromEcho(c)
+		if !ok {
+			return unauthorized(c)
+		}
+
+		workspaceID := c.Param("workspaceID")
+		membershipID := c.Param("membershipID")
+		ctx := c.Request().Context()
+
+		target, err := cfg.MembershipService.ByID(ctx, workspaceID, membershipID)
+		if err != nil {
+			return respondServiceError(c, err)
+		}
+
+		err = cfg.MembershipService.SetStatus(
+			ctx, workspaceID, membershipID, sc.MembershipID, sc.Role, target.Role, newStatus, sc.UserID,
+		)
+		if err != nil {
+			return respondServiceError(c, err)
+		}
+		return responses.SendOK(c, nil, successMessage)
+	}
+}
+
+// handleTransferOwnership is the handler for POST
+// /workspaces/:workspaceID/ownership. TransferOwnership runs
+// ValidateTransferTarget internally before writing, so the handler does not
+// need to call it separately.
+func handleTransferOwnership(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sc, ok := FromEcho(c)
+		if !ok {
+			return unauthorized(c)
+		}
+
+		var request struct {
+			TargetMembershipID string `json:"target_membership_id"`
+		}
+		if err := c.Bind(&request); err != nil {
+			return responses.SendErrorWithCode(c, http.StatusBadRequest, "invalid_request", "invalid request body", "", "", nil)
+		}
+
+		workspaceID := c.Param("workspaceID")
+		err := cfg.MembershipService.TransferOwnership(
+			c.Request().Context(), workspaceID, sc.MembershipID, request.TargetMembershipID, sc.UserID,
+		)
+		if err != nil {
+			return respondServiceError(c, err)
+		}
+		return responses.SendOK(c, nil, "Ownership transferred")
+	}
+}
+
 // RegisterRoutes registers all workspace-related route groups on the Echo app.
 //
 // Four groups:
@@ -351,18 +604,18 @@ func RegisterRoutes(cfg RouteConfig) {
 	}
 
 	wsSG := NewScopedGroup(api, "/workspaces/:workspaceID", resolver, cfg.Registry)
-	wsSG.GET("", PermWorkspaceView, handler)
-	wsSG.PATCH("", PermWorkspaceRename, handler)
-	wsSG.POST("/deletion", PermWorkspaceDelete, handler)
-	wsSG.DELETE("/deletion", PermWorkspaceDelete, handler)
-	wsSG.GET("/permissions", PermWorkspaceView, handler)
-	wsSG.POST("/import-personal-data", PermWorkspaceImportPersonalData, handler)
-	wsSG.GET("/members", PermMemberView, handler)
-	wsSG.PATCH("/members/:membershipID", PermMemberRoleChange, handler)
-	wsSG.DELETE("/members/:membershipID", PermMemberRemove, handler)
-	wsSG.POST("/members/:membershipID/suspension", PermMemberRemove, handler)
-	wsSG.DELETE("/members/:membershipID/suspension", PermMemberRemove, handler)
-	wsSG.POST("/ownership", PermOwnershipTransfer, handler)
+	wsSG.GET("", PermWorkspaceView, handleGetWorkspace(cfg))
+	wsSG.PATCH("", PermWorkspaceRename, handleRenameWorkspace(cfg))
+	wsSG.POST("/deletion", PermWorkspaceDelete, handleScheduleDeletion(cfg))
+	wsSG.DELETE("/deletion", PermWorkspaceDelete, handleCancelDeletion(cfg))
+	wsSG.GET("/permissions", PermWorkspaceView, handleGetWorkspacePermissions)
+	wsSG.POST("/import-personal-data", PermWorkspaceImportPersonalData, handleImportPersonalData(cfg))
+	wsSG.GET("/members", PermMemberView, handleListMembers(cfg))
+	wsSG.PATCH("/members/:membershipID", PermMemberRoleChange, handleChangeMemberRole(cfg))
+	wsSG.DELETE("/members/:membershipID", PermMemberRemove, handleSetMemberStatus(cfg, MembershipRemoved, "Member removed"))
+	wsSG.POST("/members/:membershipID/suspension", PermMemberRemove, handleSetMemberStatus(cfg, MembershipSuspended, "Member suspended"))
+	wsSG.DELETE("/members/:membershipID/suspension", PermMemberRemove, handleSetMemberStatus(cfg, MembershipActive, "Member reactivated"))
+	wsSG.POST("/ownership", PermOwnershipTransfer, handleTransferOwnership(cfg))
 	wsSG.GET("/invitations", PermMemberView, handler)
 	wsSG.POST("/invitations", PermMemberInvite, handler)
 	wsSG.POST("/invitations/:id/resend", PermMemberInvite, handler)

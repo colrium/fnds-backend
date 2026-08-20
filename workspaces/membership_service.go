@@ -116,6 +116,27 @@ func (m *MembershipService) Create(ctx context.Context, in CreateMembershipInput
 	return membership, nil
 }
 
+// ByID returns the membership with the given ID within the workspace, or a
+// *MembershipError with Status 404 when it does not exist. Callers that need
+// to know a target membership's current role before calling SetStatus (which
+// takes targetRole as an explicit parameter rather than looking it up itself)
+// use this first.
+func (m *MembershipService) ByID(ctx context.Context, workspaceID, membershipID string) (Membership, error) {
+	coll := configs.MI.DB.Collection("memberships")
+	var membership Membership
+	err := coll.FindOne(ctx, bson.M{
+		"_id":          membershipID,
+		"workspace_id": workspaceID,
+	}).Decode(&membership)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return Membership{}, &MembershipError{Status: 404, Code: "membership_not_found", Message: "membership not found"}
+		}
+		return Membership{}, err
+	}
+	return membership, nil
+}
+
 // List returns all members in a workspace with their display info (Req 13.15).
 func (m *MembershipService) List(ctx context.Context, workspaceID string) ([]MemberView, error) {
 	coll := configs.MI.DB.Collection("memberships")
