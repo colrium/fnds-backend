@@ -600,6 +600,12 @@ func RegisterRoutes(cfg RouteConfig) {
 			}, "Employer authentication completed")
 		}
 
+		// Nobody is asked to name a workspace: one is provisioned under a derived
+		// name and the employer lands on a finished session.
+		if handled, provisionErr := completeWithDefaultWorkspace(c, cfg, result.OnboardingID, result.Stage); handled {
+			return provisionErr
+		}
+
 		ticket, err := onboarding.MintTicket(result.OnboardingID, onboarding.Stage(result.Stage))
 		if err != nil {
 			slog.ErrorContext(c.Request().Context(), "employer authentication: mint onboarding ticket", "error", err)
@@ -744,55 +750,7 @@ func RegisterRoutes(cfg RouteConfig) {
 			)
 		}
 
-		result, err := cfg.WorkspaceService.CreateForOnboarding(c.Request().Context(), CreateForOnboardingInput{
-			OnboardingStateID:   state.ID,
-			StytchOrgID:         state.StytchOrganizationID,
-			IntermediateSession: state.IntermediateSessionToken,
-			UserID:              state.UserID,
-			Email:               state.Email,
-			StytchMemberID:      state.StytchMemberID,
-			RawName:             request.Name,
-		})
-		if err != nil {
-			var wsErr *WorkspaceError
-			if errors.As(err, &wsErr) {
-				return responses.SendErrorWithCode(c, wsErr.Status, wsErr.Code, wsErr.Message, "", "", nil)
-			}
-			slog.ErrorContext(c.Request().Context(), "employer onboarding: create workspace failed", "error", err)
-			return responses.SendErrorWithCode(
-				c,
-				http.StatusServiceUnavailable,
-				"workspace_provisioning_failed",
-				"could not create the workspace; please try again",
-				"",
-				"try_again",
-				nil,
-			)
-		}
-
-		if err := cfg.OnboardingService.CompleteOnboarding(c.Request().Context(), state.ID, result.Workspace.ID); err != nil {
-			return respondOnboardingServiceError(c, err, "auth_provider_unavailable", "could not complete onboarding")
-		}
-
-		postAuth, postAuthErr := cfg.WorkspaceService.ResolvePostAuth(c.Request().Context(), state.UserID, state.Email)
-		if postAuthErr != nil {
-			slog.ErrorContext(c.Request().Context(), "employer onboarding: resolve post-auth failed", "error", postAuthErr)
-			return responses.SendErrorWithCode(
-				c,
-				http.StatusServiceUnavailable,
-				"auth_provider_unavailable",
-				"could not complete employer onboarding",
-				"",
-				"try_again",
-				nil,
-			)
-		}
-
-		return responses.SendOK(c, authenticateResponse{
-			Stage:      string(onboarding.StageComplete),
-			SessionJWT: result.SessionJWT,
-			PostAuth:   &postAuth,
-		}, "Workspace created")
+		return provisionOnboardingWorkspace(c, cfg, state, request.Name)
 	})
 	onboardingGroup.POST("/link/decision", func(c echo.Context) error {
 		claims, err := onboardingTicketClaims(c)
@@ -824,6 +782,11 @@ func RegisterRoutes(cfg RouteConfig) {
 		})
 		if err != nil {
 			return respondOnboardingServiceError(c, err, "auth_provider_unavailable", "could not process the linking decision")
+		}
+
+		// Same as the authenticate path: no workspace-naming prompt is ever issued.
+		if handled, provisionErr := completeWithDefaultWorkspace(c, cfg, claims.StateID, result.Stage); handled {
+			return provisionErr
 		}
 
 		ticket, err := onboarding.MintTicket(claims.StateID, onboarding.Stage(result.Stage))
@@ -887,6 +850,11 @@ func RegisterRoutes(cfg RouteConfig) {
 		result, err := cfg.OnboardingService.VerifyLinkChallenge(c.Request().Context(), claims.StateID, strings.TrimSpace(request.Code))
 		if err != nil {
 			return respondOnboardingServiceError(c, err, "auth_provider_unavailable", "could not verify the code")
+		}
+
+		// Same as the authenticate path: no workspace-naming prompt is ever issued.
+		if handled, provisionErr := completeWithDefaultWorkspace(c, cfg, claims.StateID, result.Stage); handled {
+			return provisionErr
 		}
 
 		ticket, err := onboarding.MintTicket(claims.StateID, onboarding.Stage(result.Stage))

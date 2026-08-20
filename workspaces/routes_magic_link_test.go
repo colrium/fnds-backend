@@ -173,14 +173,18 @@ func TestMagicLinkRouteSendsEmailThroughStytch(t *testing.T) {
 	}
 }
 
-func TestAuthenticateRouteReturnsOnboardingTicketForNewEmployer(t *testing.T) {
+// Uses awaiting_link_decision rather than awaiting_workspace_name: the latter
+// no longer yields a ticket at all, because a default workspace is provisioned
+// on the spot (see default_workspace.go). This test is about token parsing and
+// ticket contents, which every remaining unfinished stage still exercises.
+func TestAuthenticateRouteReturnsOnboardingTicketForUnfinishedOnboarding(t *testing.T) {
 	t.Setenv("SESSION_KEY", "test-ticket-secret-key-with-at-least-32-bytes")
 
 	clock := routeTestClock{now: time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)}
 	limiter := ratelimit.NewLimiter(nil, nil)
 	onboardingService := &routeTestOnboardingService{
 		authResult: onboarding.AuthResult{
-			Stage:        string(onboarding.StageAwaitingWorkspaceName),
+			Stage:        string(onboarding.StageAwaitingLinkDecision),
 			OnboardingID: "onboarding-new-employer",
 		},
 	}
@@ -226,8 +230,8 @@ func TestAuthenticateRouteReturnsOnboardingTicketForNewEmployer(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.Data.Stage != string(onboarding.StageAwaitingWorkspaceName) {
-		t.Errorf("stage = %q, want %q", response.Data.Stage, onboarding.StageAwaitingWorkspaceName)
+	if response.Data.Stage != string(onboarding.StageAwaitingLinkDecision) {
+		t.Errorf("stage = %q, want %q", response.Data.Stage, onboarding.StageAwaitingLinkDecision)
 	}
 	if response.Data.OnboardingTicket == "" {
 		t.Fatal("onboarding ticket is empty")
@@ -240,7 +244,7 @@ func TestAuthenticateRouteReturnsOnboardingTicketForNewEmployer(t *testing.T) {
 	if claims.StateID != "onboarding-new-employer" {
 		t.Errorf("ticket state ID = %q, want %q", claims.StateID, "onboarding-new-employer")
 	}
-	if claims.Stage != onboarding.StageAwaitingWorkspaceName {
-		t.Errorf("ticket stage = %q, want %q", claims.Stage, onboarding.StageAwaitingWorkspaceName)
+	if claims.Stage != onboarding.StageAwaitingLinkDecision {
+		t.Errorf("ticket stage = %q, want %q", claims.Stage, onboarding.StageAwaitingLinkDecision)
 	}
 }

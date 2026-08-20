@@ -65,9 +65,11 @@ func newOnboardingRouteTestApp(t *testing.T, onboardingService onboardingService
 func TestLinkDecisionRoute(t *testing.T) {
 	t.Setenv("SESSION_KEY", "test-ticket-secret-key-with-at-least-32-bytes")
 
+	// A decision that still needs a challenge is the remaining case that yields a
+	// ticket; a satisfied decision now provisions a default workspace instead.
 	t.Run("valid ticket forwards the decision and mints a fresh ticket", func(t *testing.T) {
 		svc := &routeTestOnboardingService{
-			decideLinkResult: onboarding.LinkResult{Stage: string(onboarding.StageAwaitingWorkspaceName)},
+			decideLinkResult: onboarding.LinkResult{Stage: string(onboarding.StageAwaitingLinkDecision)},
 		}
 		app := newOnboardingRouteTestApp(t, svc, nil)
 		ticket := mustMintTicket(t, "state-1", onboarding.StageAwaitingLinkDecision)
@@ -99,15 +101,15 @@ func TestLinkDecisionRoute(t *testing.T) {
 		if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 			t.Fatalf("decode response: %v", err)
 		}
-		if response.Data.Stage != string(onboarding.StageAwaitingWorkspaceName) {
-			t.Errorf("stage = %q, want %q", response.Data.Stage, onboarding.StageAwaitingWorkspaceName)
+		if response.Data.Stage != string(onboarding.StageAwaitingLinkDecision) {
+			t.Errorf("stage = %q, want %q", response.Data.Stage, onboarding.StageAwaitingLinkDecision)
 		}
 		claims, err := onboarding.ValidateTicket(response.Data.OnboardingTicket)
 		if err != nil {
 			t.Fatalf("validate re-minted ticket: %v", err)
 		}
-		if claims.Stage != onboarding.StageAwaitingWorkspaceName {
-			t.Errorf("re-minted ticket stage = %q, want %q", claims.Stage, onboarding.StageAwaitingWorkspaceName)
+		if claims.Stage != onboarding.StageAwaitingLinkDecision {
+			t.Errorf("re-minted ticket stage = %q, want %q", claims.Stage, onboarding.StageAwaitingLinkDecision)
 		}
 	})
 
@@ -191,11 +193,25 @@ func TestLinkChallengeRoute(t *testing.T) {
 func TestLinkChallengeVerifyRoute(t *testing.T) {
 	t.Setenv("SESSION_KEY", "test-ticket-secret-key-with-at-least-32-bytes")
 
-	t.Run("correct code advances the stage and mints a fresh ticket", func(t *testing.T) {
+	// A correct code satisfies the link and would previously have re-minted a
+	// ticket for the naming step. That step is gone: a default workspace is
+	// provisioned on the spot, so the response must carry no ticket. The Stytch
+	// org-create is forced to fail so provisioning returns before its first Mongo
+	// write, keeping this test DB-free while still proving which path ran.
+	t.Run("correct code provisions a default workspace instead of minting a ticket", func(t *testing.T) {
 		svc := &routeTestOnboardingService{
 			verifyChallengeResult: onboarding.LinkResult{Stage: string(onboarding.StageAwaitingWorkspaceName)},
+			stateByIDResult: &onboarding.OnboardingState{
+				ID:    "state-1",
+				Stage: onboarding.StageAwaitingWorkspaceName,
+				Email: "employer@example.com",
+			},
 		}
-		app := newOnboardingRouteTestApp(t, svc, nil)
+		wsService, fake := newProvisioningTestService(t)
+		fake.FailAt["CreateOrganizationFromDiscovery"] = []stytch.FailSpec{
+			{Attempt: 1, Kind: stytch.KindInvalidRequest, Status: 400},
+		}
+		app := newOnboardingRouteTestApp(t, svc, wsService)
 		ticket := mustMintTicket(t, "state-1", onboarding.StageAwaitingLinkDecision)
 
 		request := httptest.NewRequest(
@@ -209,11 +225,15 @@ func TestLinkChallengeVerifyRoute(t *testing.T) {
 
 		app.ServeHTTP(recorder, request)
 
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d; body = %s", recorder.Code, http.StatusOK, recorder.Body.String())
-		}
 		if svc.verifyChallengeInput != "123456" {
 			t.Errorf("verify input = %q, want %q (trimmed)", svc.verifyChallengeInput, "123456")
+		}
+		if svc.stateByIDInput != "state-1" {
+			t.Errorf("StateByID called with %q, want %q — provisioning never began",
+				svc.stateByIDInput, "state-1")
+		}
+		if bytes.Contains(recorder.Body.Bytes(), []byte("onboarding_ticket")) {
+			t.Errorf("response still carries an onboarding ticket; body = %s", recorder.Body.String())
 		}
 	})
 
