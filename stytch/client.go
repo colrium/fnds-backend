@@ -119,6 +119,29 @@ type DiscoveredOrganization struct {
 	OrganizationName string
 }
 
+// Organization provisioning settings fixed for every Fundis Workspace
+// (Req 2.13, D6).
+const (
+	// EmailJITNotAllowed disables email-domain auto-join entirely, which is what
+	// Req 2.13's "the value that disables domain-based auto-join" means and what
+	// D6 requires: Kenyan SMEs overwhelmingly sign up with gmail.com addresses,
+	// so any domain-based join would let strangers into each other's Workspaces.
+	// Membership is by invitation only.
+	//
+	// NOT "RESTRICTED". Restricted does not mean "locked down" — it means "JIT is
+	// allowed, but only for domains on email_allowed_domains". Sending it with no
+	// allowed-domain list is self-contradictory, and Stytch rejects the create
+	// with 400 invalid_restricted_email_setting. Stytch also refuses to accept
+	// public domains such as gmail.com in that list at all, so RESTRICTED could
+	// never express this policy even with a list.
+	EmailJITNotAllowed = "NOT_ALLOWED"
+
+	// EmailInvitesAllAllowed permits invitations to any email domain, which is
+	// the other half of Req 2.13: invitation-only membership is worthless if the
+	// invitee's gmail address cannot be invited.
+	EmailInvitesAllAllowed = "ALL_ALLOWED"
+)
+
 // CreateOrgInput carries the parameters for CreateOrganizationFromDiscovery.
 // It includes the two settings Req 2.13 fixes for every Workspace and the
 // Fundis-side idempotency value of Req 3.12.
@@ -132,7 +155,7 @@ type CreateOrgInput struct {
 	// Slug is the URL-safe identifier for the Organization.
 	Slug string
 
-	// EmailJITProvisioning is always "RESTRICTED" — disables domain auto-join (D6, Req 2.13).
+	// EmailJITProvisioning is always EmailJITNotAllowed — see its doc comment.
 	EmailJITProvisioning string
 
 	// EmailInvites is always "ALL_ALLOWED" — permits invitations to any email domain.
@@ -166,7 +189,7 @@ type CreateOrganizationInput struct {
 	// Slug is the URL-safe identifier for the Organization.
 	Slug string
 
-	// EmailJITProvisioning is always "RESTRICTED" — disables domain auto-join (D6, Req 2.13).
+	// EmailJITProvisioning is always EmailJITNotAllowed — see its doc comment.
 	EmailJITProvisioning string
 
 	// EmailInvites is always "ALL_ALLOWED" — permits invitations to any email domain.

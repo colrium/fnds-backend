@@ -1187,8 +1187,8 @@ func handleCreateWorkspace(cfg RouteConfig) echo.HandlerFunc {
 			orgResult, innerErr = cfg.Adapter.Client().CreateOrganization(attemptCtx, stytch.CreateOrganizationInput{
 				Name:                 normalized,
 				Slug:                 slug,
-				EmailJITProvisioning: "RESTRICTED",
-				EmailInvites:         "ALL_ALLOWED",
+				EmailJITProvisioning: stytch.EmailJITNotAllowed,
+				EmailInvites:         stytch.EmailInvitesAllAllowed,
 			})
 			return innerErr
 		})

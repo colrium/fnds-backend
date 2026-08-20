@@ -117,7 +117,7 @@ type CreateForOnboardingResult struct {
 //  2. Derive the slug
 //  3. If StytchOrgID is already set, reuse it (Req 3.3) — make zero Stytch creates
 //  4. Otherwise, create a Stytch Organization via DiscoveryOrganizationCreate
-//     with JIT=RESTRICTED, invites=ALL_ALLOWED, idempotency_key="onboarding:"+stateID
+//     with JIT disabled, invites=ALL_ALLOWED, idempotency_key="onboarding:"+stateID
 //  5. Insert the workspace document, retrying slug with -2, -3, ... up to 100 attempts
 //     on mongo.IsDuplicateKeyError (same pattern as users.PublishWithUniqueSlug)
 //  6. Insert the owner membership with authority_version=1
@@ -155,8 +155,8 @@ func (w *WorkspaceService) CreateForOnboarding(ctx context.Context, in CreateFor
 				org, callErr = w.adapter.Client().CreateOrganization(attemptCtx, stytch.CreateOrganizationInput{
 					Name:                 normalized,
 					Slug:                 baseSlug,
-					EmailJITProvisioning: "RESTRICTED",
-					EmailInvites:         "ALL_ALLOWED",
+					EmailJITProvisioning: stytch.EmailJITNotAllowed,
+					EmailInvites:         stytch.EmailInvitesAllAllowed,
 				})
 				return callErr
 			})
@@ -195,8 +195,8 @@ func (w *WorkspaceService) CreateForOnboarding(ctx context.Context, in CreateFor
 				IntermediateSessionToken: in.IntermediateSession,
 				Name:                     normalized,
 				Slug:                     baseSlug,
-				EmailJITProvisioning:     "RESTRICTED",
-				EmailInvites:             "ALL_ALLOWED",
+				EmailJITProvisioning:     stytch.EmailJITNotAllowed,
+				EmailInvites:             stytch.EmailInvitesAllAllowed,
 				IdempotencyKey:           "onboarding:" + in.OnboardingStateID,
 			})
 			return callErr
