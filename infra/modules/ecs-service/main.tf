@@ -83,6 +83,7 @@ resource "aws_ecs_service" "this" {
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
   health_check_grace_period_seconds  = 60
+  wait_for_steady_state              = true
 
   network_configuration {
     subnets          = var.private_subnet_ids
