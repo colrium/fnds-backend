@@ -539,22 +539,35 @@ func main() {
 		return c.JSON(200, map[string]string{"message": "Verification email sent"})
 	})
 
+	// Retention is operator-configurable and validated against the statutory
+	// minimums (Req 12.10, 23.6). A bad value fails startup rather than
+	// silently deleting records the requirements still cover.
+	retentionConfig, err := workspaces.RetentionConfigFromEnv()
+	if err != nil {
+		slog.Error("invalid workspace retention configuration", "error", err)
+		os.Exit(1)
+	}
+
 	// Register the workspace background jobs (invitation expiry sweep,
-	// deletion effector, abandoned-onboarding reaper, Stytch member-delete
-	// retry) before starting the scheduler's tickers.
+	// deletion effector, abandoned-onboarding reaper, zero-owner detector,
+	// Stytch member-delete retry, retention purge) before starting the
+	// scheduler's tickers.
 	schedulerJobs := workspaces.NewSchedulerJobs(
 		invitationService.SweepExpired,
 		workspaceService,
 		membershipService,
 		stytchAdapter,
 		stytchClock,
+		retentionConfig,
 	)
 	scheduler.RegisterHourly(schedulerJobs.SweepExpiredInvitations)
 	scheduler.RegisterHourly(schedulerJobs.EffectDueDeletions)
 	scheduler.RegisterHourly(schedulerJobs.ReapAbandonedOnboarding)
+	scheduler.RegisterHourly(schedulerJobs.ReportZeroOwnerWorkspaces)
 	scheduler.RegisterFrequent(schedulerJobs.RetryPendingStytchDeletes)
+	scheduler.RegisterDaily(schedulerJobs.PurgeExpiredRecords)
 
-	// Start the background job scheduler with hourly and 15-minute tickers.
+	// Start the background job scheduler with hourly, 15-minute, and daily tickers.
 	scheduler.Start()
 
 	port := fmt.Sprintf(":%s", configs.EnvPort())

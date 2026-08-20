@@ -353,6 +353,69 @@ func LoadNotificationCacheSettings() (NotificationCacheSettings, error) {
 	}, nil
 }
 
+const (
+	// The retention floors come from the requirements, not from the
+	// environment: Req 12.10 keeps an invitation for at least 180 days after
+	// it leaves "pending", and Req 23.6 keeps an audit entry for at least 2
+	// years. An operator may raise the maximum age at which a record becomes
+	// purgeable, never lower it past these floors.
+	retentionInvitationMaxAgeDefault = 365 * 24 * time.Hour
+	retentionInvitationMaxAgeMin     = 180 * 24 * time.Hour
+	retentionInvitationMaxAgeMax     = 20 * 365 * 24 * time.Hour
+
+	retentionAuditMaxAgeDefault = 3 * 365 * 24 * time.Hour
+	retentionAuditMaxAgeMin     = 730 * 24 * time.Hour
+	retentionAuditMaxAgeMax     = 20 * 365 * 24 * time.Hour
+)
+
+// RetentionSettings is the immutable, validated configuration for the workspace
+// retention purge. PurgeEnabled defaults to false: the design defers the purge
+// until a data-retention policy sets the maximum, so out of the box the job
+// only reports what it would delete.
+type RetentionSettings struct {
+	PurgeEnabled     bool
+	MaxInvitationAge time.Duration
+	MaxAuditAge      time.Duration
+}
+
+// LoadRetentionSettings parses WORKSPACE_RETENTION_PURGE_ENABLED,
+// WORKSPACE_RETENTION_MAX_INVITATION_AGE, and WORKSPACE_RETENTION_MAX_AUDIT_AGE.
+// An age below the statutory minimum is an error rather than a clamp, so an
+// operator cannot accidentally configure a purge that deletes records the
+// requirements say must still exist.
+func LoadRetentionSettings() (RetentionSettings, error) {
+	enabled, err := parseBoolEnv("WORKSPACE_RETENTION_PURGE_ENABLED", false)
+	if err != nil {
+		return RetentionSettings{}, err
+	}
+
+	maxInvitationAge, err := parseDurationEnvInRange(
+		"WORKSPACE_RETENTION_MAX_INVITATION_AGE",
+		retentionInvitationMaxAgeDefault,
+		retentionInvitationMaxAgeMin,
+		retentionInvitationMaxAgeMax,
+	)
+	if err != nil {
+		return RetentionSettings{}, err
+	}
+
+	maxAuditAge, err := parseDurationEnvInRange(
+		"WORKSPACE_RETENTION_MAX_AUDIT_AGE",
+		retentionAuditMaxAgeDefault,
+		retentionAuditMaxAgeMin,
+		retentionAuditMaxAgeMax,
+	)
+	if err != nil {
+		return RetentionSettings{}, err
+	}
+
+	return RetentionSettings{
+		PurgeEnabled:     enabled,
+		MaxInvitationAge: maxInvitationAge,
+		MaxAuditAge:      maxAuditAge,
+	}, nil
+}
+
 func parseBoolEnv(name string, defaultValue bool) (bool, error) {
 	value := os.Getenv(name)
 	if value == "" {

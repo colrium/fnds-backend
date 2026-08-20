@@ -3,6 +3,7 @@ package workspaces
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	"backend/configs"
@@ -22,15 +23,20 @@ type SweepExpiredFunc func(ctx context.Context) (int64, error)
 //   - Invitation expiry sweep (Req 12.8)
 //   - Abandoned-onboarding reaper (Req 3.7, 3.8)
 //   - Workspace deletion effector (Req 18.8)
+//   - Zero-owner workspace detection (Req 14.15)
 //
 // Frequent (15-min) jobs:
 //   - Stytch member-delete retry (Req 13.4)
+//
+// Daily jobs:
+//   - Retention purge / report (Req 12.10, 23.6)
 type SchedulerJobs struct {
 	sweepExpired SweepExpiredFunc
 	workspaces   *WorkspaceService
 	memberships  *MembershipService
 	adapter      *stytch.Adapter
 	clock        stytch.Clock
+	retention    RetentionConfig
 }
 
 func NewSchedulerJobs(
@@ -39,6 +45,7 @@ func NewSchedulerJobs(
 	ms *MembershipService,
 	adapter *stytch.Adapter,
 	clock stytch.Clock,
+	retention RetentionConfig,
 ) *SchedulerJobs {
 	return &SchedulerJobs{
 		sweepExpired: sweepExpired,
@@ -46,6 +53,7 @@ func NewSchedulerJobs(
 		memberships:  ms,
 		adapter:      adapter,
 		clock:        clock,
+		retention:    retention,
 	}
 }
 
@@ -60,6 +68,47 @@ func (j *SchedulerJobs) SweepExpiredInvitations() {
 	if count > 0 {
 		slog.Info("scheduler: swept expired invitations", "count", count)
 	}
+}
+
+// PurgeExpiredRecords is the daily job for Req 12.10 and 23.6.
+//
+// Daily, not hourly: both retention thresholds are expressed in days and years
+// (180 days for an invitation that has left "pending", 2 years for an audit
+// entry), so the smallest unit of change the requirements care about is a day.
+// Running the two count queries every hour would produce 24 identical reports
+// for one day's worth of newly-eligible records.
+//
+// With PurgeEnabled false — the default, because the design defers the purge
+// until a data-retention policy sets the maximum — this only reports what it
+// would delete.
+func (j *SchedulerJobs) PurgeExpiredRecords() {
+	ctx := context.Background()
+	if _, err := RunRetentionPurge(ctx, j.retention, j.clock); err != nil {
+		slog.ErrorContext(ctx, "scheduler: retention purge failed", "error", err)
+	}
+}
+
+// ReportZeroOwnerWorkspaces is the hourly job for Req 14.15.
+//
+// A workspace with zero active owner memberships is a workspace nobody can
+// administer, delete, or transfer. The partial unique index makes it
+// unreachable, so a non-empty result is a data-integrity alarm: one
+// error-severity record naming every affected workspace, hourly, so on-call
+// sees it within the hour rather than at the next daily report.
+func (j *SchedulerJobs) ReportZeroOwnerWorkspaces() {
+	ctx := context.Background()
+	orphaned, err := j.memberships.DetectZeroOwnerWorkspaces(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "scheduler: zero-owner workspace detection failed", "error", err)
+		return
+	}
+	if len(orphaned) == 0 {
+		return
+	}
+	slog.ErrorContext(ctx, "scheduler: workspaces have zero active owner memberships",
+		"count", len(orphaned),
+		"workspace_ids", strings.Join(orphaned, ","),
+	)
 }
 
 // EffectDueDeletions is the hourly job for Req 18.8.

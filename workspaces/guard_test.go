@@ -5,6 +5,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"backend/audit"
+	"backend/ratelimit"
+	"backend/stytch"
 
 	"github.com/labstack/echo/v4"
 )
@@ -403,5 +408,43 @@ func TestSessionScopedRoutesContainsExpectedEntries(t *testing.T) {
 		if _, ok := sessionScopedRoutes[key]; !ok {
 			t.Errorf("sessionScopedRoutes missing %s %s", key.Method, key.Path)
 		}
+	}
+}
+
+// TestRegisterRoutesSatisfiesVerify builds the registry the way main.go does —
+// by handing a fresh RouteRegistry to RegisterRoutes — and then runs the same
+// startup audit main.go runs. It guards against a new route registered through
+// a ScopedGroup without a matching workspaceScopedRoutes row (or vice versa),
+// which makes the process refuse to boot. Admin routes go on a plain
+// echo.Group and must therefore leave the registry untouched.
+func TestRegisterRoutesSatisfiesVerify(t *testing.T) {
+	t.Setenv("SESSION_KEY", "test-ticket-secret-key-with-at-least-32-bytes")
+
+	clock := stytch.NewFakeClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	registry := NewRouteRegistry()
+
+	RegisterRoutes(RouteConfig{
+		App: echo.New(),
+		Adapter: stytch.NewWithClient(stytch.Config{
+			ProjectID:     "project-test",
+			Secret:        "secret-test",
+			PublicToken:   "public-token-test",
+			Environment:   "test",
+			WebhookSecret: "whsec_test",
+			Clock:         clock,
+		}, stytch.NewFake(clock)),
+		AuditLogger:       audit.NewLogger(),
+		RateLimiter:       ratelimit.NewLimiter(nil, nil),
+		WorkspaceService:  &WorkspaceService{},
+		MembershipService: &MembershipService{},
+		WebhookConsumer:   &WebhookConsumer{},
+		HealthHandler:     &HealthHandler{},
+		MigrationHandler:  &MigrationHandler{},
+		Registry:          registry,
+		Clock:             clock,
+	})
+
+	if err := registry.Verify(); err != nil {
+		t.Fatalf("Verify must pass for the routes main.go registers: %v", err)
 	}
 }

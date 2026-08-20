@@ -53,6 +53,28 @@ func DefaultRetentionConfig() RetentionConfig {
 	}
 }
 
+// RetentionConfigFromEnv starts from DefaultRetentionConfig and applies the
+// operator overrides in WORKSPACE_RETENTION_PURGE_ENABLED,
+// WORKSPACE_RETENTION_MAX_INVITATION_AGE, and WORKSPACE_RETENTION_MAX_AUDIT_AGE.
+//
+// The two minimums stay where the requirements put them (Req 12.10, Req 23.6)
+// and are not configurable; configs.LoadRetentionSettings enforces them as the
+// lower bound of the maximum ages, so an out-of-range value fails startup
+// rather than silently deleting a record the requirements still cover.
+func RetentionConfigFromEnv() (RetentionConfig, error) {
+	cfg := DefaultRetentionConfig()
+
+	settings, err := configs.LoadRetentionSettings()
+	if err != nil {
+		return RetentionConfig{}, err
+	}
+
+	cfg.PurgeEnabled = settings.PurgeEnabled
+	cfg.MaxInvitationAge = settings.MaxInvitationAge
+	cfg.MaxAuditAge = settings.MaxAuditAge
+	return cfg, nil
+}
+
 // RetentionReport records what a retention purge would or did do.
 type RetentionReport struct {
 	InvitationsEligible  int64 `json:"invitations_eligible"`

@@ -963,9 +963,57 @@ func RegisterRoutes(cfg RouteConfig) {
 	adminGroup.Use(middleware.JWTAuth, middleware.IsAdmin)
 	adminGroup.POST("/employer-migration", cfg.MigrationHandler.HandleStartMigration)
 	adminGroup.GET("/employer-migration/:runID", cfg.MigrationHandler.HandleGetMigrationReport)
-	adminGroup.POST("/workspaces/:workspaceID/ownership", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
-	})
+	adminGroup.POST("/workspaces/:workspaceID/ownership", handleAdminTransferOwnership(cfg))
+}
+
+// adminTransferOwnershipRequest is the body for
+// POST /admin/workspaces/:workspaceID/ownership.
+type adminTransferOwnershipRequest struct {
+	TargetMembershipID string `json:"target_membership_id"`
+}
+
+// handleAdminTransferOwnership is the handler for
+// POST /admin/workspaces/:workspaceID/ownership (Req 14.13): the platform
+// administrator's escape hatch for a workspace whose Owner's user account has
+// been suspended, and which therefore cannot use the member-facing
+// POST /workspaces/:workspaceID/ownership.
+//
+// It is deliberately not a ScopedGroup route. The caller holds no membership in
+// the target workspace, so there is no SessionContext and no Permission to
+// authorize against — middleware.IsAdmin on adminGroup is the whole
+// authorization story, and registering this path through a ScopedGroup would
+// fail RouteRegistry.Verify at startup.
+func handleAdminTransferOwnership(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		adminUserID := contextutil.GetUserID(c)
+		if adminUserID == "" {
+			return unauthorized(c)
+		}
+
+		var request adminTransferOwnershipRequest
+		if err := c.Bind(&request); err != nil {
+			return responses.SendErrorWithCode(c, http.StatusBadRequest, "invalid_request", "invalid request body", "", "", nil)
+		}
+		if strings.TrimSpace(request.TargetMembershipID) == "" {
+			return responses.SendErrorWithCode(c, http.StatusBadRequest, "invalid_request", "target_membership_id is required", "", "", nil)
+		}
+
+		workspaceID := c.Param("workspaceID")
+		err := cfg.MembershipService.AdminTransferOwnership(
+			c.Request().Context(),
+			workspaceID,
+			strings.TrimSpace(request.TargetMembershipID),
+			adminUserID,
+		)
+		if err != nil {
+			return respondServiceError(c, err)
+		}
+
+		return responses.SendOK(c, map[string]any{
+			"workspace_id":         workspaceID,
+			"target_membership_id": strings.TrimSpace(request.TargetMembershipID),
+		}, "Ownership transferred")
+	}
 }
 
 // bearerToken extracts the raw bearer credential from the Authorization
