@@ -168,7 +168,7 @@ func main() {
 	slog.Info("database connected", "env", configs.AppEnv())
 
 	// Validate required Stytch configuration when employer auth is enabled.
-	if flag := strings.TrimSpace(configs.StytchEmployerAuthEnabled()); flag == "true" || flag == "1" {
+	if workspaces.IsStytchAuthEnabled() {
 		required := []struct {
 			name  string
 			value string
@@ -319,7 +319,7 @@ func main() {
 	}
 
 	var stytchAdapter *stytch.Adapter
-	if flag := strings.TrimSpace(configs.StytchEmployerAuthEnabled()); flag == "true" || flag == "1" {
+	if workspaces.IsStytchAuthEnabled() {
 		httpClient, err := stytch.NewHTTPClient(stytchConfig)
 		if err != nil {
 			slog.Error("failed to construct stytch http client", "error", err)

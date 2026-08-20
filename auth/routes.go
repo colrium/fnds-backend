@@ -14,6 +14,7 @@ import (
 	"backend/responses"
 	"backend/turnstile"
 	"backend/users"
+	"backend/workspaces"
 
 	"github.com/labstack/echo/v4"
 	"go.mongodb.org/mongo-driver/bson"
@@ -88,9 +89,24 @@ func HandleUserLogin(ctx echo.Context) error {
 		phone = username
 	}
 
-	user, token, err := processUserLogin(email, phone, req.Password)
+	user, token, err := processUserLogin(ctx.Request().Context(), email, phone, req.Password)
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrStytchSignInRequired):
+			// Req 21.11: the code and sign-in location the frontend branches on.
+			// BuildCutoverResponse owns the contract; this maps its fields onto
+			// the standard structured-error envelope so `use_stytch_sign_in`
+			// reaches the client the same way every other coded 409 does
+			// (duplicate_phone, duplicate_email), with the location in
+			// `details.sign_in_url` as the design's error table specifies.
+			cutover := workspaces.BuildCutoverResponse()
+			return responses.SendErrorWithCode(
+				ctx, http.StatusConflict,
+				cutover.Code,
+				cutover.Message,
+				"", "",
+				map[string]any{"sign_in_url": cutover.SignInURL},
+			)
 		case errors.Is(err, ErrPasswordResetRequired):
 			// Issue the OTP server-side so the client can jump straight to the
 			// verify-otp screen. Doing it here avoids a second /forgot-password

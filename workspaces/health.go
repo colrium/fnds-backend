@@ -2,9 +2,7 @@ package workspaces
 
 import (
 	"net/http"
-	"strings"
 
-	"backend/configs"
 	"backend/stytch"
 
 	"github.com/labstack/echo/v4"
@@ -30,14 +28,11 @@ func NewHealthHandler(adapter *stytch.Adapter, txSupported bool) *HealthHandler 
 //
 // Requirements: 20.13
 func (h *HealthHandler) HandleHealth(c echo.Context) error {
-	stytchEnabled := strings.TrimSpace(configs.StytchEmployerAuthEnabled())
-	legacyEnabled := strings.TrimSpace(configs.LegacyEmployerAuthEnabled())
-
 	health := h.adapter.Health()
 
 	data := map[string]any{
-		"employer_stytch_auth_enabled": stytchEnabled == "true" || stytchEnabled == "1",
-		"legacy_employer_auth_enabled": legacyEnabled == "true" || legacyEnabled == "1",
+		"employer_stytch_auth_enabled": IsStytchAuthEnabled(),
+		"legacy_employer_auth_enabled": IsLegacyAuthEnabled(),
 		"transactions_supported":       h.txSupported,
 		"last_call":                    health,
 	}

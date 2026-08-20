@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"log"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"backend/notifications"
 	"backend/users"
+	"backend/workspaces"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
@@ -21,9 +23,37 @@ var (
 	ErrDuplicatePhone        = errors.New("an account with this phone number already exists")
 	ErrDuplicateEmail        = errors.New("an account with this email already exists")
 	ErrPasswordResetRequired = errors.New("password reset required")
+	ErrStytchSignInRequired  = errors.New("stytch sign-in required")
 )
 
-func processUserLogin(email, phone, password string) (*users.User, string, error) {
+// employerUserType is the `users.user_type` value an Employer holds. Employers
+// are `customer` documents; the Stytch migration touches no other type
+// (Req 21.14).
+const employerUserType = "customer"
+
+// legacyLoginBlockedByCutover reports whether this user's legacy password login
+// must be refused because employer auth has cut over to Stytch.
+//
+// Req 21.11 refuses legacy login for a migrated Employer once
+// LEGACY_EMPLOYER_AUTH_ENABLED is off. Req 21.12 requires the reverse — while
+// that variable is on, a migrated Employer's old sign-in keeps working, and a
+// revert is an env flip alone — so the flag is checked first and no
+// account_links read happens at all in the pre-cutover state.
+//
+// Req 22.2 keeps every `users` document holding zero Account_Links on the legacy
+// path. Only `customer` documents ever hold one (Req 21.14), so an artisan,
+// assessor, or admin login never reaches the account_links read either.
+func legacyLoginBlockedByCutover(ctx context.Context, user *users.User) bool {
+	if workspaces.IsLegacyAuthEnabled() {
+		return false
+	}
+	if user.UserType != employerUserType {
+		return false
+	}
+	return workspaces.IsUserMigrated(ctx, user.ID)
+}
+
+func processUserLogin(ctx context.Context, email, phone, password string) (*users.User, string, error) {
 	var user *users.User
 	var err error
 
@@ -37,6 +67,13 @@ func processUserLogin(email, phone, password string) (*users.User, string, error
 
 	if err != nil {
 		return nil, "", ErrInvalidCredentials
+	}
+
+	// Checked before the password and before the legacy-platform reset steer: a
+	// migrated Employer must land on Stytch sign-in, not be handed a legacy
+	// session or an OTP reset that ends in one (Req 21.11).
+	if legacyLoginBlockedByCutover(ctx, user) {
+		return nil, "", ErrStytchSignInRequired
 	}
 
 	// Users imported from the old platform have no usable password (their hashes
