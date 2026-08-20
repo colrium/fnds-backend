@@ -1,0 +1,58 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - 'infra/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: staging
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: af-south-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Init
+        run: terraform init -input=false -backend-config="key=backend/staging/terraform.tfstate"
+
+      - name: Plan
+        id: plan
+        env:
+          TF_VAR_session_key: ${{ secrets.TF_VAR_session_key }}
+          TF_VAR_sendgrid_api_key: ${{ secrets.TF_VAR_sendgrid_api_key }}
+          TF_VAR_advanta_api_key: ${{ secrets.TF_VAR_advanta_api_key }}
+          TF_VAR_advanta_partner_id: ${{ secrets.TF_VAR_advanta_partner_id }}
+          TF_VAR_advanta_shortcode: ${{ secrets.TF_VAR_advanta_shortcode }}
+        run: |
+          terraform plan -input=false -var-file=env/staging.tfvars -no-color 2>&1 | tee /tmp/plan-output.txt
+
+      - name: Comment plan on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('/tmp/plan-output.txt', 'utf8').slice(-60000);
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### Terraform Plan (staging)\n\`\`\`\n${output}\n\`\`\``
+            });
