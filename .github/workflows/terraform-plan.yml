@@ -42,6 +42,7 @@ jobs:
           TF_VAR_advanta_partner_id: ${{ secrets.TF_VAR_advanta_partner_id }}
           TF_VAR_advanta_shortcode: ${{ secrets.TF_VAR_advanta_shortcode }}
         run: |
+          set -o pipefail
           terraform plan -input=false -var-file=env/staging.tfvars -no-color 2>&1 | tee /tmp/plan-output.txt
 
       - name: Comment plan on PR
