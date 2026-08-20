@@ -8,7 +8,7 @@ import (
 )
 
 func TestVerifySessionJWT_ValidToken(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	fake := NewFake(clock)
 	cfg := Config{
 		ProjectID:     "project-test",
@@ -51,7 +51,7 @@ func TestVerifySessionJWT_ValidToken(t *testing.T) {
 }
 
 func TestVerifySessionJWT_ExpiredToken(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	fake := NewFake(clock)
 	cfg := Config{
 		ProjectID:     "project-test",
@@ -89,7 +89,7 @@ func TestVerifySessionJWT_ExpiredToken(t *testing.T) {
 }
 
 func TestVerifySessionJWT_InvalidSignature(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	fake := NewFake(clock)
 	cfg := Config{
 		ProjectID:     "project-test",
@@ -126,7 +126,7 @@ func TestVerifySessionJWT_InvalidSignature(t *testing.T) {
 }
 
 func TestVerifySessionJWT_WrongIssuer(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	fake := NewFake(clock)
 
 	// Use a different ProjectID than the one in the JWT (which uses "project-test").
@@ -162,7 +162,7 @@ func TestVerifySessionJWT_WrongIssuer(t *testing.T) {
 }
 
 func TestVerifySessionJWT_GarbageToken(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	fake := NewFake(clock)
 	cfg := Config{
 		ProjectID:     "project-test",
@@ -193,7 +193,7 @@ func TestVerifySessionJWT_GarbageToken(t *testing.T) {
 }
 
 func TestVerifySessionJWT_NilJWKSCache(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	cfg := Config{
 		ProjectID:     "project-test",
 		Secret:        "secret-test",
@@ -224,7 +224,7 @@ func TestVerifySessionJWT_NilJWKSCache(t *testing.T) {
 }
 
 func TestJWKSCache_StaleServeOnRefreshFailure(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	fake := NewFake(clock)
 
 	fetchCalls := 0
@@ -276,7 +276,7 @@ func TestJWKSCache_StaleServeOnRefreshFailure(t *testing.T) {
 }
 
 func TestJWKSCache_RefreshesAfterTTL(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	fake := NewFake(clock)
 
 	fetchCalls := 0
@@ -307,7 +307,7 @@ func TestJWKSCache_RefreshesAfterTTL(t *testing.T) {
 }
 
 func TestJWKSCache_UnknownKidReturnsError(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	fake := NewFake(clock)
 
 	cache := newJWKSCache(time.Hour, clock, func() ([]byte, error) {
@@ -321,7 +321,7 @@ func TestJWKSCache_UnknownKidReturnsError(t *testing.T) {
 }
 
 func TestJWKSCache_SetKeys(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	fake := NewFake(clock)
 
 	cache := newJWKSCache(time.Hour, clock, func() ([]byte, error) {
@@ -344,7 +344,7 @@ func TestJWKSCache_SetKeys(t *testing.T) {
 }
 
 func TestParseJWKS_ValidJSON(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC))
 	fake := NewFake(clock)
 
 	keys, err := parseJWKS(fake.JWKS())

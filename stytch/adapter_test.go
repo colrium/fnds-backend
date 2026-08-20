@@ -4,29 +4,9 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 )
-
-// fakeClock is a manually-advanced clock for deterministic test timing.
-type fakeClock struct {
-	now atomic.Value // stores time.Time
-}
-
-func newFakeClock(t time.Time) *fakeClock {
-	c := &fakeClock{}
-	c.now.Store(t)
-	return c
-}
-
-func (c *fakeClock) Now() time.Time {
-	return c.now.Load().(time.Time)
-}
-
-func (c *fakeClock) Advance(d time.Duration) {
-	c.now.Store(c.Now().Add(d))
-}
 
 // testConfig returns a Config suitable for unit tests.
 func testConfig(clock Clock) Config {
@@ -104,7 +84,7 @@ func TestNew_ValidatesRequiredFields(t *testing.T) {
 }
 
 func TestDo_SuccessOnFirstAttempt(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	adapter := NewWithClient(cfg, nil)
 
@@ -131,7 +111,7 @@ func TestDo_SuccessOnFirstAttempt(t *testing.T) {
 }
 
 func TestDo_RetriesOnServerError(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	cfg.Timeout = 5 * time.Second
 	adapter := NewWithClient(cfg, nil)
@@ -159,7 +139,7 @@ func TestDo_RetriesOnServerError(t *testing.T) {
 }
 
 func TestDo_ExhaustsRetriesOnPersistentFailure(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	adapter := NewWithClient(cfg, nil)
 
@@ -194,7 +174,7 @@ func TestDo_ExhaustsRetriesOnPersistentFailure(t *testing.T) {
 }
 
 func TestDo_NeverRetriesMutatingWithoutIdempotencyKey(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	adapter := NewWithClient(cfg, nil)
 
@@ -214,7 +194,7 @@ func TestDo_NeverRetriesMutatingWithoutIdempotencyKey(t *testing.T) {
 }
 
 func TestDo_Retries429WithRetryAfter(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	adapter := NewWithClient(cfg, nil)
 
@@ -242,7 +222,7 @@ func TestDo_Retries429WithRetryAfter(t *testing.T) {
 }
 
 func TestDo_ClampsRetryAfterToTimeout(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	cfg.Timeout = 1 * time.Second
 	adapter := NewWithClient(cfg, nil)
@@ -255,7 +235,7 @@ func TestDo_ClampsRetryAfterToTimeout(t *testing.T) {
 }
 
 func TestDo_AppliesPerAttemptTimeout(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	cfg.Timeout = 100 * time.Millisecond
 	cfg.MaxAttempts = 1
@@ -281,7 +261,7 @@ func TestDo_AppliesPerAttemptTimeout(t *testing.T) {
 }
 
 func TestDo_DoesNotRetryClientErrors(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	adapter := NewWithClient(cfg, nil)
 
@@ -300,7 +280,7 @@ func TestDo_DoesNotRetryClientErrors(t *testing.T) {
 }
 
 func TestDo_DoesNotRetry401(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	adapter := NewWithClient(cfg, nil)
 
@@ -319,7 +299,7 @@ func TestDo_DoesNotRetry401(t *testing.T) {
 }
 
 func TestDo_ErrorMessageExcludesSecrets(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	cfg.Secret = "super-secret-key-12345"
 	adapter := NewWithClient(cfg, nil)
@@ -349,7 +329,7 @@ func TestDo_ErrorMessageExcludesSecrets(t *testing.T) {
 }
 
 func TestHealth_ReturnsZeroValueBeforeAnyCall(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	adapter := NewWithClient(cfg, nil)
 
@@ -363,7 +343,7 @@ func TestHealth_ReturnsZeroValueBeforeAnyCall(t *testing.T) {
 }
 
 func TestHealth_UpdatedAfterSuccessAndFailure(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	adapter := NewWithClient(cfg, nil)
 
@@ -437,7 +417,7 @@ func TestNewWithClient_AppliesDefaults(t *testing.T) {
 // backoff wait the loop used to continue, spending another attempt against an
 // already-dead context and overwriting lastErr with that attempt's error.
 func TestDo_StopsRetryingWhenContextCancelledDuringBackoff(t *testing.T) {
-	clock := newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	clock := NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	cfg := testConfig(clock)
 	adapter := NewWithClient(cfg, nil)
 
@@ -492,7 +472,7 @@ func TestJWKSFetchTimeoutIsClamped(t *testing.T) {
 				t.Fatalf("jwksFetchTimeoutFor(%v) = %v, want %v", tt.set, got, tt.want)
 			}
 
-			cfg := testConfig(newFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)))
+			cfg := testConfig(NewFakeClock(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)))
 			cfg.JWKSFetchTimeout = tt.set
 			applyDefaults(&cfg)
 			if cfg.JWKSFetchTimeout != tt.want {

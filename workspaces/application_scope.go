@@ -9,6 +9,25 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
+// DEFERRED SCAFFOLDING — the two functions in this file have no caller yet and
+// must not be deleted as dead code.
+//
+// Both implement spec task 13.3 ("Scope applications and the notification
+// fan-out"), which is part of task 13 ("Re-scope companies, vacancies,
+// applications, and subscriptions to the workspace"). Task 13 is deliberately
+// deferred: it rewrites live production endpoints in `jobrequests` and needs
+// its own migration plan, so the helpers landed ahead of the call sites.
+//
+// Wiring, when task 13.3 ships:
+//   - jobrequests.HandleCreateJobApplication calls SetApplicationWorkspaceID
+//     after creating the application (Req 9.9).
+//   - the application notification fan-out calls GetApplicationNotifyMembers
+//     instead of notifying vacancy.OwnerID alone (Req 22.9), falling back to the
+//     single owner when it returns nil for a legacy unscoped vacancy.
+//
+// A dead-code scan will keep flagging these (and RolesWithPermission, whose only
+// caller is below) until then.
+
 // SetApplicationWorkspaceID sets workspace_id on a job application document
 // by copying it from the target vacancy. Called by HandleCreateJobApplication
 // after the application is created (Req 9.9). Returns the update error so the

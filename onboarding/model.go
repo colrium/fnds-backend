@@ -13,6 +13,22 @@ import (
 )
 
 // Stage is one of the five closed Onboarding_State stages (Req 3.1).
+//
+// Transitions are NOT validated by an in-process predicate. Every transition is
+// a conditional findOneAndUpdate naming the expected current stage in its
+// filter (e.g. bson.M{"_id": id, "stage": StageAwaitingWorkspaceName}), so a
+// request arriving in the wrong stage matches zero documents and returns 409.
+// That check is atomic against concurrent requests, which a pre-flight
+// in-process check would not be. Keep the filters stage-conditioned.
+//
+// The valid transitions are:
+//   - awaiting_verification  -> awaiting_link_decision   (candidates found)
+//   - awaiting_verification  -> awaiting_workspace_name  (no candidates)
+//   - awaiting_link_decision -> awaiting_workspace_name  (link satisfied or create separate)
+//   - awaiting_workspace_name -> provisioning            (name accepted, lease won)
+//   - provisioning -> provisioning                       (retry reuses org id)
+//   - provisioning -> awaiting_workspace_name            (lease expired)
+//   - provisioning -> complete                           (success)
 type Stage string
 
 const (

@@ -31,12 +31,24 @@ func (c *FakeClock) Advance(d time.Duration) {
 	c.now.Store(c.Now().Add(d))
 }
 
-// Set sets the clock to an exact time.
-func (c *FakeClock) Set(t time.Time) {
-	c.now.Store(t)
-}
-
 // --- Notification Spy ---
+//
+// DEFERRED SCAFFOLDING — do not delete as dead code.
+//
+// NotificationSpy implements the `workspaces.Notifier` interface
+// (SendEmail/SendSMS) and is the spy required by spec task 3.7 ("Implement
+// fakeClock and the shared test helpers") for the notification assertions in
+// the not-yet-written test tasks 8.x, 12.x, and 21.x — the link email/SMS, the
+// removal and role-change emails, the ownership-transfer emails, and the
+// migration email. Those tasks are still open, so the spy has no caller yet.
+// See design.md *Test infrastructure* -> "Notification spy".
+//
+// It lives in the non-test build so other packages' tests can use it without a
+// cyclic test-only import, exactly like `stytch.Fake`. Per task 3.6's
+// completion criterion, this is a stopgap and NOT acceptable long-term: once
+// the real HTTP client is wired everywhere, move this file and fake.go to a
+// test-only `stytch/fake` package (or gate them behind a build tag) so neither
+// is reachable from the production binary.
 
 // EmailRecord records one email sent through the NotificationSpy.
 type EmailRecord struct {

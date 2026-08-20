@@ -38,6 +38,15 @@ func EmployerWriteFilter(workspaceID, ownerID, documentID string) bson.M {
 // EmployerCreateDoc returns the bson.M fields that should be set on a new
 // workspace-scoped document at creation time. If workspaceID is empty (legacy),
 // returns nil (no workspace_id set, which is the omitempty behavior).
+//
+// DEFERRED SCAFFOLDING — no caller yet; do not delete as dead code. This is the
+// write-side counterpart to EmployerReadFilter/EmployerWriteFilter above, and it
+// gets wired by spec tasks 13.2 and 13.4 (the `jobrequests` company/vacancy
+// write handlers and `quotation_attachments` creation) so every document created
+// after this feature ships carries a workspace_id (Req 9.1). Task 13 is
+// deliberately deferred because it rewrites live production endpoints.
+//
+// Requirements: 9.1
 func EmployerCreateDoc(workspaceID string) bson.M {
 	if workspaceID == "" {
 		return nil

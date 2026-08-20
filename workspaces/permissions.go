@@ -177,6 +177,10 @@ func Grants(r Role, p Permission) bool {
 // specific permission (e.g. building a query filter) should use this instead
 // of hardcoding role names, so the permission matrix stays the single source
 // of truth.
+//
+// Its only caller is GetApplicationNotifyMembers in application_scope.go, which
+// is itself deferred scaffolding for spec task 13.3. A dead-code scan will flag
+// this function until that task ships — that is expected, not rot.
 func RolesWithPermission(p Permission) []Role {
 	idx, ok := permissionIndex[p]
 	if !ok {
