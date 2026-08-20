@@ -19,14 +19,17 @@ import (
 // TestNotifyVacancyCreated_Delivery uses a test server to assert one POST is issued.
 func TestNotifyVacancyCreated_Delivery(t *testing.T) {
 	callCount := 0
+	var gotBody []byte
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
+		gotBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 
 	t.Setenv("SLACK_OPS_NOTIFS_URL", ts.URL)
 	t.Setenv("SLACK_WEBHOOK_URL", "")
+	t.Setenv("ADMIN_DASHBOARD_URL", "https://admin.fundis.co.ke")
 
 	err := NotifyVacancyCreated(context.Background(), VacancyCreatedActivity{
 		VacancyID:     "v-123",
@@ -40,19 +43,32 @@ func TestNotifyVacancyCreated_Delivery(t *testing.T) {
 	if callCount != 1 {
 		t.Fatalf("expected 1 POST, got %d", callCount)
 	}
+
+	// Verify admin links are present in the payload.
+	// Note: Go's json encoder escapes < and > as \u003c and \u003e in JSON.
+	body := string(gotBody)
+	if !strings.Contains(body, "admin.fundis.co.ke/vacancies/v-123|v-123") {
+		t.Fatalf("payload missing vacancy link, got: %s", body)
+	}
+	if !strings.Contains(body, "admin.fundis.co.ke/users/u-1|u-1") {
+		t.Fatalf("payload missing user link, got: %s", body)
+	}
 }
 
 // TestNotifyApplicationCreated_Delivery uses a test server to assert one POST is issued.
 func TestNotifyApplicationCreated_Delivery(t *testing.T) {
 	callCount := 0
+	var gotBody []byte
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
+		gotBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 
 	t.Setenv("SLACK_OPS_NOTIFS_URL", ts.URL)
 	t.Setenv("SLACK_WEBHOOK_URL", "")
+	t.Setenv("ADMIN_DASHBOARD_URL", "https://admin.fundis.co.ke")
 
 	err := NotifyApplicationCreated(context.Background(), ApplicationActivity{
 		ApplicantName:  "Jane Doe",
@@ -69,25 +85,39 @@ func TestNotifyApplicationCreated_Delivery(t *testing.T) {
 	if callCount != 1 {
 		t.Fatalf("expected 1 POST, got %d", callCount)
 	}
+
+	// Verify admin links are present in the payload.
+	// Note: Go's json encoder escapes < and > as \u003c and \u003e in JSON.
+	body := string(gotBody)
+	if !strings.Contains(body, "admin.fundis.co.ke/users/u-42|u-42") {
+		t.Fatalf("payload missing applicant link, got: %s", body)
+	}
+	if !strings.Contains(body, "admin.fundis.co.ke/vacancies/v-99|v-99") {
+		t.Fatalf("payload missing vacancy link, got: %s", body)
+	}
 }
 
 // TestNotifyUserRegistered_Delivery uses a test server to assert one POST is issued.
 func TestNotifyUserRegistered_Delivery(t *testing.T) {
 	callCount := 0
+	var gotBody []byte
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
+		gotBody, _ = io.ReadAll(r.Body)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 
 	t.Setenv("SLACK_OPS_NOTIFS_URL", ts.URL)
 	t.Setenv("SLACK_WEBHOOK_URL", "")
+	t.Setenv("ADMIN_DASHBOARD_URL", "https://admin.fundis.co.ke")
 
 	err := NotifyUserRegistered(context.Background(), RegistrationActivity{
 		UserName:     "John Smith",
 		UserEmail:    "john@example.com",
 		UserPhone:    "+254711111111",
 		UserID:       "u-77",
+		UserType:     "artisan",
 		RegisteredAt: time.Now(),
 	})
 	if err != nil {
@@ -95,6 +125,13 @@ func TestNotifyUserRegistered_Delivery(t *testing.T) {
 	}
 	if callCount != 1 {
 		t.Fatalf("expected 1 POST, got %d", callCount)
+	}
+
+	// Verify admin link is present in the payload.
+	// Note: Go's json encoder escapes < and > as \u003c and \u003e in JSON.
+	body := string(gotBody)
+	if !strings.Contains(body, "admin.fundis.co.ke/users/u-77|u-77") {
+		t.Fatalf("payload missing user link, got: %s", body)
 	}
 }
 

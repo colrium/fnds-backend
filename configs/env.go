@@ -144,6 +144,12 @@ func AppPublicURL() string {
 	return os.Getenv("APP_PUBLIC_URL")
 }
 
+// AdminDashboardURL is the public base URL of the admin dashboard, used to
+// build clickable links in Slack notifications.
+func AdminDashboardURL() string {
+	return os.Getenv("ADMIN_DASHBOARD_URL")
+}
+
 // SlackOpsNotifsURL is the dedicated Slack Incoming Webhook for operations
 // activity notifications.
 func SlackOpsNotifsURL() string {

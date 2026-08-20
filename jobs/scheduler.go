@@ -15,11 +15,13 @@ type JobFunc func()
 
 // Scheduler runs registered jobs on two tickers: an hourly ticker for
 // general maintenance and a 15-minute ticker for faster-cycle work such
-// as the Stytch member-delete retry.
+// as the Stytch member-delete retry. It also runs daily jobs at a fixed
+// time (09:00 EAT).
 type Scheduler struct {
 	stop         chan struct{}
 	hourlyJobs   []JobFunc
 	frequentJobs []JobFunc
+	dailyJobs    []JobFunc
 }
 
 func NewScheduler() *Scheduler {
@@ -29,9 +31,12 @@ func NewScheduler() *Scheduler {
 		closeJobVacancies,
 		expireSubscriptions,
 		closeAwaitingConfirmation,
-		CheckReviewSLA,
 		CheckAppointmentReminders,
 		CheckNoShows,
+	}
+	// Daily jobs run once at 09:00 EAT.
+	s.dailyJobs = []JobFunc{
+		CheckReviewSLA,
 	}
 	return s
 }
@@ -46,9 +51,15 @@ func (s *Scheduler) RegisterFrequent(fn JobFunc) {
 	s.frequentJobs = append(s.frequentJobs, fn)
 }
 
+// RegisterDaily adds a job that runs once daily at 09:00 EAT.
+func (s *Scheduler) RegisterDaily(fn JobFunc) {
+	s.dailyJobs = append(s.dailyJobs, fn)
+}
+
 func (s *Scheduler) Start() {
 	go s.runHourly()
 	go s.runFrequent()
+	go s.runDaily()
 }
 
 func (s *Scheduler) Stop() {
@@ -88,6 +99,46 @@ func (s *Scheduler) runFrequent() {
 			slog.Info("job scheduler stopped", "ticker", "15m")
 			return
 		}
+	}
+}
+
+// runDaily executes daily jobs once at 09:00 EAT (Africa/Nairobi, UTC+3).
+// It sleeps until the next 09:00 EAT, fires, then repeats every 24 hours.
+func (s *Scheduler) runDaily() {
+	eat, err := time.LoadLocation("Africa/Nairobi")
+	if err != nil {
+		// Fallback: fixed UTC+3 offset if tz database is unavailable.
+		eat = time.FixedZone("EAT", 3*60*60)
+	}
+
+	slog.Info("job scheduler started", "ticker", "daily-0900-EAT")
+
+	for {
+		now := time.Now().In(eat)
+		// Next 09:00 EAT today or tomorrow.
+		next := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, eat)
+		if !next.After(now) {
+			next = next.Add(24 * time.Hour)
+		}
+		delay := next.Sub(now)
+
+		select {
+		case <-time.After(delay):
+			s.executeDailyJobs()
+		case <-s.stop:
+			slog.Info("job scheduler stopped", "ticker", "daily-0900-EAT")
+			return
+		}
+	}
+}
+
+func (s *Scheduler) executeDailyJobs() {
+	if len(s.dailyJobs) == 0 {
+		return
+	}
+	slog.Info("executing daily scheduled jobs", "count", len(s.dailyJobs))
+	for _, fn := range s.dailyJobs {
+		fn()
 	}
 }
 

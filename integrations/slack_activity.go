@@ -144,6 +144,7 @@ type VacancyCreatedEvent struct {
 	VacancyTitle  string
 	CreatorUserID string
 	CreatedAt     time.Time
+	AdminBaseURL  string
 }
 
 // ApplicationEvent carries application fields for building the notification.
@@ -155,6 +156,7 @@ type ApplicationEvent struct {
 	VacancyID      string
 	VacancyTitle   string
 	AppliedAt      time.Time
+	AdminBaseURL   string
 }
 
 // RegistrationEvent carries registration fields for building the notification.
@@ -165,26 +167,40 @@ type RegistrationEvent struct {
 	UserID       string
 	UserType     string
 	RegisteredAt time.Time
+	AdminBaseURL string
+}
+
+// SlackLink returns a Slack mrkdwn link (<baseURL/path|displayText>) when
+// baseURL is non-empty, or just displayText when baseURL is empty.
+func SlackLink(baseURL, path, displayText string) string {
+	if baseURL == "" {
+		return displayText
+	}
+	return fmt.Sprintf("<%s/%s|%s>", strings.TrimRight(baseURL, "/"), strings.TrimLeft(path, "/"), displayText)
 }
 
 // BuildVacancyCreatedMessage translates a VacancyCreatedEvent into a Block Kit message.
 func BuildVacancyCreatedMessage(e VacancyCreatedEvent) BlockKitMessage {
+	vacancyDisplay := SlackLink(e.AdminBaseURL, "vacancies/"+e.VacancyID, e.VacancyID)
+	creatorDisplay := SlackLink(e.AdminBaseURL, "users/"+e.CreatorUserID, e.CreatorUserID)
 	return buildActivityMessage("New Vacancy Created", []MessageField{
-		{Label: "Vacancy ID", Value: e.VacancyID},
+		{Label: "Vacancy ID", Value: vacancyDisplay},
 		{Label: "Title", Value: e.VacancyTitle},
-		{Label: "Created By", Value: e.CreatorUserID},
+		{Label: "Created By", Value: creatorDisplay},
 		{Label: "Created At", Value: e.CreatedAt.Format(time.RFC3339)},
 	})
 }
 
 // BuildApplicationMessage translates an ApplicationEvent into a Block Kit message.
 func BuildApplicationMessage(e ApplicationEvent) BlockKitMessage {
+	applicantDisplay := SlackLink(e.AdminBaseURL, "users/"+e.ApplicantID, e.ApplicantID)
+	vacancyDisplay := SlackLink(e.AdminBaseURL, "vacancies/"+e.VacancyID, e.VacancyID)
 	return buildActivityMessage("New Vacancy Application", []MessageField{
 		{Label: "Applicant", Value: e.ApplicantName},
 		{Label: "Email", Value: e.ApplicantEmail},
 		{Label: "Phone", Value: e.ApplicantPhone},
-		{Label: "Applicant ID", Value: e.ApplicantID},
-		{Label: "Vacancy ID", Value: e.VacancyID},
+		{Label: "Applicant ID", Value: applicantDisplay},
+		{Label: "Vacancy ID", Value: vacancyDisplay},
 		{Label: "Vacancy Title", Value: e.VacancyTitle},
 		{Label: "Applied At", Value: e.AppliedAt.Format(time.RFC3339)},
 	})
@@ -192,12 +208,33 @@ func BuildApplicationMessage(e ApplicationEvent) BlockKitMessage {
 
 // BuildRegistrationMessage translates a RegistrationEvent into a Block Kit message.
 func BuildRegistrationMessage(e RegistrationEvent) BlockKitMessage {
+	userDisplay := SlackLink(e.AdminBaseURL, "users/"+e.UserID, e.UserID)
 	return buildActivityMessage("New User Registration", []MessageField{
 		{Label: "Name", Value: e.UserName},
 		{Label: "User Type", Value: e.UserType},
 		{Label: "Email", Value: e.UserEmail},
 		{Label: "Phone", Value: e.UserPhone},
-		{Label: "User ID", Value: e.UserID},
+		{Label: "User ID", Value: userDisplay},
 		{Label: "Registered At", Value: e.RegisteredAt.Format(time.RFC3339)},
+	})
+}
+
+// ProfileSubmittedEvent carries fields for the profile-submitted-for-review notification.
+type ProfileSubmittedEvent struct {
+	UserID       string
+	UserName     string
+	UserEmail    string
+	SubmittedAt  time.Time
+	AdminBaseURL string
+}
+
+// BuildProfileSubmittedMessage translates a ProfileSubmittedEvent into a Block Kit message.
+func BuildProfileSubmittedMessage(e ProfileSubmittedEvent) BlockKitMessage {
+	reviewLink := SlackLink(e.AdminBaseURL, "profile-reviews/"+e.UserID, e.UserID)
+	return buildActivityMessage("Profile Submitted for Review", []MessageField{
+		{Label: "Name", Value: e.UserName},
+		{Label: "Email", Value: e.UserEmail},
+		{Label: "Profile Review", Value: reviewLink},
+		{Label: "Submitted At", Value: e.SubmittedAt.Format(time.RFC3339)},
 	})
 }

@@ -24,7 +24,7 @@ const reviewSLABreachHours = 48
 
 // CheckReviewSLA finds journeys stuck in profile_review and sends Slack alerts
 // at the 36h (warning) and 48h (breach) marks, excluding weekends from the
-// elapsed time calculation. Called hourly by the scheduler.
+// elapsed time calculation. Called daily at 09:00 EAT by the scheduler.
 func CheckReviewSLA() {
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -64,48 +64,78 @@ func CheckReviewSLA() {
 	}
 
 	var warningJourneys, breachJourneys int
+	var warningUserIDs, breachUserIDs []string
 	for _, j := range journeys {
 		elapsed := timeutil.BusinessHoursSince(j.UpdatedAt, now)
 		if elapsed >= float64(reviewSLABreachHours) {
 			breachJourneys++
+			breachUserIDs = append(breachUserIDs, j.UserID)
 		} else if elapsed >= float64(reviewSLAWarningHours) {
 			warningJourneys++
+			warningUserIDs = append(warningUserIDs, j.UserID)
 		}
 	}
 
 	if warningJourneys > 0 {
 		sendSLASlackAlert(ctx, warningJourneys, "warning", fmt.Sprintf(
 			"Profile reviews approaching %dh SLA breach", reviewSLABreachHours,
-		))
+		), warningUserIDs)
 	}
 	if breachJourneys > 0 {
 		sendSLASlackAlert(ctx, breachJourneys, "breach", fmt.Sprintf(
 			"Profile reviews have BREACHED %dh SLA", reviewSLABreachHours,
-		))
+		), breachUserIDs)
 	}
 }
 
-func sendSLASlackAlert(ctx context.Context, count int, level, title string) {
-	msg := integrations.BlockKitMessage{
-		Blocks: []integrations.Block{
-			{
-				Type: "header",
-				Text: &integrations.TextObject{Type: "plain_text", Text: title},
-			},
-			{
-				Type: "section",
-				Text: &integrations.TextObject{
-					Type: "mrkdwn",
-					Text: fmt.Sprintf("*%d* profile review(s) pending beyond %s threshold (weekends excluded).",
-						count, level),
-				},
+func sendSLASlackAlert(ctx context.Context, count int, level, title string, userIDs []string) {
+	adminBaseURL := configs.AdminDashboardURL()
+
+	// Build a linked list of profile reviews (limit to 10 to avoid oversized messages).
+	const maxLinks = 10
+	var linkLines string
+	for i, uid := range userIDs {
+		if i >= maxLinks {
+			linkLines += fmt.Sprintf("\n... and %d more", len(userIDs)-maxLinks)
+			break
+		}
+		link := integrations.SlackLink(adminBaseURL, "profile-reviews/"+uid, uid)
+		linkLines += fmt.Sprintf("\n• %s", link)
+	}
+
+	blocks := []integrations.Block{
+		{
+			Type: "header",
+			Text: &integrations.TextObject{Type: "plain_text", Text: title},
+		},
+		{
+			Type: "section",
+			Text: &integrations.TextObject{
+				Type: "mrkdwn",
+				Text: fmt.Sprintf("*%d* profile review(s) pending beyond %s threshold (weekends excluded).",
+					count, level),
 			},
 		},
 	}
 
+	if linkLines != "" {
+		blocks = append(blocks, integrations.Block{
+			Type: "section",
+			Text: &integrations.TextObject{
+				Type: "mrkdwn",
+				Text: "*Affected profiles:*" + linkLines,
+			},
+		})
+	}
+
+	msg := integrations.BlockKitMessage{Blocks: blocks}
 	webhookURL := configs.SlackOpsNotifsURL()
 	if webhookURL == "" {
 		webhookURL = configs.SlackWebhookURL()
+	}
+	if webhookURL == "" {
+		slog.Debug("review SLA slack alert skipped; webhook not configured", "level", level)
+		return
 	}
 	client := integrations.NewSlackActivityClient(webhookURL)
 	if err := client.Send(ctx, msg); err != nil {

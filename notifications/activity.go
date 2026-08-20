@@ -47,6 +47,14 @@ type RegistrationActivity struct {
 	RegisteredAt time.Time
 }
 
+// ProfileSubmittedActivity carries profile-submitted-for-review fields.
+type ProfileSubmittedActivity struct {
+	UserID      string
+	UserName    string
+	UserEmail   string
+	SubmittedAt time.Time
+}
+
 // NotifyVacancyCreated builds and sends the vacancy activity message.
 func NotifyVacancyCreated(ctx context.Context, a VacancyCreatedActivity) error {
 	msg := integrations.BuildVacancyCreatedMessage(integrations.VacancyCreatedEvent{
@@ -54,6 +62,7 @@ func NotifyVacancyCreated(ctx context.Context, a VacancyCreatedActivity) error {
 		VacancyTitle:  a.VacancyTitle,
 		CreatorUserID: a.CreatorUserID,
 		CreatedAt:     a.CreatedAt,
+		AdminBaseURL:  configs.AdminDashboardURL(),
 	})
 	return sendActivity(ctx, msg, "vacancy_created", SlackChannelOps)
 }
@@ -68,6 +77,7 @@ func NotifyApplicationCreated(ctx context.Context, a ApplicationActivity) error 
 		VacancyID:      a.VacancyID,
 		VacancyTitle:   a.VacancyTitle,
 		AppliedAt:      a.AppliedAt,
+		AdminBaseURL:   configs.AdminDashboardURL(),
 	})
 	return sendActivity(ctx, msg, "application_created", SlackChannelOps)
 }
@@ -81,8 +91,21 @@ func NotifyUserRegistered(ctx context.Context, a RegistrationActivity) error {
 		UserID:       a.UserID,
 		UserType:     a.UserType,
 		RegisteredAt: a.RegisteredAt,
+		AdminBaseURL: configs.AdminDashboardURL(),
 	})
 	return sendActivity(ctx, msg, "user_registered", SlackChannelOps)
+}
+
+// NotifyProfileSubmitted builds and sends the profile-submitted-for-review activity message.
+func NotifyProfileSubmitted(ctx context.Context, a ProfileSubmittedActivity) error {
+	msg := integrations.BuildProfileSubmittedMessage(integrations.ProfileSubmittedEvent{
+		UserID:       a.UserID,
+		UserName:     a.UserName,
+		UserEmail:    a.UserEmail,
+		SubmittedAt:  a.SubmittedAt,
+		AdminBaseURL: configs.AdminDashboardURL(),
+	})
+	return sendActivity(ctx, msg, "profile_submitted", SlackChannelOps)
 }
 
 // resolveWebhookURL selects the webhook URL based on the channel type.

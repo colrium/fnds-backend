@@ -81,7 +81,10 @@ func HandleStartJourney(c echo.Context) error {
 		return responses.SendError(c, http.StatusInternalServerError, "failed to start journey")
 	}
 	slog.Info("assessment journey started", "journey_id", journey.ID, "user_id", userID, "skill_id", journey.SkillID)
-	notifyOps(c.Request().Context(), "New Assessment Journey", fmt.Sprintf("User %s started assessment journey *%s* for skill %s.", userID, journey.ID, journey.SkillID))
+	adminURL := configs.AdminDashboardURL()
+	userLink := integrations.SlackLink(adminURL, "users/"+userID, userID)
+	journeyLink := integrations.SlackLink(adminURL, "assessments/journeys/"+journey.ID, journey.ID)
+	notifyOps(c.Request().Context(), "New Assessment Journey", fmt.Sprintf("User %s started assessment journey *%s* for skill %s.", userLink, journeyLink, journey.SkillID))
 	return responses.SendCreated(c, journey, "Assessment journey started")
 }
 
@@ -358,7 +361,9 @@ func HandleCancelAppointment(c echo.Context) error {
 	}
 
 	slog.Info("appointment cancelled for reschedule", "appointment_id", appointment.ID, "user_id", userID, "stage", appointment.Stage)
-	notifyOps(ctx, "Assessment Cancelled", fmt.Sprintf("User %s cancelled their *%s* appointment scheduled for %s.", userID, string(appointment.Stage), appointment.ScheduledFor.Format("Mon 02 Jan 15:04")))
+	adminURL := configs.AdminDashboardURL()
+	userLink := integrations.SlackLink(adminURL, "users/"+userID, userID)
+	notifyOps(ctx, "Assessment Cancelled", fmt.Sprintf("User %s cancelled their *%s* appointment scheduled for %s.", userLink, string(appointment.Stage), appointment.ScheduledFor.Format("Mon 02 Jan 15:04")))
 	return responses.SendOK(c, nil, "Appointment cancelled. You can now book a new slot.")
 }
 
@@ -491,9 +496,11 @@ func HandleBookAppointment(c echo.Context) error {
 			appointment.MeetingStatus = MeetingFailed
 			slog.Error("meeting creation failed; appointment has no join link",
 				"error", err, "slot_id", req.SlotID, "user_id", userID)
+			adminURL := configs.AdminDashboardURL()
+			userLink := integrations.SlackLink(adminURL, "users/"+userID, userID)
 			notifyOps(ctx, "Meeting Link Missing", fmt.Sprintf(
 				"Could not create a video call for user %s's oral assessment on %s. The booking stands but has no join link.",
-				userID, slot.StartsAt.Format("Mon 02 Jan 15:04")))
+				userLink, slot.StartsAt.Format("Mon 02 Jan 15:04")))
 		} else {
 			appointment.MeetingStatus = MeetingReady
 			appointment.MeetingKey = meeting.MeetingKey
@@ -522,7 +529,9 @@ func HandleBookAppointment(c echo.Context) error {
 		return responses.SendError(c, http.StatusInternalServerError, "failed to confirm the booking")
 	}
 	slog.Info("appointment booked", "appointment_id", appointment.ID, "user_id", userID, "stage", slot.Stage, "scheduled_for", slot.StartsAt)
-	notifyOps(ctx, "Assessment Booked", fmt.Sprintf("User %s booked *%s* appointment for %s.", userID, string(slot.Stage), slot.StartsAt.Format("Mon 02 Jan 15:04")))
+	adminURL := configs.AdminDashboardURL()
+	userLink := integrations.SlackLink(adminURL, "users/"+userID, userID)
+	notifyOps(ctx, "Assessment Booked", fmt.Sprintf("User %s booked *%s* appointment for %s.", userLink, string(slot.Stage), slot.StartsAt.Format("Mon 02 Jan 15:04")))
 	return responses.SendCreated(c, appointment, "Appointment booked")
 }
 
@@ -868,7 +877,10 @@ func HandleApproveProfile(c echo.Context) error {
 		return responses.SendError(c, http.StatusInternalServerError, "failed to save journey")
 	}
 	slog.Info("profile approved", "journey_id", id, "user_id", journey.UserID, "approved_by", userID)
-	notifyOps(ctx, "Profile Approved", fmt.Sprintf("Journey *%s* (user %s) profile approved by admin %s.", id, journey.UserID, userID))
+	adminURL := configs.AdminDashboardURL()
+	journeyLink := integrations.SlackLink(adminURL, "assessments/journeys/"+id, id)
+	userLink := integrations.SlackLink(adminURL, "users/"+journey.UserID, journey.UserID)
+	notifyOps(ctx, "Profile Approved", fmt.Sprintf("Journey *%s* (user %s) profile approved by admin %s.", journeyLink, userLink, userID))
 	return responses.SendOK(c, journey, "Profile approved")
 }
 
@@ -905,7 +917,10 @@ func HandleRejectProfile(c echo.Context) error {
 		return responses.SendError(c, http.StatusInternalServerError, "failed to save journey")
 	}
 	slog.Info("profile rejected", "journey_id", id, "user_id", journey.UserID, "rejected_by", userID)
-	notifyOps(ctx, "Profile Rejected", fmt.Sprintf("Journey *%s* (user %s) profile rejected by admin %s.", id, journey.UserID, userID))
+	adminURL := configs.AdminDashboardURL()
+	journeyLink := integrations.SlackLink(adminURL, "assessments/journeys/"+id, id)
+	userLink := integrations.SlackLink(adminURL, "users/"+journey.UserID, journey.UserID)
+	notifyOps(ctx, "Profile Rejected", fmt.Sprintf("Journey *%s* (user %s) profile rejected by admin %s.", journeyLink, userLink, userID))
 	return responses.SendOK(c, journey, "Profile rejected")
 }
 

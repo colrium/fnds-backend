@@ -16,4 +16,6 @@ func RegisterAdminRoutes(g *echo.Group) {
 	g.GET("/profile-reviews/:user_id", HandleGetProfileReview)
 	g.POST("/profile-reviews/:user_id/approve", HandleApproveProfileReview)
 	g.POST("/profile-reviews/:user_id/reject", HandleRejectProfileReview)
+	g.GET("/vacancies", HandleListVacancies)
+	g.GET("/vacancies/:id", HandleGetVacancy)
 }

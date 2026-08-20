@@ -506,3 +506,186 @@ func TestProperty6_UnconfiguredWebhookSkipsDelivery(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Tests for slackLink helper function
+// ---------------------------------------------------------------------------
+
+func TestSlackLink_WithBaseURL(t *testing.T) {
+	got := SlackLink("https://admin.fundis.co.ke", "users/abc123", "abc123")
+	want := "<https://admin.fundis.co.ke/users/abc123|abc123>"
+	if got != want {
+		t.Fatalf("SlackLink = %q, want %q", got, want)
+	}
+}
+
+func TestSlackLink_WithTrailingSlash(t *testing.T) {
+	got := SlackLink("https://admin.fundis.co.ke/", "users/abc123", "abc123")
+	want := "<https://admin.fundis.co.ke/users/abc123|abc123>"
+	if got != want {
+		t.Fatalf("SlackLink = %q, want %q", got, want)
+	}
+}
+
+func TestSlackLink_EmptyBaseURL(t *testing.T) {
+	got := SlackLink("", "users/abc123", "abc123")
+	want := "abc123"
+	if got != want {
+		t.Fatalf("SlackLink = %q, want %q", got, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests for Build*Message with AdminBaseURL set (links rendered)
+// ---------------------------------------------------------------------------
+
+func TestBuildVacancyCreatedMessage_WithAdminLinks(t *testing.T) {
+	e := VacancyCreatedEvent{
+		VacancyID:     "v-123",
+		VacancyTitle:  "Plumber",
+		CreatorUserID: "u-1",
+		AdminBaseURL:  "https://admin.fundis.co.ke",
+	}
+	msg := BuildVacancyCreatedMessage(e)
+
+	// Verify the section block contains the mrkdwn links.
+	if len(msg.Blocks) < 2 {
+		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
+	}
+	section := msg.Blocks[1]
+
+	assertFieldContains(t, section.Fields, "Vacancy ID", "<https://admin.fundis.co.ke/vacancies/v-123|v-123>")
+	assertFieldContains(t, section.Fields, "Created By", "<https://admin.fundis.co.ke/users/u-1|u-1>")
+}
+
+func TestBuildVacancyCreatedMessage_WithoutAdminLinks(t *testing.T) {
+	e := VacancyCreatedEvent{
+		VacancyID:     "v-123",
+		VacancyTitle:  "Plumber",
+		CreatorUserID: "u-1",
+		AdminBaseURL:  "",
+	}
+	msg := BuildVacancyCreatedMessage(e)
+
+	if len(msg.Blocks) < 2 {
+		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
+	}
+	section := msg.Blocks[1]
+
+	// Should have plain text, not links.
+	assertFieldContains(t, section.Fields, "Vacancy ID", "v-123")
+	assertFieldNotContains(t, section.Fields, "Vacancy ID", "<")
+	assertFieldContains(t, section.Fields, "Created By", "u-1")
+	assertFieldNotContains(t, section.Fields, "Created By", "<")
+}
+
+func TestBuildApplicationMessage_WithAdminLinks(t *testing.T) {
+	e := ApplicationEvent{
+		ApplicantName:  "Jane Doe",
+		ApplicantEmail: "jane@example.com",
+		ApplicantPhone: "+254700000000",
+		ApplicantID:    "u-42",
+		VacancyID:      "v-99",
+		VacancyTitle:   "Electrician",
+		AdminBaseURL:   "https://admin.fundis.co.ke",
+	}
+	msg := BuildApplicationMessage(e)
+
+	if len(msg.Blocks) < 2 {
+		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
+	}
+	section := msg.Blocks[1]
+
+	assertFieldContains(t, section.Fields, "Applicant ID", "<https://admin.fundis.co.ke/users/u-42|u-42>")
+	assertFieldContains(t, section.Fields, "Vacancy ID", "<https://admin.fundis.co.ke/vacancies/v-99|v-99>")
+}
+
+func TestBuildApplicationMessage_WithoutAdminLinks(t *testing.T) {
+	e := ApplicationEvent{
+		ApplicantName:  "Jane Doe",
+		ApplicantEmail: "jane@example.com",
+		ApplicantPhone: "+254700000000",
+		ApplicantID:    "u-42",
+		VacancyID:      "v-99",
+		VacancyTitle:   "Electrician",
+		AdminBaseURL:   "",
+	}
+	msg := BuildApplicationMessage(e)
+
+	if len(msg.Blocks) < 2 {
+		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
+	}
+	section := msg.Blocks[1]
+
+	assertFieldContains(t, section.Fields, "Applicant ID", "u-42")
+	assertFieldNotContains(t, section.Fields, "Applicant ID", "<")
+	assertFieldContains(t, section.Fields, "Vacancy ID", "v-99")
+	assertFieldNotContains(t, section.Fields, "Vacancy ID", "<")
+}
+
+func TestBuildRegistrationMessage_WithAdminLinks(t *testing.T) {
+	e := RegistrationEvent{
+		UserName:     "John Smith",
+		UserEmail:    "john@example.com",
+		UserPhone:    "+254711111111",
+		UserID:       "u-77",
+		UserType:     "artisan",
+		AdminBaseURL: "https://admin.fundis.co.ke",
+	}
+	msg := BuildRegistrationMessage(e)
+
+	if len(msg.Blocks) < 2 {
+		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
+	}
+	section := msg.Blocks[1]
+
+	assertFieldContains(t, section.Fields, "User ID", "<https://admin.fundis.co.ke/users/u-77|u-77>")
+}
+
+func TestBuildRegistrationMessage_WithoutAdminLinks(t *testing.T) {
+	e := RegistrationEvent{
+		UserName:     "John Smith",
+		UserEmail:    "john@example.com",
+		UserPhone:    "+254711111111",
+		UserID:       "u-77",
+		UserType:     "artisan",
+		AdminBaseURL: "",
+	}
+	msg := BuildRegistrationMessage(e)
+
+	if len(msg.Blocks) < 2 {
+		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
+	}
+	section := msg.Blocks[1]
+
+	assertFieldContains(t, section.Fields, "User ID", "u-77")
+	assertFieldNotContains(t, section.Fields, "User ID", "<")
+}
+
+// --- test helpers ---
+
+func assertFieldContains(t *testing.T, fields []TextObject, label, substr string) {
+	t.Helper()
+	for _, f := range fields {
+		if strings.Contains(f.Text, "*"+label+":*") {
+			if strings.Contains(f.Text, substr) {
+				return
+			}
+			t.Fatalf("field %q text = %q, expected to contain %q", label, f.Text, substr)
+		}
+	}
+	t.Fatalf("field %q not found in section fields", label)
+}
+
+func assertFieldNotContains(t *testing.T, fields []TextObject, label, substr string) {
+	t.Helper()
+	for _, f := range fields {
+		if strings.Contains(f.Text, "*"+label+":*") {
+			if strings.Contains(f.Text, substr) {
+				t.Fatalf("field %q text = %q, expected NOT to contain %q", label, f.Text, substr)
+			}
+			return
+		}
+	}
+	t.Fatalf("field %q not found in section fields", label)
+}
