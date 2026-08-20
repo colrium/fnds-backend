@@ -27,6 +27,25 @@ type routeTestOnboardingService struct {
 	authResult     onboarding.AuthResult
 	authErr        error
 	authInput      onboarding.AuthenticateInput
+
+	stateByIDResult *onboarding.OnboardingState
+	stateByIDErr    error
+	stateByIDInput  string
+
+	decideLinkResult onboarding.LinkResult
+	decideLinkErr    error
+	decideLinkInput  onboarding.LinkDecision
+
+	issueChallengeResult onboarding.IssueChallengeResult
+	issueChallengeErr    error
+
+	verifyChallengeResult onboarding.LinkResult
+	verifyChallengeErr    error
+	verifyChallengeInput  string
+
+	completeErr         error
+	completeStateID     string
+	completeWorkspaceID string
 }
 
 func (s *routeTestOnboardingService) InitiateMagicLink(
@@ -42,6 +61,35 @@ func (s *routeTestOnboardingService) Authenticate(
 ) (onboarding.AuthResult, error) {
 	s.authInput = input
 	return s.authResult, s.authErr
+}
+
+func (s *routeTestOnboardingService) StateByID(_ context.Context, stateID string) (*onboarding.OnboardingState, error) {
+	s.stateByIDInput = stateID
+	return s.stateByIDResult, s.stateByIDErr
+}
+
+func (s *routeTestOnboardingService) DecideLink(
+	_ context.Context,
+	_ string,
+	decision onboarding.LinkDecision,
+) (onboarding.LinkResult, error) {
+	s.decideLinkInput = decision
+	return s.decideLinkResult, s.decideLinkErr
+}
+
+func (s *routeTestOnboardingService) IssueLinkChallenge(context.Context, string) (onboarding.IssueChallengeResult, error) {
+	return s.issueChallengeResult, s.issueChallengeErr
+}
+
+func (s *routeTestOnboardingService) VerifyLinkChallenge(_ context.Context, _ string, code string) (onboarding.LinkResult, error) {
+	s.verifyChallengeInput = code
+	return s.verifyChallengeResult, s.verifyChallengeErr
+}
+
+func (s *routeTestOnboardingService) CompleteOnboarding(_ context.Context, stateID, workspaceID string) error {
+	s.completeStateID = stateID
+	s.completeWorkspaceID = workspaceID
+	return s.completeErr
 }
 
 func (c routeTestClock) Now() time.Time {

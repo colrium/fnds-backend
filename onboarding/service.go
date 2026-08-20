@@ -858,3 +858,224 @@ func (s *Service) decideLinkToCandidate(ctx context.Context, state *OnboardingSt
 		Challenge: string(identity.ChallengePhoneOTP),
 	}, nil
 }
+
+// StateByID loads an onboarding_states document by its ID. Used by the HTTP
+// layer to resolve an Onboarding_Ticket's state ID into the full record
+// before calling into WorkspaceService, which cannot import this package
+// (see workspaces/routes.go for why the cross-package orchestration lives
+// there instead of here).
+func (s *Service) StateByID(ctx context.Context, stateID string) (*OnboardingState, error) {
+	if stateID == "" {
+		return nil, &ServiceError{
+			Status:  400,
+			Code:    "invalid_state_id",
+			Message: "state ID is required",
+			Field:   "state_id",
+		}
+	}
+
+	coll := configs.MI.DB.Collection("onboarding_states")
+	var state OnboardingState
+	err := coll.FindOne(ctx, bson.M{"_id": stateID}).Decode(&state)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, &ServiceError{
+				Status:  404,
+				Code:    "state_not_found",
+				Message: "onboarding state not found",
+			}
+		}
+		return nil, fmt.Errorf("state by id: %w", err)
+	}
+	return &state, nil
+}
+
+// CompleteOnboarding advances the onboarding_states document to the terminal
+// complete stage and records the provisioned workspace ID. The update is
+// conditioned on the document currently being in awaiting_workspace_name so
+// a retried or concurrent completion call cannot double-apply.
+func (s *Service) CompleteOnboarding(ctx context.Context, stateID, workspaceID string) error {
+	coll := configs.MI.DB.Collection("onboarding_states")
+	now := time.Now()
+
+	filter := bson.M{"_id": stateID, "stage": string(StageAwaitingWorkspaceName)}
+	update := bson.M{
+		"$set": bson.M{
+			"stage":        string(StageComplete),
+			"workspace_id": workspaceID,
+			"completed_at": now,
+			"updated_at":   now,
+		},
+	}
+
+	result, err := coll.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return fmt.Errorf("complete onboarding: %w", err)
+	}
+	if result.MatchedCount == 0 {
+		return &ServiceError{
+			Status:  409,
+			Code:    "invalid_stage",
+			Message: "onboarding state is not awaiting workspace provisioning",
+		}
+	}
+
+	return nil
+}
+
+// IssueChallengeResult is the response from IssueLinkChallenge.
+type IssueChallengeResult struct {
+	Stage       string `json:"stage"`
+	Challenge   string `json:"challenge,omitempty"`
+	MaskedPhone string `json:"masked_phone,omitempty"`
+}
+
+// challengeValidityWindow bounds how long a re-issued phone_otp
+// Link_Challenge stays valid (Req 5.4).
+const challengeValidityWindow = 15 * time.Minute
+
+// IssueLinkChallenge sends the phone OTP for an in-flight phone_otp
+// Link_Challenge that DecideLink recorded on the state. A stytch_email_match
+// challenge needs no separate issuance step — DecideLink already advanced
+// that stage directly — so calling this for a state without a pending
+// phone_otp challenge is a stage conflict, not a retry target.
+//
+// Requirements: 5.3, 5.4, 5.5
+func (s *Service) IssueLinkChallenge(ctx context.Context, stateID string) (IssueChallengeResult, error) {
+	state, err := s.StateByID(ctx, stateID)
+	if err != nil {
+		return IssueChallengeResult{}, err
+	}
+
+	if state.Stage != StageAwaitingLinkDecision || state.Challenge == nil ||
+		state.Challenge.Method != ChallengePhoneOTP || state.SelectedCandidateID == "" {
+		return IssueChallengeResult{}, &ServiceError{
+			Status:  409,
+			Code:    "invalid_stage",
+			Message: "no phone verification challenge is pending for this onboarding state",
+		}
+	}
+
+	// 5 submissions per candidate per hour (Req 5.5).
+	decision := s.rate.Allow(ctx, ratelimit.LimitLinkChallenge, state.SelectedCandidateID)
+	if !decision.Allowed {
+		return IssueChallengeResult{}, &ServiceError{
+			Status:  429,
+			Code:    "link_challenge_rate_limited",
+			Message: "too many verification attempts; try again later",
+		}
+	}
+
+	candidate, err := users.GetUserByID(ctx, state.SelectedCandidateID)
+	if err != nil {
+		return IssueChallengeResult{}, fmt.Errorf("issue link challenge: load candidate: %w", err)
+	}
+	if candidate == nil || candidate.Phone == "" {
+		return IssueChallengeResult{}, &ServiceError{
+			Status:  409,
+			Code:    "link_not_possible",
+			Message: "the linked account has no phone number on file",
+		}
+	}
+
+	users.IssuePhoneOTP(candidate.ID, candidate.Phone)
+
+	now := time.Now()
+	coll := configs.MI.DB.Collection("onboarding_states")
+	_, err = coll.UpdateOne(ctx,
+		bson.M{"_id": state.ID, "stage": string(StageAwaitingLinkDecision)},
+		bson.M{"$set": bson.M{
+			"challenge.issued_at":  now,
+			"challenge.expires_at": now.Add(challengeValidityWindow),
+			"challenge.attempts":   0,
+			"updated_at":           now,
+		}},
+	)
+	if err != nil {
+		return IssueChallengeResult{}, fmt.Errorf("issue link challenge: refresh challenge: %w", err)
+	}
+
+	return IssueChallengeResult{
+		Stage:       string(StageAwaitingLinkDecision),
+		Challenge:   string(ChallengePhoneOTP),
+		MaskedPhone: identity.MaskPhone(candidate.Phone),
+	}, nil
+}
+
+// VerifyLinkChallenge checks a submitted phone OTP against the pending
+// phone_otp Link_Challenge and, on success, advances the state to
+// awaiting_workspace_name and records the candidate as the onboarding user.
+//
+// An incorrect or expired code makes zero Account_Links and increments the
+// challenge's attempt count (Req 5.6). The OTP's own correctness is decided
+// by users.VerifyOTP, which also marks the candidate's phone verified and
+// active on success (Req 4.12).
+//
+// Requirements: 5.4, 5.6, 5.7
+func (s *Service) VerifyLinkChallenge(ctx context.Context, stateID, code string) (LinkResult, error) {
+	state, err := s.StateByID(ctx, stateID)
+	if err != nil {
+		return LinkResult{}, err
+	}
+
+	if state.Stage != StageAwaitingLinkDecision || state.Challenge == nil ||
+		state.Challenge.Method != ChallengePhoneOTP || state.SelectedCandidateID == "" {
+		return LinkResult{}, &ServiceError{
+			Status:  409,
+			Code:    "invalid_stage",
+			Message: "no phone verification challenge is pending for this onboarding state",
+		}
+	}
+
+	coll := configs.MI.DB.Collection("onboarding_states")
+
+	if time.Now().After(state.Challenge.ExpiresAt) {
+		return LinkResult{}, &ServiceError{
+			Status:  401,
+			Code:    "challenge_expired",
+			Message: "the verification code has expired; request a new one",
+		}
+	}
+
+	if verifyErr := users.VerifyOTP(ctx, state.SelectedCandidateID, code); verifyErr != nil {
+		_, incErr := coll.UpdateOne(ctx,
+			bson.M{"_id": state.ID},
+			bson.M{
+				"$inc": bson.M{"challenge.attempts": 1},
+				"$set": bson.M{"updated_at": time.Now()},
+			},
+		)
+		if incErr != nil {
+			return LinkResult{}, fmt.Errorf("verify link challenge: record failed attempt: %w", incErr)
+		}
+		return LinkResult{}, &ServiceError{
+			Status:  401,
+			Code:    "challenge_incorrect",
+			Message: "incorrect verification code",
+		}
+	}
+
+	now := time.Now()
+	filter := bson.M{"_id": state.ID, "stage": string(StageAwaitingLinkDecision)}
+	update := bson.M{
+		"$set": bson.M{
+			"stage":      string(StageAwaitingWorkspaceName),
+			"user_id":    state.SelectedCandidateID,
+			"updated_at": now,
+		},
+	}
+
+	result, err := coll.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return LinkResult{}, fmt.Errorf("verify link challenge: advance stage: %w", err)
+	}
+	if result.MatchedCount == 0 {
+		return LinkResult{}, &ServiceError{
+			Status:  409,
+			Code:    "stage_conflict",
+			Message: "concurrent stage transition detected",
+		}
+	}
+
+	return LinkResult{Stage: string(StageAwaitingWorkspaceName)}, nil
+}

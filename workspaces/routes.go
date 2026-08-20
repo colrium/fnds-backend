@@ -40,6 +40,72 @@ type RouteConfig struct {
 type onboardingService interface {
 	InitiateMagicLink(context.Context, onboarding.InitiateInput) (onboarding.InitiateResult, error)
 	Authenticate(context.Context, onboarding.AuthenticateInput) (onboarding.AuthResult, error)
+	StateByID(context.Context, string) (*onboarding.OnboardingState, error)
+	DecideLink(context.Context, string, onboarding.LinkDecision) (onboarding.LinkResult, error)
+	IssueLinkChallenge(context.Context, string) (onboarding.IssueChallengeResult, error)
+	VerifyLinkChallenge(context.Context, string, string) (onboarding.LinkResult, error)
+	CompleteOnboarding(context.Context, string, string) error
+}
+
+// onboardingTicketClaims reads the Bearer Onboarding_Ticket from the
+// Authorization header and validates it. Every route in onboardingGroup
+// (except /sign-out, which also accepts a real workspace session) is
+// authenticated this way instead of through Resolver.Authenticate: the
+// caller has no Stytch Member session yet, only the short-lived ticket
+// minted by /employer/signup/authenticate (Req 1.4).
+func onboardingTicketClaims(c echo.Context) (*onboarding.TicketClaims, error) {
+	authHeader := c.Request().Header.Get("Authorization")
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") || strings.TrimSpace(parts[1]) == "" {
+		return nil, errors.New("workspaces: missing or malformed authorization header")
+	}
+	return onboarding.ValidateTicket(strings.TrimSpace(parts[1]))
+}
+
+// respondOnboardingServiceError maps an onboarding.ServiceError to its
+// declared HTTP status/code/message, or falls back to a fixed 503 for any
+// other error (an upstream Stytch or MongoDB failure), matching the pattern
+// already used by the /employer/signup routes above.
+func respondOnboardingServiceError(c echo.Context, err error, fallbackCode, fallbackMessage string) error {
+	var serviceErr *onboarding.ServiceError
+	if errors.As(err, &serviceErr) {
+		return responses.SendErrorWithCode(
+			c,
+			serviceErr.Status,
+			serviceErr.Code,
+			serviceErr.Message,
+			serviceErr.Field,
+			"",
+			nil,
+		)
+	}
+
+	slog.ErrorContext(c.Request().Context(), fallbackMessage, "error", err)
+	return responses.SendErrorWithCode(
+		c,
+		http.StatusServiceUnavailable,
+		fallbackCode,
+		fallbackMessage,
+		"",
+		"try_again",
+		nil,
+	)
+}
+
+// invalidOnboardingTicket is the fixed response for every failure to
+// validate an Onboarding_Ticket, so no failure mode discloses whether the
+// ticket was missing, malformed, expired, or signed for a different
+// audience.
+func invalidOnboardingTicket(c echo.Context) error {
+	return responses.SendErrorWithCode(
+		c,
+		http.StatusUnauthorized,
+		"invalid_onboarding_ticket",
+		"onboarding session expired or invalid; please sign in again",
+		"",
+		"sign_in_again",
+		nil,
+	)
 }
 
 type authenticateResponse struct {
@@ -570,19 +636,252 @@ func RegisterRoutes(cfg RouteConfig) {
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
 	})
 	onboardingGroup.POST("/workspace", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
+		claims, err := onboardingTicketClaims(c)
+		if err != nil {
+			return invalidOnboardingTicket(c)
+		}
+
+		var request struct {
+			Name string `json:"name"`
+		}
+		if err := c.Bind(&request); err != nil {
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusBadRequest,
+				"invalid_request",
+				"invalid request body",
+				"",
+				"",
+				nil,
+			)
+		}
+
+		if err := ValidateName(request.Name); err != nil {
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusBadRequest,
+				"invalid_workspace_name",
+				err.Error(),
+				"workspace_name",
+				"",
+				nil,
+			)
+		}
+
+		state, err := cfg.OnboardingService.StateByID(c.Request().Context(), claims.StateID)
+		if err != nil {
+			return respondOnboardingServiceError(c, err, "auth_provider_unavailable", "could not load the onboarding session")
+		}
+
+		if state.Stage != onboarding.StageAwaitingWorkspaceName {
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusConflict,
+				"invalid_stage",
+				"onboarding is not awaiting a workspace name",
+				"",
+				"",
+				nil,
+			)
+		}
+
+		result, err := cfg.WorkspaceService.CreateForOnboarding(c.Request().Context(), CreateForOnboardingInput{
+			OnboardingStateID:   state.ID,
+			StytchOrgID:         state.StytchOrganizationID,
+			IntermediateSession: state.IntermediateSessionToken,
+			UserID:              state.UserID,
+			Email:               state.Email,
+			StytchMemberID:      state.StytchMemberID,
+			RawName:             request.Name,
+		})
+		if err != nil {
+			var wsErr *WorkspaceError
+			if errors.As(err, &wsErr) {
+				return responses.SendErrorWithCode(c, wsErr.Status, wsErr.Code, wsErr.Message, "", "", nil)
+			}
+			slog.ErrorContext(c.Request().Context(), "employer onboarding: create workspace failed", "error", err)
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusServiceUnavailable,
+				"workspace_provisioning_failed",
+				"could not create the workspace; please try again",
+				"",
+				"try_again",
+				nil,
+			)
+		}
+
+		if err := cfg.OnboardingService.CompleteOnboarding(c.Request().Context(), state.ID, result.Workspace.ID); err != nil {
+			return respondOnboardingServiceError(c, err, "auth_provider_unavailable", "could not complete onboarding")
+		}
+
+		postAuth, postAuthErr := cfg.WorkspaceService.ResolvePostAuth(c.Request().Context(), state.UserID, state.Email)
+		if postAuthErr != nil {
+			slog.ErrorContext(c.Request().Context(), "employer onboarding: resolve post-auth failed", "error", postAuthErr)
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusServiceUnavailable,
+				"auth_provider_unavailable",
+				"could not complete employer onboarding",
+				"",
+				"try_again",
+				nil,
+			)
+		}
+
+		return responses.SendOK(c, authenticateResponse{
+			Stage:      string(onboarding.StageComplete),
+			SessionJWT: result.SessionJWT,
+			PostAuth:   &postAuth,
+		}, "Workspace created")
 	})
 	onboardingGroup.POST("/link/decision", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
+		claims, err := onboardingTicketClaims(c)
+		if err != nil {
+			return invalidOnboardingTicket(c)
+		}
+
+		var request struct {
+			CandidateID    string `json:"candidate_id"`
+			CreateSeparate bool   `json:"create_separate"`
+			Email          string `json:"email"`
+		}
+		if err := c.Bind(&request); err != nil {
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusBadRequest,
+				"invalid_request",
+				"invalid request body",
+				"",
+				"",
+				nil,
+			)
+		}
+
+		result, err := cfg.OnboardingService.DecideLink(c.Request().Context(), claims.StateID, onboarding.LinkDecision{
+			CandidateID:    request.CandidateID,
+			CreateSeparate: request.CreateSeparate,
+			Email:          request.Email,
+		})
+		if err != nil {
+			return respondOnboardingServiceError(c, err, "auth_provider_unavailable", "could not process the linking decision")
+		}
+
+		ticket, err := onboarding.MintTicket(claims.StateID, onboarding.Stage(result.Stage))
+		if err != nil {
+			slog.ErrorContext(c.Request().Context(), "employer onboarding: mint ticket after link decision", "error", err)
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusServiceUnavailable,
+				"auth_configuration_error",
+				"employer sign-in is temporarily unavailable",
+				"",
+				"try_again",
+				nil,
+			)
+		}
+
+		return responses.SendOK(c, struct {
+			Stage            string `json:"stage"`
+			Challenge        string `json:"challenge,omitempty"`
+			OnboardingTicket string `json:"onboarding_ticket"`
+		}{
+			Stage:            result.Stage,
+			Challenge:        result.Challenge,
+			OnboardingTicket: ticket,
+		}, "Link decision recorded")
 	})
 	onboardingGroup.POST("/link/challenge", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
+		claims, err := onboardingTicketClaims(c)
+		if err != nil {
+			return invalidOnboardingTicket(c)
+		}
+
+		result, err := cfg.OnboardingService.IssueLinkChallenge(c.Request().Context(), claims.StateID)
+		if err != nil {
+			return respondOnboardingServiceError(c, err, "auth_provider_unavailable", "could not send the verification code")
+		}
+
+		return responses.SendOK(c, result, "Verification code sent")
 	})
 	onboardingGroup.POST("/link/challenge/verify", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
+		claims, err := onboardingTicketClaims(c)
+		if err != nil {
+			return invalidOnboardingTicket(c)
+		}
+
+		var request struct {
+			Code string `json:"code"`
+		}
+		if err := c.Bind(&request); err != nil {
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusBadRequest,
+				"invalid_request",
+				"invalid request body",
+				"",
+				"",
+				nil,
+			)
+		}
+
+		result, err := cfg.OnboardingService.VerifyLinkChallenge(c.Request().Context(), claims.StateID, strings.TrimSpace(request.Code))
+		if err != nil {
+			return respondOnboardingServiceError(c, err, "auth_provider_unavailable", "could not verify the code")
+		}
+
+		ticket, err := onboarding.MintTicket(claims.StateID, onboarding.Stage(result.Stage))
+		if err != nil {
+			slog.ErrorContext(c.Request().Context(), "employer onboarding: mint ticket after challenge verify", "error", err)
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusServiceUnavailable,
+				"auth_configuration_error",
+				"employer sign-in is temporarily unavailable",
+				"",
+				"try_again",
+				nil,
+			)
+		}
+
+		return responses.SendOK(c, struct {
+			Stage            string `json:"stage"`
+			OnboardingTicket string `json:"onboarding_ticket"`
+		}{
+			Stage:            result.Stage,
+			OnboardingTicket: ticket,
+		}, "Verification successful")
 	})
 	onboardingGroup.POST("/sign-out", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
+		// An Onboarding_Ticket is a bare HS256 JWT scoped to this backend only
+		// — Stytch has no record of it, so there is nothing to revoke. Only a
+		// genuine Stytch session credential (held after workspace
+		// provisioning completes) names a real session worth revoking. This
+		// keeps sign-out a single endpoint for both credential shapes instead
+		// of forcing the frontend to know which one it currently holds.
+		authHeader := c.Request().Header.Get("Authorization")
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+			token := strings.TrimSpace(parts[1])
+			if token != "" {
+				if _, ticketErr := onboarding.ValidateTicket(token); ticketErr != nil {
+					id, resolveErr := resolver.authenticateHeader(c)
+					if resolveErr == nil && id.sessionID != "" {
+						revokeErr := cfg.Adapter.Do(c.Request().Context(), "RevokeSession", false, func(attemptCtx context.Context) error {
+							return cfg.Adapter.Client().RevokeSession(attemptCtx, id.sessionID)
+						})
+						if revokeErr != nil {
+							// Best-effort: the frontend discards the credential
+							// client-side regardless, so a revoke failure does not
+							// block sign-out — it only leaves the session valid at
+							// Stytch until its own expiry.
+							slog.WarnContext(c.Request().Context(), "employer sign-out: revoke session failed", "error", revokeErr)
+						}
+					}
+				}
+			}
+		}
+		return responses.SendOK(c, map[string]any{"success": true}, "Signed out")
 	})
 
 	// ─── 3. Session-scoped routes (authenticated, no workspace required) ───

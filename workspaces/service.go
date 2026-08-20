@@ -91,6 +91,13 @@ type CreateForOnboardingInput struct {
 type CreateForOnboardingResult struct {
 	Workspace  Workspace
 	Membership Membership
+
+	// SessionJWT and SessionToken are the Stytch session scoped to the new
+	// Organization, so the caller can hand the Employer a real workspace
+	// session instead of the onboarding_ticket that was authenticating
+	// their requests up to this point.
+	SessionJWT   string
+	SessionToken string
 }
 
 // CreateForOnboarding provisions a workspace during employer onboarding.
@@ -122,9 +129,12 @@ func (w *WorkspaceService) CreateForOnboarding(ctx context.Context, in CreateFor
 	// Step 3/4: Resolve the Stytch Organization ID.
 	stytchOrgID := in.StytchOrgID
 	stytchMemberID := in.StytchMemberID
+	var sessionJWT, sessionToken string
 
 	if stytchOrgID == "" {
-		// No existing org — create one via the adapter (Req 2.13, 3.12).
+		// No existing org — create one via the adapter (Req 2.13, 3.12). The
+		// create call itself returns a session already scoped to the new
+		// Organization, so no separate exchange is needed on this path.
 		var createResult stytch.CreateOrgResult
 		err := w.adapter.Do(ctx, "CreateOrganizationFromDiscovery", false, func(attemptCtx context.Context) error {
 			var callErr error
@@ -146,6 +156,27 @@ func (w *WorkspaceService) CreateForOnboarding(ctx context.Context, in CreateFor
 		if stytchMemberID == "" {
 			stytchMemberID = createResult.MemberID
 		}
+		sessionJWT = createResult.SessionJWT
+		sessionToken = createResult.SessionToken
+	} else {
+		// A retry after a partial failure reuses the retained Organization ID
+		// (Req 3.3) and never calls CreateOrganizationFromDiscovery again, so
+		// the session for it comes from exchanging the intermediate session
+		// for that Organization instead.
+		var sess stytch.Session
+		err := w.adapter.Do(ctx, "ExchangeSession", true, func(attemptCtx context.Context) error {
+			var callErr error
+			sess, callErr = w.adapter.Client().ExchangeSession(attemptCtx, in.IntermediateSession, stytchOrgID)
+			return callErr
+		})
+		if err != nil {
+			return CreateForOnboardingResult{}, fmt.Errorf("stytch exchange session: %w", err)
+		}
+		if stytchMemberID == "" {
+			stytchMemberID = sess.MemberID
+		}
+		sessionJWT = sess.SessionJWT
+		sessionToken = sess.SessionToken
 	}
 
 	// Step 5: Insert the workspace document with slug retry (Req 2.8, 2.10).
@@ -205,8 +236,10 @@ func (w *WorkspaceService) CreateForOnboarding(ctx context.Context, in CreateFor
 	})
 
 	return CreateForOnboardingResult{
-		Workspace:  ws,
-		Membership: membership,
+		Workspace:    ws,
+		Membership:   membership,
+		SessionJWT:   sessionJWT,
+		SessionToken: sessionToken,
 	}, nil
 }
 
