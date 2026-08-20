@@ -352,6 +352,11 @@ func main() {
 	workspaceService := workspaces.NewWorkspaceService(stytchAdapter, auditLogger, stytchClock, rateLimiter)
 	membershipService := workspaces.NewMembershipService(stytchAdapter, auditLogger, stytchClock, txSupported)
 	invitationService := invitations.NewService(rateLimiter, auditLogger, stytchClock, membershipService)
+	invitationHandlers := invitations.NewHTTPHandlers(invitations.HandlersConfig{
+		Service:          invitationService,
+		Adapter:          stytchAdapter,
+		WorkspaceService: workspaceService,
+	})
 	onboardingService := onboarding.NewService(stytchAdapter, rateLimiter)
 	webhookConsumer := workspaces.NewWebhookConsumer(stytchAdapter, stytchClock, membershipService, workspaceService, auditLogger)
 	healthHandler := workspaces.NewHealthHandler(stytchAdapter, txSupported)
@@ -373,7 +378,7 @@ func main() {
 		RateLimiter:       rateLimiter,
 		WorkspaceService:  workspaceService,
 		MembershipService: membershipService,
-		InvitationService: invitationService,
+		Invitations:       invitationHandlers,
 		OnboardingService: onboardingService,
 		WebhookConsumer:   webhookConsumer,
 		HealthHandler:     healthHandler,

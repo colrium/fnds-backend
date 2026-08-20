@@ -28,7 +28,7 @@ type RouteConfig struct {
 	RateLimiter       ratelimit.RateLimiter
 	WorkspaceService  *WorkspaceService
 	MembershipService *MembershipService
-	InvitationService any // *invitations.Service — typed as any to avoid import cycle
+	Invitations       InvitationHandlers // built by invitations.NewHTTPHandlers — see invitation_handlers.go
 	OnboardingService onboardingService
 	WebhookConsumer   *WebhookConsumer
 	HealthHandler     *HealthHandler
@@ -606,18 +606,16 @@ func RegisterRoutes(cfg RouteConfig) {
 		}, "Employer authentication completed")
 	})
 
-	// Invitation public endpoints.
-	api.GET("/invitations/:token", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
-	}, cfg.RateLimiter.Guard(ratelimit.LimitInviteResolveMin, ratelimit.SubjectIP))
+	// Invitation public endpoints (Req 11.1, 11.18, 12.5, 12.6, 25.6). Rate
+	// limited per-IP like every other unauthenticated route in this group.
+	api.GET("/invitations/:token", cfg.Invitations.Resolve,
+		cfg.RateLimiter.Guard(ratelimit.LimitInviteResolveMin, ratelimit.SubjectIP))
 
-	api.POST("/invitations/:token/decline", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
-	}, cfg.RateLimiter.Guard(ratelimit.LimitInviteResolveMin, ratelimit.SubjectIP))
+	api.POST("/invitations/:token/decline", cfg.Invitations.Decline,
+		cfg.RateLimiter.Guard(ratelimit.LimitInviteResolveMin, ratelimit.SubjectIP))
 
-	api.POST("/invitations/:token/accept", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
-	}, cfg.RateLimiter.Guard(ratelimit.LimitInviteResolveMin, ratelimit.SubjectIP))
+	api.POST("/invitations/:token/accept", cfg.Invitations.Accept,
+		cfg.RateLimiter.Guard(ratelimit.LimitInviteResolveMin, ratelimit.SubjectIP))
 
 	// Webhook endpoint — registered before body-consuming middleware. Public
 	// and unauthenticated, so it needs IP-based limiting like any other
@@ -910,10 +908,10 @@ func RegisterRoutes(cfg RouteConfig) {
 	wsSG.POST("/members/:membershipID/suspension", PermMemberRemove, handleSetMemberStatus(cfg, MembershipSuspended, "Member suspended"))
 	wsSG.DELETE("/members/:membershipID/suspension", PermMemberRemove, handleSetMemberStatus(cfg, MembershipActive, "Member reactivated"))
 	wsSG.POST("/ownership", PermOwnershipTransfer, handleTransferOwnership(cfg))
-	wsSG.GET("/invitations", PermMemberView, handler)
-	wsSG.POST("/invitations", PermMemberInvite, handler)
-	wsSG.POST("/invitations/:id/resend", PermMemberInvite, handler)
-	wsSG.DELETE("/invitations/:id", PermMemberInvite, handler)
+	wsSG.GET("/invitations", PermMemberView, cfg.Invitations.List)
+	wsSG.POST("/invitations", PermMemberInvite, cfg.Invitations.Create)
+	wsSG.POST("/invitations/:id/resend", PermMemberInvite, cfg.Invitations.Resend)
+	wsSG.DELETE("/invitations/:id", PermMemberInvite, cfg.Invitations.Revoke)
 	wsSG.GET("/audit-log", PermAuditView, cfg.AuditLogger.HandleList)
 
 	// Re-scoped legacy employer paths (keep URLs for frontend compatibility).
