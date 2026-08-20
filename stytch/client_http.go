@@ -240,6 +240,21 @@ func (c *HTTPClient) CreateOrganizationFromDiscovery(ctx context.Context, in Cre
 	}, nil
 }
 
+func (c *HTTPClient) CreateOrganization(ctx context.Context, in CreateOrganizationInput) (CreateOrganizationResult, error) {
+	resp, err := c.api.Organizations.Create(ctx, &orgs.CreateParams{
+		OrganizationName:     in.Name,
+		OrganizationSlug:     in.Slug,
+		EmailJITProvisioning: in.EmailJITProvisioning,
+		EmailInvites:         in.EmailInvites,
+	})
+	if err != nil {
+		return CreateOrganizationResult{}, classify("CreateOrganization", err)
+	}
+	return CreateOrganizationResult{
+		OrganizationID: resp.Organization.OrganizationID,
+	}, nil
+}
+
 func (c *HTTPClient) UpdateOrganization(ctx context.Context, orgID string, in UpdateOrgInput) error {
 	params := &orgs.UpdateParams{OrganizationID: orgID}
 	if in.Name != "" {

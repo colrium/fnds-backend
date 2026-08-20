@@ -15,6 +15,7 @@ import (
 	"backend/ratelimit"
 	"backend/responses"
 	"backend/stytch"
+	"backend/users"
 
 	"github.com/labstack/echo/v4"
 )
@@ -587,15 +588,9 @@ func RegisterRoutes(cfg RouteConfig) {
 	// ─── 3. Session-scoped routes (authenticated, no workspace required) ───
 	// These are excluded from the workspace route registry by name.
 	sessionGroup := api.Group("/workspaces")
-	sessionGroup.GET("", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
-	}, resolver.Authenticate)
-	sessionGroup.POST("", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
-	}, resolver.Authenticate)
-	sessionGroup.POST("/:workspaceID/switch", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
-	}, resolver.Authenticate)
+	sessionGroup.GET("", handleListWorkspaces(cfg), resolver.Authenticate)
+	sessionGroup.POST("", handleCreateWorkspace(cfg), resolver.Authenticate)
+	sessionGroup.POST("/:workspaceID/switch", handleSwitchWorkspace(cfg), resolver.Authenticate)
 
 	// ─── 4. Workspace-scoped routes (ScopedGroup) ────────────────────
 	// Every route here declares a Permission at compile time (Req 8.5).
@@ -671,4 +666,258 @@ func RegisterRoutes(cfg RouteConfig) {
 	adminGroup.POST("/workspaces/:workspaceID/ownership", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
 	})
+}
+
+// bearerToken extracts the raw bearer credential from the Authorization
+// header, exactly the way Resolver.authenticateHeader parses it, without
+// the credential-chain verification that follows. Handlers that call a
+// Stytch operation needing the raw session credential (ExchangeSession,
+// CreateOrganizationFromDiscovery) — rather than the already-resolved
+// SessionContext — use this to get it.
+func bearerToken(c echo.Context) (string, bool) {
+	authHeader := c.Request().Header.Get("Authorization")
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+		return "", false
+	}
+	token := strings.TrimSpace(parts[1])
+	if token == "" {
+		return "", false
+	}
+	return token, true
+}
+
+// handleListWorkspaces lists every workspace the authenticated user belongs
+// to, for the workspace selector UI (Req 15.10).
+func handleListWorkspaces(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sc, ok := FromEcho(c)
+		if !ok {
+			return unauthorized(c)
+		}
+
+		summaries, err := cfg.WorkspaceService.ListForUser(c.Request().Context(), sc.UserID)
+		if err != nil {
+			slog.ErrorContext(c.Request().Context(), "list workspaces failed", "error", err)
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusServiceUnavailable,
+				"workspace_list_failed",
+				"could not list workspaces",
+				"",
+				"try_again",
+				nil,
+			)
+		}
+
+		return responses.SendOK(c, summaries, "Workspaces retrieved")
+	}
+}
+
+// createWorkspaceRequest is the body for POST /workspaces (create an
+// additional workspace for a user who already holds at least one).
+type createWorkspaceRequest struct {
+	Name string `json:"name"`
+}
+
+// createWorkspaceResponse mirrors the shape of PostAuthResult / SwitchResult
+// so the frontend can activate the freshly created workspace the same way
+// it activates any other.
+type createWorkspaceResponse struct {
+	WorkspaceID string       `json:"workspace_id"`
+	Name        string       `json:"name"`
+	Slug        string       `json:"slug"`
+	Role        Role         `json:"role"`
+	Permissions []Permission `json:"permissions"`
+	SessionJWT  string       `json:"session_jwt,omitempty"`
+}
+
+// handleCreateWorkspace creates an additional workspace for a user who
+// already holds at least one active membership (Req 15.12, 15.13). This is
+// distinct from the onboarding-flow workspace creation at
+// POST /employer/onboarding/workspace, which provisions the user's very
+// first workspace from a Stytch discovery intermediate session.
+//
+// Creating an *additional* workspace has no discovery intermediate session
+// to reuse — the caller already holds a full Stytch session for their
+// existing workspace(s), not an intermediate one — so
+// CreateOrganizationFromDiscovery (which only accepts an intermediate
+// session token) does not apply here. This handler instead: (1) creates a
+// plain Stytch Organization with no Member via CreateOrganization, then (2)
+// adds the caller as a Member of that Organization via CreateMember.
+// WorkspaceService.CreateAdditional then persists the Workspace and owner
+// Membership from the resulting organization_id and member_id. Fundis's
+// Membership document is authoritative for authorization (Req 16.6), so the
+// Stytch Member's RBAC roles are left empty here — they are observability
+// only and are never read by the Session_Resolver.
+func handleCreateWorkspace(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sc, ok := FromEcho(c)
+		if !ok {
+			return unauthorized(c)
+		}
+
+		var request createWorkspaceRequest
+		if err := c.Bind(&request); err != nil {
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusBadRequest,
+				"invalid_request",
+				"invalid request body",
+				"",
+				"",
+				nil,
+			)
+		}
+
+		if err := ValidateName(request.Name); err != nil {
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusBadRequest,
+				"invalid_workspace_name",
+				err.Error(),
+				"workspace_name",
+				"",
+				nil,
+			)
+		}
+
+		user, err := users.GetUserByID(c.Request().Context(), sc.UserID)
+		if err != nil || user == nil {
+			slog.ErrorContext(c.Request().Context(), "create additional workspace: load user failed", "error", err)
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusServiceUnavailable,
+				"workspace_create_failed",
+				"could not create workspace",
+				"",
+				"try_again",
+				nil,
+			)
+		}
+
+		normalized := NormalizeName(request.Name)
+		slug := DeriveSlug(normalized)
+
+		var orgResult stytch.CreateOrganizationResult
+		err = cfg.Adapter.Do(c.Request().Context(), "CreateOrganization", false, func(attemptCtx context.Context) error {
+			var innerErr error
+			orgResult, innerErr = cfg.Adapter.Client().CreateOrganization(attemptCtx, stytch.CreateOrganizationInput{
+				Name:                 normalized,
+				Slug:                 slug,
+				EmailJITProvisioning: "RESTRICTED",
+				EmailInvites:         "ALL_ALLOWED",
+			})
+			return innerErr
+		})
+		if err != nil {
+			slog.ErrorContext(c.Request().Context(), "create additional workspace: stytch organization create failed", "error", err)
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusServiceUnavailable,
+				"auth_provider_unavailable",
+				"could not create workspace",
+				"",
+				"try_again",
+				nil,
+			)
+		}
+
+		var member stytch.Member
+		err = cfg.Adapter.Do(c.Request().Context(), "CreateMember", false, func(attemptCtx context.Context) error {
+			var innerErr error
+			member, innerErr = cfg.Adapter.Client().CreateMember(attemptCtx, stytch.CreateMemberInput{
+				OrganizationID: orgResult.OrganizationID,
+				Email:          user.Email,
+				Name:           strings.TrimSpace(user.FirstName + " " + user.LastName),
+			})
+			return innerErr
+		})
+		if err != nil {
+			slog.ErrorContext(c.Request().Context(), "create additional workspace: stytch member create failed", "error", err)
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusServiceUnavailable,
+				"auth_provider_unavailable",
+				"could not create workspace",
+				"",
+				"try_again",
+				nil,
+			)
+		}
+
+		result, err := cfg.WorkspaceService.CreateAdditional(
+			c.Request().Context(),
+			sc.UserID,
+			request.Name,
+			orgResult.OrganizationID,
+			member.MemberID,
+		)
+		if err != nil {
+			var wsErr *WorkspaceError
+			if errors.As(err, &wsErr) {
+				return responses.SendErrorWithCode(c, wsErr.Status, wsErr.Code, wsErr.Message, "", "", nil)
+			}
+			slog.ErrorContext(c.Request().Context(), "create additional workspace failed", "error", err)
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusServiceUnavailable,
+				"workspace_create_failed",
+				"could not create workspace",
+				"",
+				"try_again",
+				nil,
+			)
+		}
+
+		return responses.SendCreated(c, createWorkspaceResponse{
+			WorkspaceID: result.Workspace.ID,
+			Name:        result.Workspace.Name,
+			Slug:        result.Workspace.Slug,
+			Role:        result.Membership.Role,
+			Permissions: GrantedPermissions(result.Membership.Role),
+		}, "Workspace created")
+	}
+}
+
+// handleSwitchWorkspace switches the user's active workspace (Req 15.7,
+// 15.8, 15.9). SwitchWorkspace needs the caller's raw opaque session
+// token — not the resolved SessionContext — because it round-trips Stytch's
+// ExchangeSession to mint a new session scoped to the target organization.
+func handleSwitchWorkspace(cfg RouteConfig) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sc, ok := FromEcho(c)
+		if !ok {
+			return unauthorized(c)
+		}
+
+		token, ok := bearerToken(c)
+		if !ok {
+			return unauthorized(c)
+		}
+
+		result, err := cfg.WorkspaceService.SwitchWorkspace(c.Request().Context(), SwitchInput{
+			UserID:            sc.UserID,
+			TargetWorkspaceID: c.Param("workspaceID"),
+			SessionToken:      token,
+		})
+		if err != nil {
+			var membershipErr *MembershipError
+			if errors.As(err, &membershipErr) {
+				return responses.SendErrorWithCode(c, membershipErr.Status, membershipErr.Code, membershipErr.Message, "", "", nil)
+			}
+			slog.ErrorContext(c.Request().Context(), "switch workspace failed", "error", err)
+			return responses.SendErrorWithCode(
+				c,
+				http.StatusServiceUnavailable,
+				"workspace_switch_failed",
+				"could not switch workspace",
+				"",
+				"try_again",
+				nil,
+			)
+		}
+
+		return responses.SendOK(c, result, "Workspace switched")
+	}
 }

@@ -30,6 +30,14 @@ type Client interface {
 	// discovery intermediate session.
 	CreateOrganizationFromDiscovery(ctx context.Context, in CreateOrgInput) (CreateOrgResult, error)
 
+	// CreateOrganization creates a plain Stytch Organization with no Member
+	// and no discovery session involved. Used when an already-authenticated
+	// member creates an additional Workspace (Req 15.12): unlike signup,
+	// there is no discovery intermediate session to reuse, so the
+	// Organization and the caller's Member (via CreateMember) are created as
+	// two separate calls instead of the combined discovery Create call.
+	CreateOrganization(ctx context.Context, in CreateOrganizationInput) (CreateOrganizationResult, error)
+
 	// UpdateOrganization updates mutable fields on a Stytch Organization.
 	UpdateOrganization(ctx context.Context, orgID string, in UpdateOrgInput) error
 
@@ -147,6 +155,28 @@ type CreateOrgResult struct {
 
 	// SessionToken is the opaque session token for the new Organization.
 	SessionToken string
+}
+
+// CreateOrganizationInput carries the parameters for the plain
+// CreateOrganization call (no discovery session, no Member created).
+type CreateOrganizationInput struct {
+	// Name is the Workspace name (used as the Organization display name).
+	Name string
+
+	// Slug is the URL-safe identifier for the Organization.
+	Slug string
+
+	// EmailJITProvisioning is always "RESTRICTED" — disables domain auto-join (D6, Req 2.13).
+	EmailJITProvisioning string
+
+	// EmailInvites is always "ALL_ALLOWED" — permits invitations to any email domain.
+	EmailInvites string
+}
+
+// CreateOrganizationResult is returned by CreateOrganization.
+type CreateOrganizationResult struct {
+	// OrganizationID is the Stytch Organization identifier.
+	OrganizationID string
 }
 
 // UpdateOrgInput carries the mutable fields for UpdateOrganization.

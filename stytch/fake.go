@@ -291,6 +291,28 @@ func (f *Fake) mintSessionJWTLocked(memberID, orgID string, ttl time.Duration) s
 	return signed
 }
 
+func (f *Fake) CreateOrganization(_ context.Context, in CreateOrganizationInput) (CreateOrganizationResult, error) {
+	if err := f.before("CreateOrganization", in); err != nil {
+		return CreateOrganizationResult{}, err
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	orgID := "organization-" + uuid.New().String()
+	f.Orgs[orgID] = &FakeOrg{
+		Organization: Organization{
+			OrganizationID: orgID,
+			Name:           in.Name,
+			Slug:           in.Slug,
+		},
+		Members:  make(map[string]Member),
+		Sessions: make(map[string]Session),
+	}
+
+	return CreateOrganizationResult{OrganizationID: orgID}, nil
+}
+
 func (f *Fake) UpdateOrganization(_ context.Context, orgID string, in UpdateOrgInput) error {
 	if err := f.before("UpdateOrganization", map[string]any{
 		"orgID": orgID,
