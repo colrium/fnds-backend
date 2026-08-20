@@ -134,6 +134,10 @@ func (j *MigrationJob) Run(ctx context.Context, candidates []MigrationCandidate,
 				UserID:            candidate.User.ID,
 				Email:             candidate.User.Email,
 				RawName:           candidate.WorkspaceName,
+				// The Employer is not present, so there is no intermediate
+				// session token; without this the discovery Organization-create
+				// is called with an empty token and every candidate fails.
+				AdminProvisioned: true,
 			})
 			if createErr != nil {
 				finding.Outcome = "failed"

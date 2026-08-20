@@ -86,6 +86,15 @@ type CreateForOnboardingInput struct {
 	Email               string
 	StytchMemberID      string
 	RawName             string
+
+	// AdminProvisioned marks a workspace created without the Employer present —
+	// the bulk migration of Req 21.8. Stytch's discovery Organization-create
+	// exists only to spend an intermediate session token, and a server-side
+	// batch has none, so that call can never succeed here. This path uses the
+	// plain Organization-create plus an explicit Member-create instead, and
+	// mints no session: nobody is signing in, and the Employer's next magic
+	// link resolves to the Member created here.
+	AdminProvisioned bool
 }
 
 // CreateForOnboardingResult is returned on successful workspace creation.
@@ -132,7 +141,50 @@ func (w *WorkspaceService) CreateForOnboarding(ctx context.Context, in CreateFor
 	stytchMemberID := in.StytchMemberID
 	var sessionJWT, sessionToken string
 
-	if stytchOrgID == "" {
+	switch {
+	case in.AdminProvisioned:
+		// Migration path: no discovery session to spend, so create the
+		// Organization directly (Req 2.13 settings still apply) and then the
+		// Member, which the plain Organization-create does not create. Both
+		// steps are skipped when a previous partial run already produced them,
+		// which is what makes a re-run safe.
+		if stytchOrgID == "" {
+			var org stytch.CreateOrganizationResult
+			err := w.adapter.Do(ctx, "CreateOrganization", false, func(attemptCtx context.Context) error {
+				var callErr error
+				org, callErr = w.adapter.Client().CreateOrganization(attemptCtx, stytch.CreateOrganizationInput{
+					Name:                 normalized,
+					Slug:                 baseSlug,
+					EmailJITProvisioning: "RESTRICTED",
+					EmailInvites:         "ALL_ALLOWED",
+				})
+				return callErr
+			})
+			if err != nil {
+				return CreateForOnboardingResult{}, fmt.Errorf("stytch create organization: %w", err)
+			}
+			stytchOrgID = org.OrganizationID
+		}
+
+		if stytchMemberID == "" {
+			var member stytch.Member
+			err := w.adapter.Do(ctx, "CreateMember", true, func(attemptCtx context.Context) error {
+				var callErr error
+				member, callErr = w.adapter.Client().CreateMember(attemptCtx, stytch.CreateMemberInput{
+					OrganizationID: stytchOrgID,
+					Email:          in.Email,
+					Roles:          []string{string(RoleOwner)},
+				})
+				return callErr
+			})
+			if err != nil {
+				return CreateForOnboardingResult{}, fmt.Errorf("stytch create member: %w", err)
+			}
+			stytchMemberID = member.MemberID
+		}
+		// sessionJWT/sessionToken deliberately stay empty — see AdminProvisioned.
+
+	case stytchOrgID == "":
 		// No existing org — create one via the adapter (Req 2.13, 3.12). The
 		// create call itself returns a session already scoped to the new
 		// Organization, so no separate exchange is needed on this path.
@@ -159,7 +211,8 @@ func (w *WorkspaceService) CreateForOnboarding(ctx context.Context, in CreateFor
 		}
 		sessionJWT = createResult.SessionJWT
 		sessionToken = createResult.SessionToken
-	} else {
+
+	default:
 		// A retry after a partial failure reuses the retained Organization ID
 		// (Req 3.3) and never calls CreateOrganizationFromDiscovery again, so
 		// the session for it comes from exchanging the intermediate session
