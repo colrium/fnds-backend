@@ -373,6 +373,22 @@ func (s *Service) Authenticate(ctx context.Context, in AuthenticateInput) (AuthR
 	}
 
 	if err := users.CreateNewUser(newUser); err != nil {
+		// Email is globally unique across all user types (see
+		// users.EnsureIndexes). The candidate search above only offers linking
+		// for customer-type accounts (Req 4.9), so an email already registered
+		// as artisan/assessor/admin reaches here with zero candidates and
+		// collides on insert. That is a real, expected conflict — not a
+		// transient provider failure — so it gets its own status/code rather
+		// than falling into the generic "authenticate: create user" wrap that
+		// routes.go maps to a misleading 503 "auth_provider_unavailable".
+		if mongo.IsDuplicateKeyError(err) {
+			return AuthResult{}, &ServiceError{
+				Status:  409,
+				Code:    "email_already_registered",
+				Message: "this email is already registered under a different account type",
+				Field:   "email",
+			}
+		}
 		return AuthResult{}, fmt.Errorf("authenticate: create user: %w", err)
 	}
 
