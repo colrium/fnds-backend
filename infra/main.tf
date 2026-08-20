@@ -82,7 +82,7 @@ resource "aws_ssm_parameter" "image" {
   name        = "/${var.project_name}/${var.environment}/backend/image"
   description = "Digest-pinned image deployed for backend; written by CI"
   type        = "String"
-  value       = "${aws_ecr_repository.this.repository_url}@sha256:0000000000000000000000000000000000000000000000000000000000000"
+  value       = "${aws_ecr_repository.this.repository_url}@sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
   lifecycle {
     ignore_changes = [value]
