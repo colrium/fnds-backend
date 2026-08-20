@@ -12,7 +12,6 @@ cellulant_base_url     = ""
 cellulant_checkout_url = "https://online.uat.tingg.africa/testing/express/checkout"
 advanta_base_url       = "https://quicksms.advantasms.com"
 turnstile_hostname     = ""
-videosdk_base_url      = ""
 betterstack_ingest_url = ""
 
 unset_secrets = [
@@ -31,6 +30,4 @@ unset_secrets = [
   "SLACK_WEBHOOK_URL",
   "SLACK_OPS_NOTIFS_URL",
   "BETTERSTACK_SOURCE_TOKEN",
-  "VIDEOSDK_API_KEY",
-  "VIDEOSDK_SECRET_KEY",
 ]

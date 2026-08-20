@@ -51,3 +51,7 @@ data "aws_ssm_parameter" "s3_bucket_name" {
 data "aws_ssm_parameter" "s3_bucket_arn" {
   name = "${local.platform_ssm_prefix}/s3-bucket-arn"
 }
+
+data "aws_ssm_parameter" "s3_public_base_url" {
+  name = "${local.platform_ssm_prefix}/s3-public-base-url"
+}

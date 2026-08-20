@@ -64,10 +64,6 @@ variable "turnstile_hostname" {
   type = string
 }
 
-variable "videosdk_base_url" {
-  type = string
-}
-
 variable "betterstack_ingest_url" {
   type = string
 }
@@ -190,18 +186,6 @@ variable "slack_ops_notifs_url" {
 }
 
 variable "betterstack_source_token" {
-  type      = string
-  sensitive = true
-  default   = ""
-}
-
-variable "videosdk_api_key" {
-  type      = string
-  sensitive = true
-  default   = ""
-}
-
-variable "videosdk_secret_key" {
   type      = string
   sensitive = true
   default   = ""

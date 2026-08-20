@@ -23,8 +23,6 @@ locals {
     SLACK_WEBHOOK_URL               = var.slack_webhook_url
     SLACK_OPS_NOTIFS_URL            = var.slack_ops_notifs_url
     BETTERSTACK_SOURCE_TOKEN        = var.betterstack_source_token
-    VIDEOSDK_API_KEY                = var.videosdk_api_key
-    VIDEOSDK_SECRET_KEY             = var.videosdk_secret_key
   }
 
   backend_secret_has_value = { for k, v in local.backend_secret_candidates : k => nonsensitive(v != "") }
@@ -168,14 +166,13 @@ module "service" {
     APP_PUBLIC_URL           = var.app_public_url
     AWS_REGION               = var.aws_region
     AWS_S3_BUCKET            = data.aws_ssm_parameter.s3_bucket_name.value
-    AWS_S3_PUBLIC_BASE_URL   = "https://${data.aws_ssm_parameter.s3_bucket_name.value}.s3.${var.aws_region}.amazonaws.com"
+    AWS_S3_PUBLIC_BASE_URL   = data.aws_ssm_parameter.s3_public_base_url.value
     SENDGRID_FROM_EMAIL      = var.sendgrid_from_email
     SENDGRID_FROM_NAME       = var.sendgrid_from_name
     CELLULANT_BASE_URL       = var.cellulant_base_url
     CELLULANT_CHECKOUT_URL   = var.cellulant_checkout_url
     ADVANTA_BASE_URL         = var.advanta_base_url
     TURNSTILE_HOSTNAME       = var.turnstile_hostname
-    VIDEOSDK_BASE_URL        = var.videosdk_base_url
     BETTERSTACK_INGEST_URL   = var.betterstack_ingest_url
     BETTERSTACK_SERVICE_NAME = "fundis-backend-${var.environment}"
     BETTERSTACK_MIN_LEVEL    = var.betterstack_min_level
