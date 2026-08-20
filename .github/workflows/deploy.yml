@@ -5,6 +5,16 @@ on:
     branches:
       - main
       - production
+  # Lets a deploy be re-run without an empty commit — needed after any run that
+  # failed for a reason outside the code (a billing block stops jobs before they
+  # start, so every push during one is lost work).
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: staging
 
 env:
   AWS_REGION: af-south-1
@@ -19,7 +29,12 @@ jobs:
       - name: Set environment
         id: env
         run: |
-          if [ "${{ github.ref_name }}" = "production" ]; then
+          TARGET="${{ inputs.environment }}"
+          if [ -z "$TARGET" ]; then
+            # Push-triggered: the branch decides.
+            TARGET="${{ github.ref_name }}"
+          fi
+          if [ "$TARGET" = "production" ]; then
             echo "environment=production" >> $GITHUB_OUTPUT
             echo "ecr_repo=fundis-production-backend" >> $GITHUB_OUTPUT
           else
