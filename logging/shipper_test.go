@@ -86,11 +86,23 @@ func stableGoroutineCount() int {
 	return previous
 }
 
+// asyncSettleTimeout bounds the "eventually" waits below: a delivery goroutine
+// starting up, and that goroutine taking events off the queue.
+//
+// It is deliberately far larger than the work needs. waitFor polls and returns
+// the moment its condition holds, so a generous ceiling costs nothing when the
+// machine is idle — but the previous 500ms was not enough under `go test ./...
+// -race`, where every package competes for CPU and the race detector multiplies
+// the cost of each. TestStartedShipperDrainsTheQueue failed there while passing
+// in isolation, which is the signature of a deadline tuned to an unloaded
+// machine. Nothing here asserts promptness, only that it happens at all.
+const asyncSettleTimeout = 10 * time.Second
+
 // waitForGoroutineDelta fails unless the goroutine count reaches baseline+delta.
 func waitForGoroutineDelta(t *testing.T, baseline, delta int) {
 	t.Helper()
 	want := baseline + delta
-	if !waitFor(func() bool { return runtime.NumGoroutine() == want }, 500*time.Millisecond) {
+	if !waitFor(func() bool { return runtime.NumGoroutine() == want }, asyncSettleTimeout) {
 		t.Fatalf("goroutine count = %d, want baseline+%d = %d", runtime.NumGoroutine(), delta, want)
 	}
 }
@@ -544,7 +556,7 @@ func TestStartedShipperDrainsTheQueue(t *testing.T) {
 	logger := slog.New(NewFanoutHandler(slog.NewJSONHandler(console, nil), s.Handler()))
 	emitErrors(logger, 3, "drained record")
 
-	if !waitFor(func() bool { return s.Snapshot().InFlight == 3 }, 500*time.Millisecond) {
+	if !waitFor(func() bool { return s.Snapshot().InFlight == 3 }, asyncSettleTimeout) {
 		t.Errorf("InFlight = %d, want 3 events taken off the queue", s.Snapshot().InFlight)
 	}
 
