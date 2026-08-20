@@ -52,15 +52,19 @@ func (r *RouteRegistry) Declared() map[routeKey]Permission {
 type ScopedGroup struct {
 	group    *echo.Group
 	registry *RouteRegistry
+	resolver *Resolver
 	prefix   string
 }
 
 // NewScopedGroup creates a ScopedGroup that registers routes on parent under
-// the given prefix. Every route registered through it is recorded in registry.
-func NewScopedGroup(parent *echo.Group, prefix string, registry *RouteRegistry) *ScopedGroup {
+// the given prefix. Every route registered through it is recorded in registry
+// and runs resolver.RequireSession before RequirePermission, so a
+// ScopedGroup route always has a real SessionContext to authorize against.
+func NewScopedGroup(parent *echo.Group, prefix string, resolver *Resolver, registry *RouteRegistry) *ScopedGroup {
 	return &ScopedGroup{
 		group:    parent.Group(prefix),
 		registry: registry,
+		resolver: resolver,
 		prefix:   prefix,
 	}
 }
@@ -92,10 +96,16 @@ func (s *ScopedGroup) DELETE(path string, p Permission, h echo.HandlerFunc, m ..
 	s.group.DELETE(path, h, s.withRequirePermission(p, m)...)
 }
 
-// withRequirePermission prepends RequirePermission(p) to the caller-supplied
-// middleware chain.
+// withRequirePermission prepends resolver.RequireSession and RequirePermission(p)
+// to the caller-supplied middleware chain, in that order: RequireSession must
+// populate the SessionContext before RequirePermission can read it. A nil
+// resolver skips RequireSession — tests exercising RequirePermission in
+// isolation inject a fake SessionContext via their own middleware instead.
 func (s *ScopedGroup) withRequirePermission(p Permission, m []echo.MiddlewareFunc) []echo.MiddlewareFunc {
-	chain := make([]echo.MiddlewareFunc, 0, len(m)+1)
+	chain := make([]echo.MiddlewareFunc, 0, len(m)+2)
+	if s.resolver != nil {
+		chain = append(chain, s.resolver.RequireSession)
+	}
 	chain = append(chain, RequirePermission(p))
 	chain = append(chain, m...)
 	return chain

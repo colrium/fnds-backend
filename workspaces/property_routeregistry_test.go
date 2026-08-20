@@ -23,7 +23,7 @@ func TestProperty29_EveryDeclaredRouteHasExactlyOneKnownPermission(t *testing.T)
 		e := echo.New()
 		reg := NewRouteRegistry()
 		parent := e.Group("")
-		sg := NewScopedGroup(parent, "/workspaces/:workspaceID", reg)
+		sg := NewScopedGroup(parent, "/workspaces/:workspaceID", nil, reg)
 		handler := func(c echo.Context) error { return nil }
 
 		expected := make(map[routeKey]Permission)

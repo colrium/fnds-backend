@@ -152,6 +152,15 @@ type AuthResult struct {
 	Stage          string              `json:"stage"`
 	OnboardingID   string              `json:"onboarding_id,omitempty"`
 	LinkCandidates []LinkCandidateView `json:"link_candidates,omitempty"`
+
+	// Internal fields the HTTP layer uses to establish a real workspace
+	// session when Stage is "complete" — never serialized to the client.
+	// workspaces can't be imported here (it imports onboarding), so the
+	// session exchange itself happens in workspaces/routes.go.
+	UserID                   string `json:"-"`
+	WorkspaceID              string `json:"-"`
+	StytchOrganizationID     string `json:"-"`
+	IntermediateSessionToken string `json:"-"`
 }
 
 // LinkCandidateView is the masked public representation of a link candidate.
@@ -279,11 +288,22 @@ func (s *Service) Authenticate(ctx context.Context, in AuthenticateInput) (AuthR
 
 	// If the state already has a stage beyond awaiting_verification, resume at that stage (Req 3.6).
 	if state.Stage != StageAwaitingVerification && state.Stage != "" {
-		// Resuming an existing flow — return current stage.
-		return AuthResult{
+		// Resuming an existing flow — return current stage. For a returning,
+		// fully-onboarded member (StageComplete), also surface the raw
+		// identifiers the HTTP layer needs to exchange this call's fresh
+		// IntermediateSessionToken for a real workspace session — the
+		// onboarding_ticket alone only carries stage/state, not a session.
+		authResult := AuthResult{
 			Stage:        string(state.Stage),
 			OnboardingID: state.ID,
-		}, nil
+		}
+		if state.Stage == StageComplete {
+			authResult.UserID = state.UserID
+			authResult.WorkspaceID = state.WorkspaceID
+			authResult.StytchOrganizationID = state.StytchOrganizationID
+			authResult.IntermediateSessionToken = result.IntermediateSessionToken
+		}
+		return authResult, nil
 	}
 
 	// 4. Search candidates ONLY AFTER verified authentication via GetUsersByNormalizedEmail (Req 25.5).

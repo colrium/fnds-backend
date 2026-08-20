@@ -43,8 +43,14 @@ type onboardingService interface {
 
 type authenticateResponse struct {
 	Stage            string                         `json:"stage"`
-	OnboardingTicket string                         `json:"onboarding_ticket"`
+	OnboardingTicket string                         `json:"onboarding_ticket,omitempty"`
 	LinkCandidates   []onboarding.LinkCandidateView `json:"link_candidates,omitempty"`
+
+	// Populated only when Stage is "complete": a real workspace session for
+	// a returning, fully-onboarded member. The onboarding_ticket above is
+	// for continuing an in-progress signup, not for authenticated requests.
+	SessionJWT string          `json:"session_jwt,omitempty"`
+	PostAuth   *PostAuthResult `json:"post_auth,omitempty"`
 }
 
 // RegisterRoutes registers all workspace-related route groups on the Echo app.
@@ -58,6 +64,7 @@ type authenticateResponse struct {
 // Requirements: 8.5, 8.12, 22.5, 22.7
 func RegisterRoutes(cfg RouteConfig) {
 	api := cfg.App.Group("/api/v1")
+	resolver := NewResolver(cfg.Adapter, cfg.Clock)
 
 	// ─── 1. Unauthenticated routes ───────────────────────────────────
 	// Signup endpoints with rate limiting.
@@ -213,6 +220,51 @@ func RegisterRoutes(cfg RouteConfig) {
 			)
 		}
 
+		// A returning, fully-onboarded member re-authenticating gets a real
+		// workspace session instead of an onboarding ticket: the ticket only
+		// carries onboarding stage/state, and there is no more onboarding
+		// left to do.
+		if onboarding.Stage(result.Stage) == onboarding.StageComplete {
+			var sess stytch.Session
+			exchangeErr := cfg.Adapter.Do(c.Request().Context(), "ExchangeSession", true, func(attemptCtx context.Context) error {
+				var innerErr error
+				sess, innerErr = cfg.Adapter.Client().ExchangeSession(attemptCtx, result.IntermediateSessionToken, result.StytchOrganizationID)
+				return innerErr
+			})
+			if exchangeErr != nil {
+				slog.ErrorContext(c.Request().Context(), "employer authentication: session exchange failed", "error", exchangeErr)
+				return responses.SendErrorWithCode(
+					c,
+					http.StatusServiceUnavailable,
+					"auth_provider_unavailable",
+					"could not complete employer authentication",
+					"",
+					"try_again",
+					nil,
+				)
+			}
+
+			postAuth, postAuthErr := cfg.WorkspaceService.ResolvePostAuth(c.Request().Context(), result.UserID, result.WorkspaceID)
+			if postAuthErr != nil {
+				slog.ErrorContext(c.Request().Context(), "employer authentication: resolve post-auth failed", "error", postAuthErr)
+				return responses.SendErrorWithCode(
+					c,
+					http.StatusServiceUnavailable,
+					"auth_provider_unavailable",
+					"could not complete employer authentication",
+					"",
+					"try_again",
+					nil,
+				)
+			}
+
+			return responses.SendOK(c, authenticateResponse{
+				Stage:      result.Stage,
+				SessionJWT: sess.SessionJWT,
+				PostAuth:   &postAuth,
+			}, "Employer authentication completed")
+		}
+
 		ticket, err := onboarding.MintTicket(result.OnboardingID, onboarding.Stage(result.Stage))
 		if err != nil {
 			slog.ErrorContext(c.Request().Context(), "employer authentication: mint onboarding ticket", "error", err)
@@ -284,13 +336,13 @@ func RegisterRoutes(cfg RouteConfig) {
 	sessionGroup := api.Group("/workspaces")
 	sessionGroup.GET("", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
-	})
+	}, resolver.Authenticate)
 	sessionGroup.POST("", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
-	})
+	}, resolver.Authenticate)
 	sessionGroup.POST("/:workspaceID/switch", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]any{"success": true})
-	})
+	}, resolver.Authenticate)
 
 	// ─── 4. Workspace-scoped routes (ScopedGroup) ────────────────────
 	// Every route here declares a Permission at compile time (Req 8.5).
@@ -298,7 +350,7 @@ func RegisterRoutes(cfg RouteConfig) {
 		return c.JSON(http.StatusOK, map[string]any{"success": true, "workspace_id": contextutil.GetWorkspaceID(c)})
 	}
 
-	wsSG := NewScopedGroup(api, "/workspaces/:workspaceID", cfg.Registry)
+	wsSG := NewScopedGroup(api, "/workspaces/:workspaceID", resolver, cfg.Registry)
 	wsSG.GET("", PermWorkspaceView, handler)
 	wsSG.PATCH("", PermWorkspaceRename, handler)
 	wsSG.POST("/deletion", PermWorkspaceDelete, handler)
@@ -318,43 +370,43 @@ func RegisterRoutes(cfg RouteConfig) {
 	wsSG.GET("/audit-log", PermAuditView, cfg.AuditLogger.HandleList)
 
 	// Re-scoped legacy employer paths (keep URLs for frontend compatibility).
-	vacSG := NewScopedGroup(api, "/job-vacancies", cfg.Registry)
+	vacSG := NewScopedGroup(api, "/job-vacancies", resolver, cfg.Registry)
 	vacSG.GET("", PermVacancyView, handler)
 	vacSG.POST("", PermVacancyCreate, handler)
 	vacSG.POST("/update", PermVacancyUpdate, handler)
 	vacSG.POST("/delete", PermVacancyClose, handler)
 
-	vacSingleSG := NewScopedGroup(api, "/job-vacancy", cfg.Registry)
+	vacSingleSG := NewScopedGroup(api, "/job-vacancy", resolver, cfg.Registry)
 	vacSingleSG.GET("", PermVacancyView, handler)
 
-	appSG := NewScopedGroup(api, "/job-applications", cfg.Registry)
+	appSG := NewScopedGroup(api, "/job-applications", resolver, cfg.Registry)
 	appSG.GET("", PermApplicationView, handler)
 	appSG.GET("/:id/review", PermApplicationView, handler)
 	appSG.POST("/decision", PermApplicationDecide, handler)
 
-	empSG := NewScopedGroup(api, "/employer", cfg.Registry)
+	empSG := NewScopedGroup(api, "/employer", resolver, cfg.Registry)
 	empSG.GET("/dashboard", PermVacancyView, handler)
 	empSG.GET("/artisans", PermArtisanBrowse, handler)
 
-	coSG := NewScopedGroup(api, "/companies", cfg.Registry)
+	coSG := NewScopedGroup(api, "/companies", resolver, cfg.Registry)
 	coSG.GET("", PermWorkspaceView, handler)
 	coSG.POST("", PermCompanyCreate, handler)
 	coSG.POST("/update", PermCompanyUpdate, handler)
 	coSG.POST("/delete", PermCompanyUpdate, handler)
 
-	subSG := NewScopedGroup(api, "/subscriptions", cfg.Registry)
+	subSG := NewScopedGroup(api, "/subscriptions", resolver, cfg.Registry)
 	subSG.GET("/mine", PermBillingView, handler)
 	subSG.POST("/purchase", PermSubscriptionManage, handler)
 	subSG.POST("/cancel", PermSubscriptionManage, handler)
 
-	invSG := NewScopedGroup(api, "/invoices", cfg.Registry)
+	invSG := NewScopedGroup(api, "/invoices", resolver, cfg.Registry)
 	invSG.GET("", PermInvoiceView, handler)
 	invSG.POST("/:id/pay", PermInvoicePay, handler)
 
-	paySG := NewScopedGroup(api, "/payments", cfg.Registry)
+	paySG := NewScopedGroup(api, "/payments", resolver, cfg.Registry)
 	paySG.GET("", PermPayoutView, handler)
 
-	pmSG := NewScopedGroup(api, "/payment-methods", cfg.Registry)
+	pmSG := NewScopedGroup(api, "/payment-methods", resolver, cfg.Registry)
 	pmSG.POST("", PermPaymentMethodManage, handler)
 
 	// ─── Admin routes (behind middleware.IsAdmin, outside workspace scope) ───

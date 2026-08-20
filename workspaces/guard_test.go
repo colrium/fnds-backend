@@ -58,7 +58,7 @@ func TestScopedGroupRegistersOnEchoAndRecordsInRegistry(t *testing.T) {
 	reg := NewRouteRegistry()
 	parent := e.Group("")
 
-	sg := NewScopedGroup(parent, "/workspaces/:workspaceID", reg)
+	sg := NewScopedGroup(parent, "/workspaces/:workspaceID", nil, reg)
 
 	handler := func(c echo.Context) error { return c.String(http.StatusOK, "ok") }
 
@@ -112,7 +112,7 @@ func TestScopedGroupHandlerIsInvoked(t *testing.T) {
 		Permissions:  permissionMatrix[RoleOwner],
 	}))
 
-	sg := NewScopedGroup(parent, "/test", reg)
+	sg := NewScopedGroup(parent, "/test", nil, reg)
 
 	called := false
 	sg.GET("/hello", PermWorkspaceView, func(c echo.Context) error {
@@ -142,7 +142,7 @@ func TestScopedGroupWithMiddleware(t *testing.T) {
 		Permissions:  permissionMatrix[RoleOwner],
 	}))
 
-	sg := NewScopedGroup(parent, "/ws", reg)
+	sg := NewScopedGroup(parent, "/ws", nil, reg)
 
 	mwCalled := false
 	mw := func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -173,7 +173,7 @@ func TestScopedGroupDeniesRequestWithoutSessionContext(t *testing.T) {
 	reg := NewRouteRegistry()
 	parent := e.Group("/api")
 
-	sg := NewScopedGroup(parent, "/test", reg)
+	sg := NewScopedGroup(parent, "/test", nil, reg)
 
 	called := false
 	sg.GET("/hello", PermWorkspaceView, func(c echo.Context) error {
@@ -202,7 +202,7 @@ func TestScopedGroupDeniesRequestMissingPermission(t *testing.T) {
 		Permissions:  permissionMatrix[RoleFinance],
 	}))
 
-	sg := NewScopedGroup(parent, "/test", reg)
+	sg := NewScopedGroup(parent, "/test", nil, reg)
 
 	called := false
 	sg.POST("/delete-workspace", PermWorkspaceDelete, func(c echo.Context) error {
@@ -265,7 +265,7 @@ func TestVerifyPassesWhenAllRoutesRegistered(t *testing.T) {
 
 	// Register every route in workspaceScopedRoutes through ScopedGroups.
 	// We need to create appropriate ScopedGroups for different prefixes.
-	wsSG := NewScopedGroup(parent, "/workspaces/:workspaceID", reg)
+	wsSG := NewScopedGroup(parent, "/workspaces/:workspaceID", nil, reg)
 	wsSG.GET("", PermWorkspaceView, handler)
 	wsSG.PATCH("", PermWorkspaceRename, handler)
 	wsSG.POST("/deletion", PermWorkspaceDelete, handler)
@@ -284,44 +284,44 @@ func TestVerifyPassesWhenAllRoutesRegistered(t *testing.T) {
 	wsSG.DELETE("/invitations/:id", PermMemberInvite, handler)
 	wsSG.GET("/audit-log", PermAuditView, handler)
 
-	vacSG := NewScopedGroup(parent, "/job-vacancies", reg)
+	vacSG := NewScopedGroup(parent, "/job-vacancies", nil, reg)
 	vacSG.GET("", PermVacancyView, handler)
 	vacSG.POST("", PermVacancyCreate, handler)
 	vacSG.POST("/update", PermVacancyUpdate, handler)
 	vacSG.POST("/delete", PermVacancyClose, handler)
 
 	// /job-vacancy singular
-	vacSingleSG := NewScopedGroup(parent, "/job-vacancy", reg)
+	vacSingleSG := NewScopedGroup(parent, "/job-vacancy", nil, reg)
 	vacSingleSG.GET("", PermVacancyView, handler)
 
-	appSG := NewScopedGroup(parent, "/job-applications", reg)
+	appSG := NewScopedGroup(parent, "/job-applications", nil, reg)
 	appSG.GET("", PermApplicationView, handler)
 	appSG.GET("/:id/review", PermApplicationView, handler)
 	appSG.POST("/decision", PermApplicationDecide, handler)
 
-	empSG := NewScopedGroup(parent, "/employer", reg)
+	empSG := NewScopedGroup(parent, "/employer", nil, reg)
 	empSG.GET("/dashboard", PermWorkspaceView, handler)
 	empSG.GET("/artisans", PermArtisanBrowse, handler)
 
-	coSG := NewScopedGroup(parent, "/companies", reg)
+	coSG := NewScopedGroup(parent, "/companies", nil, reg)
 	coSG.GET("", PermCompanyCreate, handler)
 	coSG.POST("", PermCompanyCreate, handler)
 	coSG.POST("/update", PermCompanyUpdate, handler)
 	coSG.POST("/delete", PermCompanyUpdate, handler)
 
-	subSG := NewScopedGroup(parent, "/subscriptions", reg)
+	subSG := NewScopedGroup(parent, "/subscriptions", nil, reg)
 	subSG.GET("/mine", PermSubscriptionManage, handler)
 	subSG.POST("/purchase", PermSubscriptionManage, handler)
 	subSG.POST("/cancel", PermSubscriptionManage, handler)
 
-	invSG := NewScopedGroup(parent, "/invoices", reg)
+	invSG := NewScopedGroup(parent, "/invoices", nil, reg)
 	invSG.GET("", PermInvoiceView, handler)
 	invSG.POST("/:id/pay", PermInvoicePay, handler)
 
-	paySG := NewScopedGroup(parent, "/payments", reg)
+	paySG := NewScopedGroup(parent, "/payments", nil, reg)
 	paySG.GET("", PermPayoutView, handler)
 
-	pmSG := NewScopedGroup(parent, "/payment-methods", reg)
+	pmSG := NewScopedGroup(parent, "/payment-methods", nil, reg)
 	pmSG.POST("", PermPaymentMethodManage, handler)
 
 	if err := reg.Verify(); err != nil {
