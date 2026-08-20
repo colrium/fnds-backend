@@ -116,6 +116,17 @@ func AWSRegion() string {
 	return os.Getenv("AWS_REGION")
 }
 
+// AWSS3Region is the region the S3 client signs requests for. It can differ
+// from AWS_REGION (e.g. production's bucket lives in a different region than
+// the ECS service) — falls back to AWS_REGION when unset, so environments
+// where the bucket is co-located need no extra configuration.
+func AWSS3Region() string {
+	if v := os.Getenv("AWS_S3_REGION"); v != "" {
+		return v
+	}
+	return AWSRegion()
+}
+
 func AWSS3Bucket() string {
 	return os.Getenv("AWS_S3_BUCKET")
 }

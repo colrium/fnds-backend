@@ -174,6 +174,7 @@ module "service" {
     APP_PUBLIC_URL               = var.app_public_url
     AWS_REGION                   = var.aws_region
     AWS_S3_BUCKET                = data.aws_ssm_parameter.s3_bucket_name.value
+    AWS_S3_REGION                = data.aws_ssm_parameter.s3_bucket_region.value
     AWS_S3_PUBLIC_BASE_URL       = data.aws_ssm_parameter.s3_public_base_url.value
     SENDGRID_FROM_EMAIL          = var.sendgrid_from_email
     SENDGRID_FROM_NAME           = var.sendgrid_from_name

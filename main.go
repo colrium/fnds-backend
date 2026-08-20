@@ -207,7 +207,7 @@ func main() {
 		os.Exit(1)
 	}
 	s3Store, err := files.NewS3Store(context.Background(), files.S3Config{
-		Region:        configs.AWSRegion(),
+		Region:        configs.AWSS3Region(),
 		Bucket:        configs.AWSS3Bucket(),
 		PublicBaseURL: configs.AWSS3PublicBaseURL(),
 	})
