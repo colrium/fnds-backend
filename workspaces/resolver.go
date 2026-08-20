@@ -197,6 +197,33 @@ func (r *Resolver) respondUnlinked(c echo.Context) error {
 		"unlinked_member", "no linked Fundis account", "", "", nil)
 }
 
+// UserIDFromRequest authenticates any supported credential and returns just the
+// Fundis user_id, for the legacy authGroup routes that predate workspaces
+// (notifications, profiles, quotations, …) and are guarded by
+// middleware.JWTAuth.
+//
+// Those routes accept only an HS256 token, so an employer holding a Stytch
+// session got a 401 from every one of them the moment Stytch auth was enabled —
+// they had signed in successfully and could still touch nothing. This is the
+// seam that lets JWTAuth fall back to the same credential chain the workspace
+// routes already use.
+//
+// It reports only success or failure: the caller must emit the single fixed 401
+// body, so no failure mode reveals which credential form was tried. workspaceID
+// is "" because these routes are not workspace-scoped — the credential resolves
+// against the member's active workspace.
+func (r *Resolver) UserIDFromRequest(c echo.Context) (string, bool) {
+	id, err := r.authenticateHeader(c)
+	if err != nil {
+		return "", false
+	}
+	sc, err := r.Resolve(c.Request().Context(), id, "")
+	if err != nil {
+		return "", false
+	}
+	return sc.UserID, true
+}
+
 // Authenticate is middleware for session-scoped routes (no workspace
 // requirement): GET/POST /workspaces, POST /workspaces/:workspaceID/switch.
 func (r *Resolver) Authenticate(next echo.HandlerFunc) echo.HandlerFunc {

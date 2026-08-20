@@ -398,6 +398,21 @@ func RegisterRoutes(cfg RouteConfig) {
 	api := cfg.App.Group("/api/v1")
 	resolver := NewResolver(cfg.Adapter, cfg.Clock)
 
+	// Teach the legacy authGroup middleware to accept a Stytch session.
+	//
+	// Those routes (notifications, profiles, quotations, …) validate only an
+	// HS256 token, so an employer signed in through Stytch was authenticated yet
+	// got a 401 from every one of them. The hook is injected rather than called
+	// directly because this package imports middleware, so middleware cannot
+	// import it back.
+	//
+	// Gated on the feature flag: with Stytch off, cfg.Adapter is a stub that can
+	// verify nothing, and installing the fallback would only add a wasted remote
+	// call on every malformed token.
+	if IsStytchAuthEnabled() {
+		middleware.SetSessionAuthenticator(resolver.UserIDFromRequest)
+	}
+
 	// ─── 1. Unauthenticated routes ───────────────────────────────────
 	// Signup endpoints with rate limiting.
 	api.POST("/employer/signup/magic-link", func(c echo.Context) error {
