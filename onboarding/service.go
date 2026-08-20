@@ -28,6 +28,9 @@ type ServiceError struct {
 	Code    string
 	Message string
 	Field   string
+	// SuggestedAction names the recovery the caller should offer, when one
+	// exists (e.g. "use_different_email"). Empty means no specific recovery.
+	SuggestedAction string
 }
 
 func (e *ServiceError) Error() string { return e.Message }
@@ -319,16 +322,24 @@ func (s *Service) Authenticate(ctx context.Context, in AuthenticateInput) (AuthR
 	var candidates []users.User
 	accountLinksColl := configs.MI.DB.Collection("account_links")
 
+	// Tracks why every candidate was withheld, so a caller left with zero
+	// candidates gets the specific reason (Req 4.9, 4.10) instead of falling
+	// through to the create-a-user path and colliding on the unique email
+	// index — email is globally unique across every user_type.
+	var withheldNonEmployer, withheldSuspended bool
+
 	for i := range allUsers {
 		u := allUsers[i]
 
 		// Exclude non-customer types (Req 4.9).
 		if u.UserType == "artisan" || u.UserType == "assessor" || u.UserType == "admin" {
+			withheldNonEmployer = true
 			continue
 		}
 
 		// Exclude suspended users (Req 4.10).
 		if u.Status == users.StatusSuspended {
+			withheldSuspended = true
 			continue
 		}
 
@@ -379,6 +390,29 @@ func (s *Service) Authenticate(ctx context.Context, in AuthenticateInput) (AuthR
 			OnboardingID:   state.ID,
 			LinkCandidates: views,
 		}, nil
+	}
+
+	// Zero candidates, but at least one match was withheld: report why rather
+	// than attempting an insert that the unique email index would reject.
+	// Suspended is checked first — it is the more actionable of the two and
+	// directs the caller to support rather than to a different address.
+	if withheldSuspended {
+		return AuthResult{}, &ServiceError{
+			Status:          409,
+			Code:            "account_suspended",
+			Message:         "an account for this email is suspended; please contact support",
+			Field:           "email",
+			SuggestedAction: "contact_support",
+		}
+	}
+	if withheldNonEmployer {
+		return AuthResult{}, &ServiceError{
+			Status:          409,
+			Code:            "email_belongs_to_non_employer",
+			Message:         "this email is already registered as an artisan, assessor, or admin account; use a different email for an employer account or contact support",
+			Field:           "email",
+			SuggestedAction: "use_different_email",
+		}
 	}
 
 	// 7. With zero candidates → insert users document, set stage awaiting_workspace_name (Req 1.3, 1.11-1.13).

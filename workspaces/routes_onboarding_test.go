@@ -412,6 +412,7 @@ func TestWorkspaceProvisionRoute(t *testing.T) {
 			mt.AddMockResponses(
 				mtest.CreateSuccessResponse(), // insert workspace
 				mtest.CreateSuccessResponse(), // insert membership
+				mtest.CreateSuccessResponse(), // insert account_link (Req 5.8)
 				mtest.CreateSuccessResponse(), // audit log entry
 				mtest.CreateCursorResponse(0, nsOf("memberships"), mtest.FirstBatch, bson.D{
 					{Key: "_id", Value: "membership-1"},

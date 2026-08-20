@@ -75,7 +75,7 @@ func respondOnboardingServiceError(c echo.Context, err error, fallbackCode, fall
 			serviceErr.Code,
 			serviceErr.Message,
 			serviceErr.Field,
-			"",
+			serviceErr.SuggestedAction,
 			nil,
 		)
 	}
@@ -437,7 +437,7 @@ func RegisterRoutes(cfg RouteConfig) {
 					serviceErr.Code,
 					serviceErr.Message,
 					serviceErr.Field,
-					"",
+					serviceErr.SuggestedAction,
 					nil,
 				)
 			}
@@ -523,7 +523,7 @@ func RegisterRoutes(cfg RouteConfig) {
 					serviceErr.Code,
 					serviceErr.Message,
 					serviceErr.Field,
-					"",
+					serviceErr.SuggestedAction,
 					nil,
 				)
 			}

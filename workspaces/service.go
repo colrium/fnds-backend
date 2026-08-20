@@ -8,6 +8,7 @@ import (
 
 	"backend/audit"
 	"backend/configs"
+	"backend/identity"
 	"backend/ratelimit"
 	"backend/stytch"
 
@@ -220,6 +221,18 @@ func (w *WorkspaceService) CreateForOnboarding(ctx context.Context, in CreateFor
 		return CreateForOnboardingResult{}, fmt.Errorf("insert membership: %w", err)
 	}
 
+	// Step 6b: Record the Account_Link naming this users document and the
+	// Stytch Member that authenticated it (Req 5.8, "at signup or at link
+	// time"). Resolver.Resolve requires one on every request (Req 16.4,
+	// errUnlinkedMember), so without this a freshly-provisioned workspace
+	// would be permanently unreachable through the ordinary session path.
+	// A duplicate key means a link already exists for this user — exactly one
+	// per users document is the invariant (uniq_account_link_user), so a
+	// retried provision is a no-op rather than an error.
+	if err := w.ensureAccountLink(ctx, in.UserID, stytchMemberID, stytchOrgID, in.Email); err != nil {
+		return CreateForOnboardingResult{}, err
+	}
+
 	// Step 7: Write one audit entry for workspace creation (Req 23.1).
 	w.audit.Write(ctx, audit.WriteInput{
 		WorkspaceID: workspaceID,
@@ -265,6 +278,36 @@ func (w *WorkspaceService) ByID(ctx context.Context, workspaceID string) (Worksp
 		return Workspace{}, fmt.Errorf("get workspace: %w", err)
 	}
 	return ws, nil
+}
+
+// ensureAccountLink records the one Account_Link permitted per users document
+// (Req 5.8). A duplicate key means the link already exists — that is the
+// invariant holding, not a failure, so it is treated as success. Callers that
+// provision a workspace must call this: Resolver.Resolve rejects any session
+// whose user holds no Account_Link (Req 16.4).
+func (w *WorkspaceService) ensureAccountLink(ctx context.Context, userID, stytchMemberID, stytchOrgID, linkedEmail string) error {
+	if userID == "" || stytchMemberID == "" {
+		// Nothing to link against; the caller's own validation owns this case.
+		return nil
+	}
+
+	now := w.clock.Now().UTC()
+	link := identity.AccountLink{
+		ID:                   uuid.New().String(),
+		UserID:               userID,
+		StytchMemberID:       stytchMemberID,
+		StytchOrganizationID: stytchOrgID,
+		LinkedEmail:          linkedEmail,
+		LinkMethod:           "signup",
+		CreatedAt:            now,
+		UpdatedAt:            now,
+	}
+
+	_, err := configs.MI.DB.Collection("account_links").InsertOne(ctx, link)
+	if err != nil && !mongo.IsDuplicateKeyError(err) {
+		return fmt.Errorf("insert account link: %w", err)
+	}
+	return nil
 }
 
 // Rename changes the workspace name. Retains the existing slug, propagates
