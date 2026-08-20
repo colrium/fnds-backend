@@ -14,6 +14,7 @@ advanta_base_url       = "https://quicksms.advantasms.com"
 turnstile_hostname     = ""
 betterstack_ingest_url = ""
 
+stytch_public_token          = "public-token-test-474cf1de-9817-4125-a46f-02a355255d0c"
 stytch_env                   = "test"
 stytch_employer_auth_enabled = "true"
 
