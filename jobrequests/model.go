@@ -461,6 +461,26 @@ func GetCompanyByName(ownerID, name string) (*Company, error) {
 	return &c, nil
 }
 
+// MaxCompaniesPerOwner caps how many company profiles one employer may create.
+// One, for now.
+//
+// Scoped by owner_id rather than workspace_id because companies do not yet carry
+// a workspace_id — that is deferred spec task 13 (see
+// workspaces.EmployerCreateDoc). Since an employer also has exactly one
+// workspace, the two scopes currently describe the same set; when task 13 lands,
+// this cap should move to workspace_id so the limit follows the business rather
+// than whichever member happened to create the profile.
+const MaxCompaniesPerOwner = 1
+
+// CountCompaniesByOwner counts an owner's company profiles without decoding them,
+// for the MaxCompaniesPerOwner check.
+func CountCompaniesByOwner(ownerID string) (int64, error) {
+	return configs.MI.DB.Collection("companies").CountDocuments(
+		context.TODO(),
+		bson.M{"owner_id": ownerID},
+	)
+}
+
 func ListCompaniesByOwner(ownerID string) ([]Company, error) {
 	opts := options.Find().SetSort(bson.M{"created_at": -1})
 	cursor, err := configs.MI.DB.Collection("companies").Find(context.TODO(), bson.M{"owner_id": ownerID}, opts)

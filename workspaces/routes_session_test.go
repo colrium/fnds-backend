@@ -201,6 +201,12 @@ func TestHandleCreateWorkspace_HappyPath(t *testing.T) {
 				{Key: "first_name", Value: "Ada"},
 				{Key: "last_name", Value: "Lovelace"},
 			}),
+			// memberships.CountDocuments — the one-workspace-per-employer cap.
+			// Zero, so this caller is creating their first workspace and the cap
+			// permits it.
+			mtest.CreateCursorResponse(1, ns("memberships"), mtest.FirstBatch, bson.D{
+				{Key: "n", Value: int32(0)},
+			}),
 			// workspaces.InsertOne (insertWorkspaceWithSlugRetry).
 			mtest.CreateSuccessResponse(),
 			// memberships.InsertOne (owner membership).

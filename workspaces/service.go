@@ -30,6 +30,22 @@ type WorkspaceService struct {
 // insertWorkspaceWithSlugRetry.
 const maxSlugRetryAttempts = 100
 
+// maxWorkspacesPerEmployer caps how many workspaces one employer may belong to.
+// One, for now — multi-workspace support exists throughout the model (switching,
+// per-workspace roles, ListForUser) and is only gated here, so raising this is
+// the whole change.
+const maxWorkspacesPerEmployer = 1
+
+// ActiveWorkspaceCount counts the workspaces a user actively belongs to. Uses the
+// same {user_id, status} prefix as the memberships_user_status_active index that
+// ResolvePostAuth relies on, so it is an index-only count rather than a scan.
+func (w *WorkspaceService) ActiveWorkspaceCount(ctx context.Context, userID string) (int64, error) {
+	return configs.MI.DB.Collection("memberships").CountDocuments(ctx, bson.M{
+		"user_id": userID,
+		"status":  string(MembershipActive),
+	})
+}
+
 // NewWorkspaceService constructs a WorkspaceService.
 func NewWorkspaceService(adapter *stytch.Adapter, auditLogger *audit.Logger, clock stytch.Clock, limiter ratelimit.RateLimiter) *WorkspaceService {
 	return &WorkspaceService{
@@ -548,6 +564,24 @@ func (w *WorkspaceService) CreateAdditional(ctx context.Context, userID, rawName
 				Message:    "too many workspaces created recently, try again later",
 				RetryAfter: decision.RetryAfter,
 			}
+		}
+	}
+
+	// Step 1b: One workspace per employer, for now.
+	//
+	// The check counts rather than refusing outright because this same method
+	// serves the employer who belongs to no workspace at all (post_auth's
+	// needs_workspace) — they must still be able to create their first one.
+	// CreateForOnboarding is deliberately not capped: it IS the first workspace.
+	count, err := w.ActiveWorkspaceCount(ctx, userID)
+	if err != nil {
+		return CreateForOnboardingResult{}, fmt.Errorf("count workspaces: %w", err)
+	}
+	if count >= maxWorkspacesPerEmployer {
+		return CreateForOnboardingResult{}, &WorkspaceError{
+			Status:  409,
+			Code:    "workspace_limit_reached",
+			Message: "you already have a workspace; renaming it is in workspace settings",
 		}
 	}
 

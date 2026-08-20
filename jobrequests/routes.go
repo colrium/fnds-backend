@@ -297,6 +297,17 @@ func HandleCreateCompany(ctx echo.Context) error {
 		return responses.SendError(ctx, 400, err.Error())
 	}
 
+	// One company profile per employer, for now. Checked before the name-collision
+	// lookup below, which only catches a second company sharing the first one's
+	// name — a differently named one would otherwise slip through.
+	count, err := CountCompaniesByOwner(userID)
+	if err != nil {
+		return responses.SendError(ctx, 500, "Failed to look up company")
+	}
+	if count >= MaxCompaniesPerOwner {
+		return responses.SendError(ctx, 409, "You already have a company profile; edit it instead of creating another")
+	}
+
 	existing, err := GetCompanyByName(userID, c.Name)
 	if err != nil {
 		return responses.SendError(ctx, 500, "Failed to look up company")
