@@ -1,9 +1,12 @@
 package cvparser
 
 import (
+	"log/slog"
 	"math"
 	"sort"
 	"strings"
+
+	"backend/counties"
 )
 
 // maxCollectionItems is the maximum number of items allowed in any collection
@@ -17,7 +20,7 @@ type AutofillPayload struct {
 	// Scalar fields with confidence
 	Address               *FieldWithConfidence        `json:"address,omitempty"`
 	City                  *FieldWithConfidence        `json:"city,omitempty"`
-	State                 *FieldWithConfidence        `json:"state,omitempty"`
+	County                *FieldWithConfidence        `json:"county,omitempty"`
 	HighestEducationLevel *FieldWithConfidence        `json:"highest_education_level,omitempty"`
 	Certificate           *FieldWithConfidence        `json:"certificate,omitempty"`
 	Institution           *FieldWithConfidence        `json:"institution,omitempty"`
@@ -107,7 +110,7 @@ func (m *Mapper) MapToAutofill(result *ExtractionResult) *AutofillPayload {
 		conf := scores.PersonalDetails
 		payload.Address = mapStringField(result.PersonalDetails.Address, conf)
 		payload.City = mapStringField(result.PersonalDetails.City, conf)
-		payload.State = mapStringField(result.PersonalDetails.State, conf)
+		payload.County = mapCountyField(result.PersonalDetails.County, conf)
 	}
 
 	// Map education
@@ -231,6 +234,29 @@ func mapStringField(value *string, confidence float64) *FieldWithConfidence {
 	}
 	return &FieldWithConfidence{
 		Value:      *value,
+		Confidence: clampConfidence(confidence),
+	}
+}
+
+// mapCountyField normalizes an LLM-extracted county string against the
+// canonical list of Kenya's 47 counties before building the autofill field.
+// If the extracted value cannot be matched to any known county, the field is
+// omitted (returns nil) so the dropdown does not receive an invalid value.
+func mapCountyField(value *string, confidence float64) *FieldWithConfidence {
+	if value == nil || *value == "" || isUnknownPlaceholder(*value) {
+		return nil
+	}
+	canonical, ok := counties.Normalize(*value)
+	if !ok {
+		slog.Debug(
+			"CV county normalization failed",
+			"field", "county",
+			"source", "cv_parser",
+		)
+		return nil
+	}
+	return &FieldWithConfidence{
+		Value:      canonical,
 		Confidence: clampConfidence(confidence),
 	}
 }

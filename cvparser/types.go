@@ -16,7 +16,7 @@ type ExtractionResult struct {
 type PersonalDetails struct {
 	Address *string `json:"address"`
 	City    *string `json:"city"`
-	State   *string `json:"state"`
+	County  *string `json:"county"`
 }
 
 // Education contains educational background extracted from a CV.

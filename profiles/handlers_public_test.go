@@ -347,19 +347,31 @@ func TestHandleUpdateProfilePostUpdateFailuresAreNonFatal(t *testing.T) {
 }
 
 func TestHandleUpdateProfileValidationFailureDoesNotInvalidateCache(t *testing.T) {
-	server := useProfileTestRedis(t)
-	const slug = "alice-kamau-plumber-nairobi"
-	seedPublicProfileCaches(t, server, slug)
+	tests := []struct {
+		name string
+		body string
+	}{
+		{name: "invalid skill selection", body: `{"skills":["skill-1","skill-2"]}`},
+		{name: "invalid county", body: `{"county":"California"}`},
+	}
 
-	recorder, err := runUpdateProfileRequest("user-1", `{"skills":["skill-1","skill-2"]}`)
-	if err != nil {
-		t.Fatalf("HandleUpdateProfile() error = %v", err)
-	}
-	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400; body: %s", recorder.Code, recorder.Body.String())
-	}
-	if !server.Exists("artisan-profile:/api/v1/artisans/" + slug) {
-		t.Error("validation failure unexpectedly invalidated the profile cache")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			server := useProfileTestRedis(t)
+			const slug = "alice-kamau-plumber-nairobi"
+			seedPublicProfileCaches(t, server, slug)
+
+			recorder, err := runUpdateProfileRequest("user-1", test.body)
+			if err != nil {
+				t.Fatalf("HandleUpdateProfile() error = %v", err)
+			}
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body: %s", recorder.Code, recorder.Body.String())
+			}
+			if !server.Exists("artisan-profile:/api/v1/artisans/" + slug) {
+				t.Error("validation failure unexpectedly invalidated the profile cache")
+			}
+		})
 	}
 }
 

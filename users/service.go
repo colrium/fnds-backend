@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"backend/configs"
+	"backend/counties"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
@@ -102,6 +103,14 @@ func GetProfile(ctx context.Context, userID string) (*User, error) {
 }
 
 func UpdateProfile(ctx context.Context, userID string, req ProfileUpdateRequest) error {
+	if req.County != "" {
+		canonical, ok := counties.Normalize(req.County)
+		if !ok {
+			return counties.ErrInvalidCounty
+		}
+		req.County = canonical
+	}
+
 	user, err := GetUserByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("user not found")
@@ -155,8 +164,8 @@ func UpdateProfile(ctx context.Context, userID string, req ProfileUpdateRequest)
 	if req.City != "" {
 		profileUpdates["city"] = req.City
 	}
-	if req.State != "" {
-		profileUpdates["state"] = req.State
+	if req.County != "" {
+		profileUpdates["county"] = req.County
 	}
 	if req.Zip != "" {
 		profileUpdates["zip"] = req.Zip
@@ -317,7 +326,7 @@ type ProfileUpdateRequest struct {
 	RecentGoodConduct              *bool                      `json:"recent_good_conduct"`
 	Address                        string                     `json:"address"`
 	City                           string                     `json:"city"`
-	State                          string                     `json:"state"`
+	County                         string                     `json:"county"`
 	Zip                            string                     `json:"zip"`
 	Country                        string                     `json:"country"`
 	SkillAcquisitionMode           string                     `json:"skill_acquisition_mode"`

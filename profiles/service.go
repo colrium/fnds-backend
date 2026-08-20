@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"backend/configs"
+	"backend/counties"
 	"backend/users"
 
 	"github.com/google/uuid"
@@ -30,7 +31,7 @@ type ProfileUpdateRequest struct {
 	RecentGoodConduct              *bool                      `json:"recent_good_conduct"`
 	Address                        string                     `json:"address"`
 	City                           string                     `json:"city"`
-	State                          string                     `json:"state"`
+	County                         string                     `json:"county"`
 	Zip                            string                     `json:"zip"`
 	Country                        string                     `json:"country"`
 	HighestEducationLevel          string                     `json:"highest_education_level"`
@@ -58,7 +59,10 @@ type ProfileUpdateRequest struct {
 	References                     []ReferenceInput           `json:"references"`
 }
 
-var ErrInvalidSkillSelection = errors.New("select exactly one valid skill")
+var (
+	ErrInvalidSkillSelection = errors.New("select exactly one valid skill")
+	ErrInvalidCounty         = counties.ErrInvalidCounty
+)
 
 type WorkingHourInput struct {
 	Day         string `json:"day" bson:"day"`
@@ -109,7 +113,7 @@ type FullProfile struct {
 	RecentGoodConduct              bool                       `json:"recent_good_conduct"`
 	Address                        string                     `json:"address"`
 	City                           string                     `json:"city"`
-	State                          string                     `json:"state"`
+	County                         string                     `json:"county"`
 	Zip                            string                     `json:"zip"`
 	Country                        string                     `json:"country"`
 	HighestEducationLevel          string                     `json:"highest_education_level"`
@@ -165,7 +169,7 @@ func GetFullProfile(ctx context.Context, userID string) (*FullProfile, error) {
 		full.RecentGoodConduct = profile.RecentGoodConduct
 		full.Address = profile.Address
 		full.City = profile.City
-		full.State = profile.State
+		full.County = profile.County
 		full.Zip = profile.Zip
 		full.Country = profile.Country
 		full.HighestEducationLevel = profile.HighestEducationLevel
@@ -247,7 +251,7 @@ func buildProfileUpdates(req ProfileUpdateRequest) bson.M {
 	setStr("business_registration_number", req.BusinessRegistrationNumber)
 	setStr("address", req.Address)
 	setStr("city", req.City)
-	setStr("state", req.State)
+	setStr("county", req.County)
 	setStr("zip", req.Zip)
 	setStr("country", req.Country)
 	setStr("highest_education_level", req.HighestEducationLevel)
@@ -287,6 +291,14 @@ func buildProfileUpdates(req ProfileUpdateRequest) bson.M {
 }
 
 func UpdateProfile(ctx context.Context, userID string, req ProfileUpdateRequest) error {
+	if req.County != "" {
+		canonical, ok := counties.Normalize(req.County)
+		if !ok {
+			return ErrInvalidCounty
+		}
+		req.County = canonical
+	}
+
 	if err := validateProfileUpdate(req); err != nil {
 		return err
 	}

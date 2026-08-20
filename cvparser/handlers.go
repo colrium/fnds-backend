@@ -254,7 +254,7 @@ func countPopulatedFields(payload *AutofillPayload) int {
 	if payload.City != nil {
 		count++
 	}
-	if payload.State != nil {
+	if payload.County != nil {
 		count++
 	}
 	if payload.HighestEducationLevel != nil {

@@ -296,9 +296,9 @@ const cvExtractionInputSchema = `{
       "properties": {
         "address": { "type": ["string", "null"] },
         "city": { "type": ["string", "null"] },
-        "state": { "type": ["string", "null"] }
+        "county": { "type": ["string", "null"], "description": "The Kenya county where the person resides. Must be one of the 47 official county names." }
       },
-      "required": ["address", "city", "state"]
+      "required": ["address", "city"]
     },
     "education": {
       "type": "object",

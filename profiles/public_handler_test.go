@@ -246,7 +246,7 @@ func TestHandleGetPublicArtisanProfile_SuccessEnvelopeCacheAndContext(t *testing
 	profile := &Profile{
 		BusinessName:      "Kamau Painters",
 		City:              "Nakuru",
-		State:             "Nakuru County",
+		County:            "Nakuru",
 		Country:           "Kenya",
 		YearsOfExperience: 8,
 		Skills:            []string{"skill-1"},
@@ -337,7 +337,7 @@ func TestHandleGetPublicArtisanProfile_SuccessEnvelopeCacheAndContext(t *testing
 		LastName:           "Kamau",
 		BusinessName:       "Kamau Painters",
 		City:               "Nakuru",
-		County:             "Nakuru County",
+		County:             "Nakuru",
 		Country:            "Kenya",
 		YearsOfExperience:  8,
 		Skills:             []string{"Painting"},

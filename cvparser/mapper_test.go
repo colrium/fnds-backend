@@ -1,6 +1,9 @@
 package cvparser
 
 import (
+	"bytes"
+	"log/slog"
+	"strings"
 	"testing"
 )
 
@@ -19,6 +22,18 @@ func TestMapToAutofill_NilResult(t *testing.T) {
 	}
 }
 
+func TestMapToAutofill_NilPersonalDetails(t *testing.T) {
+	t.Parallel()
+	m := NewMapper()
+	payload := m.MapToAutofill(&ExtractionResult{PersonalDetails: nil})
+	if payload == nil {
+		t.Fatal("MapToAutofill() returned nil, want empty payload")
+	}
+	if payload.Address != nil || payload.City != nil || payload.County != nil {
+		t.Fatalf("personal detail fields = (%v, %v, %v), want all nil", payload.Address, payload.City, payload.County)
+	}
+}
+
 func TestMapToAutofill_NilFieldsOmitted(t *testing.T) {
 	t.Parallel()
 	m := NewMapper()
@@ -26,7 +41,7 @@ func TestMapToAutofill_NilFieldsOmitted(t *testing.T) {
 		PersonalDetails: &PersonalDetails{
 			Address: nil,
 			City:    ptr("Nairobi"),
-			State:   nil,
+			County:  nil,
 		},
 		ConfidenceScores: &ConfidenceScores{PersonalDetails: 0.9},
 	}
@@ -37,8 +52,8 @@ func TestMapToAutofill_NilFieldsOmitted(t *testing.T) {
 	if payload.City == nil || payload.City.Value != "Nairobi" {
 		t.Fatalf("City = %v, want Nairobi", payload.City)
 	}
-	if payload.State != nil {
-		t.Fatal("expected nil State for nil input")
+	if payload.County != nil {
+		t.Fatal("expected nil County for nil input")
 	}
 }
 
@@ -237,5 +252,80 @@ func TestMapToAutofill_ReferencesMapAllFields(t *testing.T) {
 	}
 	if ref.Location == nil || ref.Location.Value != "Nairobi" {
 		t.Fatalf("ref.Location = %v", ref.Location)
+	}
+}
+
+func TestMapToAutofill_CountyNormalization(t *testing.T) {
+	t.Parallel()
+	m := NewMapper()
+
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantNil bool
+	}{
+		{"exact match", "Nairobi", "Nairobi", false},
+		{"lowercase", "nairobi", "Nairobi", false},
+		{"with county suffix", "Nairobi County", "Nairobi", false},
+		{"uppercase with suffix", "MOMBASA COUNTY", "Mombasa", false},
+		{"repeated whitespace", "Nairobi  County", "Nairobi", false},
+		{"tabs within name", "Uasin\tGishu", "Uasin Gishu", false},
+		{"alternative spelling", "Muranga", "Murang'a", false},
+		{"hyphenated alternative", "Taita Taveta", "Taita-Taveta", false},
+		{"invalid county", "California", "", true},
+		{"random text", "Some Random Place", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result := &ExtractionResult{
+				PersonalDetails:  &PersonalDetails{County: ptr(tt.input)},
+				ConfidenceScores: &ConfidenceScores{PersonalDetails: 0.9},
+			}
+			payload := m.MapToAutofill(result)
+			if tt.wantNil {
+				if payload.County != nil {
+					t.Fatalf("County = %v, want nil for input %q", payload.County, tt.input)
+				}
+			} else {
+				if payload.County == nil {
+					t.Fatalf("County is nil, want %q for input %q", tt.want, tt.input)
+				}
+				if payload.County.Value != tt.want {
+					t.Fatalf("County.Value = %q, want %q for input %q", payload.County.Value, tt.want, tt.input)
+				}
+			}
+		})
+	}
+}
+
+func TestMapToAutofill_InvalidCountyDiagnosticOmitsRawValue(t *testing.T) {
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	const rawCounty = "PRIVATE-CV-DERIVED-LOCATION"
+	payload := NewMapper().MapToAutofill(&ExtractionResult{
+		PersonalDetails: &PersonalDetails{County: ptr(rawCounty)},
+	})
+	if payload.County != nil {
+		t.Fatalf("County = %v, want nil for invalid county", payload.County)
+	}
+
+	output := logs.String()
+	for _, expected := range []string{
+		`"msg":"CV county normalization failed"`,
+		`"field":"county"`,
+		`"source":"cv_parser"`,
+	} {
+		if !strings.Contains(output, expected) {
+			t.Errorf("diagnostic %q missing from log: %s", expected, output)
+		}
+	}
+	if strings.Contains(output, rawCounty) {
+		t.Fatalf("diagnostic leaked raw CV-derived county: %s", output)
 	}
 }

@@ -29,7 +29,7 @@ type ApplicantProfessionalProfile struct {
 	ApplicantPhone         string                              `json:"applicant_phone"`
 	Avatar                 string                              `json:"avatar"`
 	City                   string                              `json:"city"`
-	State                  string                              `json:"state"`
+	County                 string                              `json:"county"`
 	Country                string                              `json:"country"`
 	Skills                 []string                            `json:"skills"`
 	PreferredLocations     []string                            `json:"preferred_locations"`
@@ -73,7 +73,7 @@ func BuildApplicantProfessionalProfile(
 	locationCandidates := append(
 		append([]string{}, preferredLocations...),
 		full.City,
-		full.State,
+		full.County,
 		full.Country,
 	)
 
@@ -83,7 +83,7 @@ func BuildApplicantProfessionalProfile(
 		ApplicantPhone:         full.Phone,
 		Avatar:                 full.Avatar,
 		City:                   full.City,
-		State:                  full.State,
+		County:                 full.County,
 		Country:                full.Country,
 		Skills:                 skills,
 		PreferredLocations:     preferredLocations,

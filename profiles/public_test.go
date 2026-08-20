@@ -39,7 +39,7 @@ func TestBuildPublicArtisanProfile_MapsAllPublicFields(t *testing.T) {
 	profile := &Profile{
 		BusinessName:                   "Kamau Painters",
 		City:                           "Nakuru",
-		State:                          "Nakuru County",
+		County:                         "Nakuru",
 		Country:                        "Kenya",
 		HighestEducationLevel:          "Degree",
 		Institution:                    "UoN",
@@ -94,7 +94,7 @@ func TestBuildPublicArtisanProfile_MapsAllPublicFields(t *testing.T) {
 		AvatarURL:              "https://api.example.test/api/v1/avatars/user-123?v=1700000000000000123",
 		BusinessName:           "Kamau Painters",
 		City:                   "Nakuru",
-		County:                 "Nakuru County",
+		County:                 "Nakuru",
 		Country:                "Kenya",
 		HighestEducationLevel:  "Degree",
 		Institution:            "UoN",
@@ -187,7 +187,7 @@ func TestBuildPublicArtisanProfile_JSONUsesStrictAllowList(t *testing.T) {
 		&Profile{
 			BusinessName:                   "Kamau Painters",
 			City:                           "Nakuru",
-			State:                          "Nakuru County",
+			County:                         "Nakuru",
 			Country:                        "Kenya",
 			HighestEducationLevel:          "Degree",
 			Institution:                    "UoN",

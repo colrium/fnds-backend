@@ -125,7 +125,7 @@ func BuildPublicArtisanProfile(
 	if profile != nil {
 		dto.BusinessName = profile.BusinessName
 		dto.City = profile.City
-		dto.County = profile.State // State maps to County in public view
+		dto.County = profile.County
 		dto.Country = profile.Country
 		dto.HighestEducationLevel = profile.HighestEducationLevel
 		dto.Institution = profile.Institution

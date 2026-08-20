@@ -29,7 +29,7 @@ type Profile struct {
 	RecentGoodConduct              bool      `json:"recent_good_conduct" bson:"recent_good_conduct"`
 	Address                        string    `json:"address" bson:"address"`
 	City                           string    `json:"city" bson:"city"`
-	State                          string    `json:"state" bson:"state"`
+	County                         string    `json:"county" bson:"county"`
 	Zip                            string    `json:"zip" bson:"zip"`
 	Country                        string    `json:"country" bson:"country"`
 	HighestEducationLevel          string    `json:"highest_education_level" bson:"highest_education_level"`

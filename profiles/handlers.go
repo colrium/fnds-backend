@@ -74,7 +74,7 @@ func HandleUpdateProfile(ctx echo.Context) error {
 	}
 
 	if err := UpdateProfile(ctx.Request().Context(), userID, req); err != nil {
-		if errors.Is(err, ErrInvalidSkillSelection) {
+		if errors.Is(err, ErrInvalidSkillSelection) || errors.Is(err, ErrInvalidCounty) {
 			return responses.SendError(ctx, 400, err.Error())
 		}
 		return responses.SendError(ctx, 500, err.Error())
