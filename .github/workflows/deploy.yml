@@ -4,9 +4,7 @@ on:
   push:
     branches:
       - main
-      # `production` intentionally omitted: this repo's Terraform stack has no
-      # env/production.tfvars yet (production hasn't been migrated off the
-      # shared platform stack). Re-add once production is migrated.
+      - production
 
 env:
   AWS_REGION: af-south-1
