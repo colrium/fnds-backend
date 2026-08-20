@@ -91,6 +91,37 @@ variable "stytch_employer_auth_enabled" {
   default     = "false"
 }
 
+# The app treats an unset value as false, which would reject every employer who
+# still holds a legacy password credential. Default to true so the rollback path
+# (Req 21.12: legacy login keeps working for at least 60 days after cutover)
+# survives an omitted tfvar. Set to false only once migration is verified.
+variable "legacy_employer_auth_enabled" {
+  description = "Keeps POST /api/v1/login working for employers not yet migrated to Stytch."
+  type        = string
+  default     = "true"
+}
+
+# Workspace data-retention purge. Disabled by default: with purge off the job
+# only reports what it WOULD delete. The ages below are floors set by
+# requirements (Req 12.10, Req 23.6) — the app fails startup on a smaller value.
+variable "workspace_retention_purge_enabled" {
+  description = "Whether the retention job actually deletes, or only reports."
+  type        = string
+  default     = "false"
+}
+
+variable "workspace_retention_max_invitation_age" {
+  description = "Age at which a non-pending invitation becomes purgeable. Minimum 4320h."
+  type        = string
+  default     = "8760h"
+}
+
+variable "workspace_retention_max_audit_age" {
+  description = "Age at which an audit log entry becomes purgeable. Minimum 17520h."
+  type        = string
+  default     = "26280h"
+}
+
 variable "zoho_accounts_base_url" {
   description = "Zoho datacenter host override. Empty uses the app's .com default."
   type        = string

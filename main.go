@@ -351,6 +351,12 @@ func main() {
 
 	workspaceService := workspaces.NewWorkspaceService(stytchAdapter, auditLogger, stytchClock, rateLimiter)
 	membershipService := workspaces.NewMembershipService(stytchAdapter, auditLogger, stytchClock, txSupported)
+	// Req 17.5: suspending a user revokes their Stytch workspace sessions.
+	// context.Background rather than the request context — revocation must
+	// finish even if the admin's client disconnects mid-request.
+	adminapi.SetSuspendHook(func(userID string) {
+		membershipService.RevokeAllSessionsForUser(context.Background(), userID)
+	})
 	invitationService := invitations.NewService(rateLimiter, auditLogger, stytchClock, membershipService)
 	invitationHandlers := invitations.NewHTTPHandlers(invitations.HandlersConfig{
 		Service:          invitationService,

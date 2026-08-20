@@ -79,6 +79,40 @@ type updateUserStatusRequest struct {
 	Status string `json:"status"`
 }
 
+// SuspendHook runs after a users document is successfully set to
+// users.StatusSuspended. Req 17.5 requires suspension to revoke the person's
+// Stytch workspace sessions, and workspaces.MembershipService owns that
+// capability — but this package cannot depend on it at construction time,
+// because every handler here is a package-level function reached through
+// RegisterAdminRoutes(g), which carries no dependencies.
+//
+// It is a hook rather than a returned error because revocation is
+// best-effort: Req 17.7 says a failed revoke falls back on the membership
+// check performed on every request, so a Stytch outage must not turn a
+// legitimate suspension into a 500.
+type SuspendHook func(userID string)
+
+// onUserSuspended is nil until SetSuspendHook is called. It stays nil in tests
+// and in deployments with Stytch employer auth disabled, where there are no
+// Stytch sessions to revoke.
+var onUserSuspended SuspendHook
+
+// SetSuspendHook registers the revocation hook. Called once from main.go
+// during startup, before the server begins serving.
+func SetSuspendHook(hook SuspendHook) {
+	onUserSuspended = hook
+}
+
+// notifySuspension fires the hook only for a suspension, and only when one is
+// registered — a deployment with Stytch employer auth disabled never calls
+// SetSuspendHook, so the nil case is the normal path there, not an edge case.
+func notifySuspension(status string, userID string) {
+	if status != users.StatusSuspended || onUserSuspended == nil {
+		return
+	}
+	onUserSuspended(userID)
+}
+
 func HandleUpdateUserStatus(c echo.Context) error {
 	id := c.Param("id")
 
@@ -100,6 +134,10 @@ func HandleUpdateUserStatus(c echo.Context) error {
 	if err := users.UpdateUser(id, bson.M{"status": req.Status}); err != nil {
 		return responses.SendError(c, http.StatusInternalServerError, "failed to update user status")
 	}
+
+	// Fire before reloading the user: the suspension is already durable, and a
+	// failure to read it back must not skip revocation.
+	notifySuspension(req.Status, id)
 
 	updated, err := users.GetUserByID(c.Request().Context(), id)
 	if err != nil {

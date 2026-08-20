@@ -46,6 +46,10 @@ type routeTestOnboardingService struct {
 	completeErr         error
 	completeStateID     string
 	completeWorkspaceID string
+
+	submitNameErr   error
+	submitNameFirst string
+	submitNameLast  string
 }
 
 func (s *routeTestOnboardingService) InitiateMagicLink(
@@ -84,6 +88,13 @@ func (s *routeTestOnboardingService) IssueLinkChallenge(context.Context, string)
 func (s *routeTestOnboardingService) VerifyLinkChallenge(_ context.Context, _ string, code string) (onboarding.LinkResult, error) {
 	s.verifyChallengeInput = code
 	return s.verifyChallengeResult, s.verifyChallengeErr
+}
+
+func (s *routeTestOnboardingService) SubmitName(_ context.Context, stateID, first, last string) error {
+	s.stateByIDInput = stateID
+	s.submitNameFirst = first
+	s.submitNameLast = last
+	return s.submitNameErr
 }
 
 func (s *routeTestOnboardingService) CompleteOnboarding(_ context.Context, stateID, workspaceID string) error {

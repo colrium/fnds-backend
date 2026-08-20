@@ -17,6 +17,12 @@ betterstack_min_level  = "info"
 
 stytch_env                   = "live"
 stytch_employer_auth_enabled = "false"
+# Must stay "true" while stytch_employer_auth_enabled is "false": with it unset
+# the app blocks legacy login for any employer already holding an account_link.
+legacy_employer_auth_enabled = "true"
+
+# Retention purge stays in report-only mode until a data-retention policy is set.
+workspace_retention_purge_enabled = "false"
 
 unset_secrets = [
   "FLUTTERWAVE_SECRET_KEY",

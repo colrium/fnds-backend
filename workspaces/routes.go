@@ -45,6 +45,18 @@ type onboardingService interface {
 	IssueLinkChallenge(context.Context, string) (onboarding.IssueChallengeResult, error)
 	VerifyLinkChallenge(context.Context, string, string) (onboarding.LinkResult, error)
 	CompleteOnboarding(context.Context, string, string) error
+	SubmitName(context.Context, string, string, string) error
+}
+
+// onboardingStateResponse is the body of GET /employer/onboarding/state. It
+// exposes only what the frontend needs to resume the flow — deliberately not
+// the whole OnboardingState, which holds the Stytch intermediate session
+// token and the link-challenge material.
+type onboardingStateResponse struct {
+	Stage     string `json:"stage"`
+	Email     string `json:"email"`
+	FirstName string `json:"first_name,omitempty"`
+	LastName  string `json:"last_name,omitempty"`
 }
 
 // onboardingTicketClaims reads the Bearer Onboarding_Ticket from the
@@ -630,11 +642,57 @@ func RegisterRoutes(cfg RouteConfig) {
 
 	// ─── 2. Onboarding-ticket scoped routes ──────────────────────────
 	onboardingGroup := api.Group("/employer/onboarding")
+
+	// Lets a caller holding a ticket recover which step they are on — a
+	// reloaded tab keeps the ticket in sessionStorage but loses the in-memory
+	// stage, and the ticket's own stage claim is a snapshot from mint time, so
+	// the document is the only current source.
 	onboardingGroup.GET("/state", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
+		claims, err := onboardingTicketClaims(c)
+		if err != nil {
+			return invalidOnboardingTicket(c)
+		}
+
+		state, err := cfg.OnboardingService.StateByID(c.Request().Context(), claims.StateID)
+		if err != nil {
+			return respondOnboardingServiceError(c, err,
+				"onboarding_state_unavailable", "could not load your onboarding progress")
+		}
+
+		return responses.SendOK(c, onboardingStateResponse{
+			Stage:     string(state.Stage),
+			Email:     state.Email,
+			FirstName: state.FirstName,
+			LastName:  state.LastName,
+		}, "Onboarding state retrieved")
 	})
+
+	// Collects a name when Stytch did not report one (a magic link carries no
+	// name, unlike OAuth), so an employer provisioned this way is not left
+	// nameless (Req 1.15).
 	onboardingGroup.POST("/name", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{"success": true})
+		claims, err := onboardingTicketClaims(c)
+		if err != nil {
+			return invalidOnboardingTicket(c)
+		}
+
+		var request struct {
+			FirstName string `json:"first_name"`
+			LastName  string `json:"last_name"`
+		}
+		if err := c.Bind(&request); err != nil {
+			return responses.SendErrorWithCode(c, http.StatusBadRequest,
+				"invalid_request", "invalid request body", "", "", nil)
+		}
+
+		if err := cfg.OnboardingService.SubmitName(
+			c.Request().Context(), claims.StateID, request.FirstName, request.LastName,
+		); err != nil {
+			return respondOnboardingServiceError(c, err,
+				"onboarding_name_failed", "could not save your name")
+		}
+
+		return responses.SendOK(c, nil, "Name saved")
 	})
 	onboardingGroup.POST("/workspace", func(c echo.Context) error {
 		claims, err := onboardingTicketClaims(c)

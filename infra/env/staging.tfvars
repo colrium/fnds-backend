@@ -17,6 +17,12 @@ betterstack_ingest_url = ""
 stytch_public_token          = "public-token-test-474cf1de-9817-4125-a46f-02a355255d0c"
 stytch_env                   = "test"
 stytch_employer_auth_enabled = "true"
+# Existing employers still on password auth must be able to log in. This is the
+# rollback switch (Req 21.12) — flip to "false" only after migration is verified.
+legacy_employer_auth_enabled = "true"
+
+# Retention purge stays in report-only mode until a data-retention policy is set.
+workspace_retention_purge_enabled = "false"
 
 unset_secrets = [
   "SENDGRID_API_KEY",

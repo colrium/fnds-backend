@@ -188,9 +188,15 @@ module "service" {
     STYTCH_PUBLIC_TOKEN          = var.stytch_public_token
     STYTCH_ENV                   = var.stytch_env
     STYTCH_EMPLOYER_AUTH_ENABLED = var.stytch_employer_auth_enabled
-    ZOHO_ACCOUNTS_BASE_URL       = var.zoho_accounts_base_url
-    ZOHO_MEETING_BASE_URL        = var.zoho_meeting_base_url
-    ZOHO_MEETING_TIMEZONE        = var.zoho_meeting_timezone
+    LEGACY_EMPLOYER_AUTH_ENABLED = var.legacy_employer_auth_enabled
+
+    WORKSPACE_RETENTION_PURGE_ENABLED      = var.workspace_retention_purge_enabled
+    WORKSPACE_RETENTION_MAX_INVITATION_AGE = var.workspace_retention_max_invitation_age
+    WORKSPACE_RETENTION_MAX_AUDIT_AGE      = var.workspace_retention_max_audit_age
+
+    ZOHO_ACCOUNTS_BASE_URL = var.zoho_accounts_base_url
+    ZOHO_MEETING_BASE_URL  = var.zoho_meeting_base_url
+    ZOHO_MEETING_TIMEZONE  = var.zoho_meeting_timezone
   }, local.backend_secret_env_vars)
 
   secrets = { for k, s in aws_secretsmanager_secret.this : k => s.arn }
