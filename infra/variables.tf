@@ -208,6 +208,7 @@ variable "videosdk_secret_key" {
 }
 
 variable "unset_secrets" {
-  type    = set(string)
-  default = []
+  description = "Keys deliberately left unset in this env. Blank and not listed here fails the plan."
+  type        = set(string)
+  default     = []
 }
