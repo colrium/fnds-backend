@@ -52,9 +52,12 @@ type CreateMembershipInput struct {
 
 // MembershipService manages membership lifecycle.
 type MembershipService struct {
-	adapter   *stytch.Adapter
-	audit     *audit.Logger
-	clock     stytch.Clock
+	adapter *stytch.Adapter
+	audit   *audit.Logger
+	clock   stytch.Clock
+	// notifier delivers the membership emails of Req 13.6, 13.9, and 14.9. It
+	// defaults to the production email notifier; tests substitute a spy.
+	notifier  Notifier
 	txCapable bool
 }
 
@@ -62,7 +65,13 @@ type MembershipService struct {
 // txCapable indicates whether the connected MongoDB deployment supports multi-document
 // transactions (determined at startup by configs.TransactionsSupported).
 func NewMembershipService(adapter *stytch.Adapter, auditLogger *audit.Logger, clock stytch.Clock, txCapable bool) *MembershipService {
-	return &MembershipService{adapter: adapter, audit: auditLogger, clock: clock, txCapable: txCapable}
+	return &MembershipService{
+		adapter:   adapter,
+		audit:     auditLogger,
+		clock:     clock,
+		notifier:  emailNotifier{},
+		txCapable: txCapable,
+	}
 }
 
 // Create inserts a new membership. If a duplicate key is hit (same user+workspace),
@@ -234,6 +243,22 @@ func (m *MembershipService) ChangeRole(ctx context.Context, workspaceID, members
 		New:         map[string]any{"role": string(newRole)},
 	})
 
+	// Best-effort side effects, in this order because the Fundis document is
+	// authoritative: it is already written, so neither a Stytch mirror failure
+	// (Req 7.15) nor a notification failure may fail this request or roll the
+	// document back — that would trade a cosmetic mismatch for an authority
+	// mismatch.
+	if ws, ok := m.loadWorkspaceForSideEffects(ctx, workspaceID, "role_change"); ok {
+		// MirrorRoleToStytch reads Role off the membership it is handed, so it
+		// must receive the post-write role, not the pre-image (Req 7.15).
+		updated := before
+		updated.Role = newRole
+		m.MirrorRoleToStytch(ctx, updated, ws)
+
+		// Req 13.9: the affected member alone is notified, naming both roles.
+		NotifyRoleChange(ctx, m.notifier, before.UserID, ws.Name, before.Role, newRole)
+	}
+
 	return nil
 }
 
@@ -311,6 +336,27 @@ func (m *MembershipService) SetStatus(ctx context.Context, workspaceID, membersh
 		Previous:    map[string]any{"status": string(before.Status)},
 		New:         map[string]any{"status": string(newStatus)},
 	})
+
+	// Best-effort side effects after the authoritative write. Reactivation is
+	// deliberately excluded: revoking the sessions of a member who was just
+	// reinstated would lock out the person the caller means to restore, and
+	// Req 17.3 scopes revocation to `removed` and `suspended` alone.
+	if newStatus == MembershipRemoved || newStatus == MembershipSuspended {
+		if ws, ok := m.loadWorkspaceForSideEffects(ctx, workspaceID, "status_change"); ok {
+			// Req 13.3, 17.3: revoke sessions for both transitions and, for
+			// removal only, delete the Stytch member — flagging
+			// stytch_member_delete_pending on failure so
+			// RetryPendingStytchDeletes picks it up (Req 13.4).
+			m.RevokeAndDeleteOnRemoval(ctx, before, ws, newStatus)
+
+			// Req 13.6 names removal alone: the removed person is told their
+			// access to the workspace has ended. A suspension is reversible and
+			// carries no such requirement.
+			if newStatus == MembershipRemoved {
+				NotifyMemberRemoval(ctx, m.notifier, before.UserID, ws.Name)
+			}
+		}
+	}
 
 	return nil
 }
@@ -566,7 +612,9 @@ func (m *MembershipService) TransferOwnership(ctx context.Context, workspaceID, 
 	// leaves the caller's stale cached session holding Owner permissions
 	// after they were demoted to Admin — a privilege-escalation window.
 	var caller Membership
+	callerLoaded := true
 	if err := coll.FindOne(ctx, bson.M{"_id": callerMembershipID}).Decode(&caller); err != nil {
+		callerLoaded = false
 		slog.ErrorContext(ctx, "transfer: failed to load caller for cache invalidation", "membership_id", callerMembershipID, "error", err)
 	} else {
 		m.invalidateAuthority(ctx, caller.UserID, workspaceID)
@@ -585,7 +633,47 @@ func (m *MembershipService) TransferOwnership(ctx context.Context, workspaceID, 
 		New:         map[string]any{"owner_membership_id": targetMembershipID, "new_owner_role": "owner", "previous_owner_role": "admin"},
 	})
 
+	// 7. Best-effort side effects after the committed swap. A transfer changes
+	// two Workspace_Roles, so Req 7.15's mirror applies to both Stytch members.
+	if ws, ok := m.loadWorkspaceForSideEffects(ctx, workspaceID, "ownership_transfer"); ok {
+		if callerLoaded {
+			demoted := caller
+			demoted.Role = RoleAdmin
+			m.MirrorRoleToStytch(ctx, demoted, ws)
+		}
+		promoted := target
+		promoted.Role = RoleOwner
+		m.MirrorRoleToStytch(ctx, promoted, ws)
+
+		// Req 14.9: both the previous and the new owner are emailed. Without
+		// the caller's user ID there is no previous-owner address to send to,
+		// and the failure is already logged above.
+		if callerLoaded {
+			NotifyOwnershipTransfer(ctx, m.notifier, caller.UserID, target.UserID, ws.Name)
+		}
+	}
+
 	return nil
+}
+
+// loadWorkspaceForSideEffects reads the Workspace document the Stytch mirror
+// and the notification emails both need — the former for
+// StytchOrganizationID, the latter for the workspace name. It is called only
+// after the authoritative membership write has already succeeded, so a failure
+// here cannot fail the operation: it is logged and reported as false, and the
+// caller skips its best-effort side effects.
+func (m *MembershipService) loadWorkspaceForSideEffects(ctx context.Context, workspaceID, operation string) (Workspace, bool) {
+	var ws Workspace
+	err := configs.MI.DB.Collection("workspaces").FindOne(ctx, bson.M{"_id": workspaceID}).Decode(&ws)
+	if err != nil {
+		slog.WarnContext(ctx, "membership: failed to load workspace for post-write side effects",
+			"workspace_id", workspaceID,
+			"operation", operation,
+			"error", err.Error(),
+		)
+		return Workspace{}, false
+	}
+	return ws, true
 }
 
 // countActiveOwners counts active memberships with role "owner" in a workspace.
@@ -754,6 +842,21 @@ func (m *MembershipService) AdminTransferOwnership(ctx context.Context, workspac
 		New:         map[string]any{"owner_membership_id": targetMembershipID, "new_owner_role": "owner", "previous_owner_role": "admin"},
 	})
 
+	// 7. Best-effort side effects after the committed swap.
+	if ws, ok := m.loadWorkspaceForSideEffects(ctx, workspaceID, "admin_ownership_transfer"); ok {
+		// Req 7.15: both roles changed, so both Stytch members are mirrored.
+		demoted := currentOwner
+		demoted.Role = RoleAdmin
+		m.MirrorRoleToStytch(ctx, demoted, ws)
+		promoted := target
+		promoted.Role = RoleOwner
+		m.MirrorRoleToStytch(ctx, promoted, ws)
+
+		// Req 14.9 applies to every completed transfer, including this
+		// administrator-driven one (Req 14.13).
+		NotifyOwnershipTransfer(ctx, m.notifier, currentOwner.UserID, target.UserID, ws.Name)
+	}
+
 	return nil
 }
 
@@ -835,6 +938,17 @@ func (m *MembershipService) DetectZeroOwnerWorkspaces(ctx context.Context) ([]st
 // stale event: the update matches zero documents when a newer event (or a
 // newer Fundis-initiated change) has already touched this membership, so an
 // out-of-order webhook can never overwrite fresher state (Req 19.10).
+//
+// This path deliberately performs no Stytch side effects, unlike SetStatus.
+// Stytch is the originator of the change, so mirroring it back would be a
+// feedback loop. Concretely, the only event that reaches here with `removed` is
+// member.delete (see WebhookConsumer.handleMemberDeleted): the Stytch_Member is
+// already gone, so DeleteMember would return 404, set
+// stytch_member_delete_pending, and hand RetryPendingStytchDeletes 24 hours of
+// futile retries against an identity that no longer exists. Session revocation
+// is moot for the same reason — a deleted member holds no live sessions. Nor is
+// a notification sent: Req 13.6 is scoped to "WHEN a caller removes a
+// Membership", and there is no caller here.
 func (m *MembershipService) SetStatusFromWebhook(ctx context.Context, membershipID string, newStatus MembershipStatus, eventTS time.Time) error {
 	coll := configs.MI.DB.Collection("memberships")
 	now := m.clock.Now()

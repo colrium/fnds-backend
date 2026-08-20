@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"backend/notifications"
 	"backend/users"
 )
 
@@ -16,6 +17,25 @@ import (
 type Notifier interface {
 	SendEmail(to, subject, body string)
 	SendSMS(to, body string)
+}
+
+// emailNotifier is the production Notifier, delegating to the existing
+// notifications package. The Notifier interface is fire-and-forget by design —
+// membership notifications are best-effort and must never fail the mutation
+// that triggered them — so a delivery error is logged here rather than
+// returned.
+type emailNotifier struct{}
+
+func (emailNotifier) SendEmail(to, subject, body string) {
+	if err := notifications.SendEmailViaSendGrid(context.Background(), to, subject, body); err != nil {
+		slog.Warn("notify: failed to send membership email", "subject", subject, "error", err)
+	}
+}
+
+func (emailNotifier) SendSMS(to, body string) {
+	if err := notifications.SendSMS(notifications.DefaultSMSProvider, to, body); err != nil {
+		slog.Warn("notify: failed to send membership SMS", "error", err)
+	}
 }
 
 // NotifyRoleChange sends an email to the affected member naming the previous

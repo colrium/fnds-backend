@@ -102,8 +102,13 @@ func (m *MembershipService) RevokeAndDeleteOnRemoval(ctx context.Context, member
 }
 
 // RevokeAllSessionsForUser revokes every Stytch session held by every linked
-// member across every organization. Called when a user's status is set to
-// "suspended" (Req 17.5).
+// member across every organization. Its trigger is a `users` document's status
+// being set to "suspended" (Req 17.5), which happens in
+// adminapi.HandleUpdateUserStatus — not on any Membership mutation, so nothing
+// in this package calls it. It also implements the behavior behind the
+// self-service revoke-everywhere endpoint of Req 17.6, which is not yet
+// registered in routes.go. Both call sites are owned elsewhere; wiring it into
+// a Membership path instead would fire it on the wrong event.
 func (m *MembershipService) RevokeAllSessionsForUser(ctx context.Context, userID string) {
 	coll := configs.MI.DB.Collection("memberships")
 	cursor, err := coll.Find(ctx, bson.M{
