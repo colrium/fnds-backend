@@ -15,9 +15,20 @@ turnstile_hostname     = ""
 betterstack_ingest_url = "https://s2652431.eu-central-1a.betterstackdata.com"
 betterstack_min_level  = "info"
 
+stytch_env                   = "live"
+stytch_employer_auth_enabled = "false"
+
 unset_secrets = [
   "FLUTTERWAVE_SECRET_KEY",
   "FLUTTERWAVE_WEBHOOK_SECRET_HASH",
   "KOPOKOPO_API_KEY",
   "SLACK_WEBHOOK_URL",
+  "STYTCH_PROJECT_ID",
+  "STYTCH_SECRET",
+  "STYTCH_WEBHOOK_SECRET",
+  "ZOHO_MEETING_CLIENT_ID",
+  "ZOHO_MEETING_CLIENT_SECRET",
+  "ZOHO_MEETING_REFRESH_TOKEN",
+  "ZOHO_MEETING_ZSOID",
+  "ZOHO_MEETING_PRESENTER_ID",
 ]

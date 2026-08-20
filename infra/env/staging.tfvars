@@ -14,6 +14,9 @@ advanta_base_url       = "https://quicksms.advantasms.com"
 turnstile_hostname     = ""
 betterstack_ingest_url = ""
 
+stytch_env                   = "test"
+stytch_employer_auth_enabled = "true"
+
 unset_secrets = [
   "SENDGRID_API_KEY",
   "FLUTTERWAVE_SECRET_KEY",
@@ -30,4 +33,9 @@ unset_secrets = [
   "SLACK_WEBHOOK_URL",
   "SLACK_OPS_NOTIFS_URL",
   "BETTERSTACK_SOURCE_TOKEN",
+  "ZOHO_MEETING_CLIENT_ID",
+  "ZOHO_MEETING_CLIENT_SECRET",
+  "ZOHO_MEETING_REFRESH_TOKEN",
+  "ZOHO_MEETING_ZSOID",
+  "ZOHO_MEETING_PRESENTER_ID",
 ]

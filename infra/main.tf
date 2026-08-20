@@ -23,6 +23,14 @@ locals {
     SLACK_WEBHOOK_URL               = var.slack_webhook_url
     SLACK_OPS_NOTIFS_URL            = var.slack_ops_notifs_url
     BETTERSTACK_SOURCE_TOKEN        = var.betterstack_source_token
+    STYTCH_PROJECT_ID               = var.stytch_project_id
+    STYTCH_SECRET                   = var.stytch_secret
+    STYTCH_WEBHOOK_SECRET           = var.stytch_webhook_secret
+    ZOHO_MEETING_CLIENT_ID          = var.zoho_meeting_client_id
+    ZOHO_MEETING_CLIENT_SECRET      = var.zoho_meeting_client_secret
+    ZOHO_MEETING_REFRESH_TOKEN      = var.zoho_meeting_refresh_token
+    ZOHO_MEETING_ZSOID              = var.zoho_meeting_zsoid
+    ZOHO_MEETING_PRESENTER_ID       = var.zoho_meeting_presenter_id
   }
 
   backend_secret_has_value = { for k, v in local.backend_secret_candidates : k => nonsensitive(v != "") }
@@ -159,23 +167,29 @@ module "service" {
   target_group_arn        = data.aws_ssm_parameter.target_group_arn_backend.value
 
   env_vars = merge({
-    APP_ENV                  = var.environment
-    PORT                     = "8080"
-    REDIS_URL                = data.aws_ssm_parameter.redis_url.value
-    API_PUBLIC_URL           = var.api_public_url
-    APP_PUBLIC_URL           = var.app_public_url
-    AWS_REGION               = var.aws_region
-    AWS_S3_BUCKET            = data.aws_ssm_parameter.s3_bucket_name.value
-    AWS_S3_PUBLIC_BASE_URL   = data.aws_ssm_parameter.s3_public_base_url.value
-    SENDGRID_FROM_EMAIL      = var.sendgrid_from_email
-    SENDGRID_FROM_NAME       = var.sendgrid_from_name
-    CELLULANT_BASE_URL       = var.cellulant_base_url
-    CELLULANT_CHECKOUT_URL   = var.cellulant_checkout_url
-    ADVANTA_BASE_URL         = var.advanta_base_url
-    TURNSTILE_HOSTNAME       = var.turnstile_hostname
-    BETTERSTACK_INGEST_URL   = var.betterstack_ingest_url
-    BETTERSTACK_SERVICE_NAME = "fundis-backend-${var.environment}"
-    BETTERSTACK_MIN_LEVEL    = var.betterstack_min_level
+    APP_ENV                      = var.environment
+    PORT                         = "8080"
+    REDIS_URL                    = data.aws_ssm_parameter.redis_url.value
+    API_PUBLIC_URL               = var.api_public_url
+    APP_PUBLIC_URL               = var.app_public_url
+    AWS_REGION                   = var.aws_region
+    AWS_S3_BUCKET                = data.aws_ssm_parameter.s3_bucket_name.value
+    AWS_S3_PUBLIC_BASE_URL       = data.aws_ssm_parameter.s3_public_base_url.value
+    SENDGRID_FROM_EMAIL          = var.sendgrid_from_email
+    SENDGRID_FROM_NAME           = var.sendgrid_from_name
+    CELLULANT_BASE_URL           = var.cellulant_base_url
+    CELLULANT_CHECKOUT_URL       = var.cellulant_checkout_url
+    ADVANTA_BASE_URL             = var.advanta_base_url
+    TURNSTILE_HOSTNAME           = var.turnstile_hostname
+    BETTERSTACK_INGEST_URL       = var.betterstack_ingest_url
+    BETTERSTACK_SERVICE_NAME     = "fundis-backend-${var.environment}"
+    BETTERSTACK_MIN_LEVEL        = var.betterstack_min_level
+    STYTCH_PUBLIC_TOKEN          = var.stytch_public_token
+    STYTCH_ENV                   = var.stytch_env
+    STYTCH_EMPLOYER_AUTH_ENABLED = var.stytch_employer_auth_enabled
+    ZOHO_ACCOUNTS_BASE_URL       = var.zoho_accounts_base_url
+    ZOHO_MEETING_BASE_URL        = var.zoho_meeting_base_url
+    ZOHO_MEETING_TIMEZONE        = var.zoho_meeting_timezone
   }, local.backend_secret_env_vars)
 
   secrets = { for k, s in aws_secretsmanager_secret.this : k => s.arn }

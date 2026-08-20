@@ -34,10 +34,13 @@ jobs:
     concurrency:
       group: deploy-backend-${{ needs.set-env.outputs.environment }}
       cancel-in-progress: false
-    # These map directly to the Terraform variables in infra/variables.tf that have
-    # no default and are therefore required at apply time. Every other sensitive
-    # variable in variables.tf has `default = ""`, so Terraform falls back to that
-    # default and doesn't need a GitHub secret or an env mapping here.
+    # Maps every TF_VAR_* secret that actually has a real value set in at least one
+    # GitHub Environment (staging or production). Sensitive variables in
+    # infra/variables.tf default to "" when no mapping exists here, which is
+    # correct for integrations an environment deliberately leaves unset (see that
+    # environment's env/*.tfvars `unset_secrets` list) — but any secret an
+    # environment DOES have a real value for must be mapped here, or the next
+    # apply silently writes a blank value over the real one in Secrets Manager.
     #
     # Placed at job level (not workflow level) because this job carries
     # `environment:`. Environment-scoped secrets only resolve once a job's own
@@ -52,6 +55,20 @@ jobs:
       TF_VAR_advanta_api_key: ${{ secrets.TF_VAR_ADVANTA_API_KEY }}
       TF_VAR_advanta_partner_id: ${{ secrets.TF_VAR_ADVANTA_PARTNER_ID }}
       TF_VAR_advanta_shortcode: ${{ secrets.TF_VAR_ADVANTA_SHORTCODE }}
+      TF_VAR_mongodb_uri_override: ${{ secrets.TF_VAR_MONGODB_URI_OVERRIDE }}
+      TF_VAR_cellulant_api_key: ${{ secrets.TF_VAR_CELLULANT_API_KEY }}
+      TF_VAR_cellulant_access_key: ${{ secrets.TF_VAR_CELLULANT_ACCESS_KEY }}
+      TF_VAR_cellulant_secret_key: ${{ secrets.TF_VAR_CELLULANT_SECRET_KEY }}
+      TF_VAR_cellulant_iv_key: ${{ secrets.TF_VAR_CELLULANT_IV_KEY }}
+      TF_VAR_cellulant_client_id: ${{ secrets.TF_VAR_CELLULANT_CLIENT_ID }}
+      TF_VAR_cellulant_client_secret: ${{ secrets.TF_VAR_CELLULANT_CLIENT_SECRET }}
+      TF_VAR_cellulant_service_code: ${{ secrets.TF_VAR_CELLULANT_SERVICE_CODE }}
+      TF_VAR_turnstile_secret_key: ${{ secrets.TF_VAR_TURNSTILE_SECRET_KEY }}
+      TF_VAR_slack_ops_notifs_url: ${{ secrets.TF_VAR_SLACK_OPS_NOTIFS_URL }}
+      TF_VAR_betterstack_source_token: ${{ secrets.TF_VAR_BETTERSTACK_SOURCE_TOKEN }}
+      TF_VAR_stytch_project_id: ${{ secrets.TF_VAR_STYTCH_PROJECT_ID }}
+      TF_VAR_stytch_secret: ${{ secrets.TF_VAR_STYTCH_SECRET }}
+      TF_VAR_stytch_webhook_secret: ${{ secrets.TF_VAR_STYTCH_WEBHOOK_SECRET }}
     defaults:
       run:
         working-directory: infra

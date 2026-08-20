@@ -73,6 +73,42 @@ variable "betterstack_min_level" {
   default = "info"
 }
 
+variable "stytch_public_token" {
+  description = "Safe to expose to the frontend; used by the Stytch JS SDK."
+  type        = string
+  default     = ""
+}
+
+variable "stytch_env" {
+  description = "\"test\" or \"live\"."
+  type        = string
+  default     = "test"
+}
+
+variable "stytch_employer_auth_enabled" {
+  description = "Master switch for employer Stytch authentication."
+  type        = string
+  default     = "false"
+}
+
+variable "zoho_accounts_base_url" {
+  description = "Zoho datacenter host override. Empty uses the app's .com default."
+  type        = string
+  default     = ""
+}
+
+variable "zoho_meeting_base_url" {
+  description = "Zoho datacenter host override. Empty uses the app's .com default."
+  type        = string
+  default     = ""
+}
+
+variable "zoho_meeting_timezone" {
+  description = "IANA zone Zoho interprets meeting start times in. Empty uses the app's Africa/Nairobi default."
+  type        = string
+  default     = ""
+}
+
 variable "mongodb_uri_override" {
   description = "Set to use an external Mongo (e.g. Atlas) instead of the platform's self-hosted instance. Empty string means use the platform value."
   type        = string
@@ -186,6 +222,54 @@ variable "slack_ops_notifs_url" {
 }
 
 variable "betterstack_source_token" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "stytch_project_id" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "stytch_secret" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "stytch_webhook_secret" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "zoho_meeting_client_id" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "zoho_meeting_client_secret" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "zoho_meeting_refresh_token" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "zoho_meeting_zsoid" {
+  type      = string
+  sensitive = true
+  default   = ""
+}
+
+variable "zoho_meeting_presenter_id" {
   type      = string
   sensitive = true
   default   = ""
