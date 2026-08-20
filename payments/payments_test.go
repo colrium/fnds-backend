@@ -12,9 +12,7 @@ func TestValidateWebhookPayload(t *testing.T) {
 		wantErr  bool
 		errMsg   string
 	}{
-		{"nil payload", nil, ProviderFlutterwave, true, "payload is required"},
-		{"flutterwave valid", map[string]interface{}{"event": "charge.completed"}, ProviderFlutterwave, false, ""},
-		{"flutterwave missing event", map[string]interface{}{"other": "value"}, ProviderFlutterwave, true, "missing event field"},
+		{"nil payload", nil, ProviderCellulant, true, "payload is required"},
 		{"cellulant valid", map[string]interface{}{"transaction_id": "tx-123"}, ProviderCellulant, false, ""},
 		{"cellulant missing id", map[string]interface{}{"other": "value"}, ProviderCellulant, true, "missing transaction_id field"},
 		{"kopokopo valid", map[string]interface{}{"event_type": "payment_received"}, ProviderKopoKopo, false, ""},
@@ -43,9 +41,6 @@ func TestSanitizeProvider(t *testing.T) {
 		input string
 		want  PaymentProvider
 	}{
-		{"flutterwave", ProviderFlutterwave},
-		{"FLUTTERWAVE", ProviderFlutterwave},
-		{"Flutterwave", ProviderFlutterwave},
 		{"cellulant", ProviderCellulant},
 		{"CELLULANT", ProviderCellulant},
 		{"kopokopo", ProviderKopoKopo},

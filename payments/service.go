@@ -8,9 +8,8 @@ import (
 type PaymentProvider string
 
 const (
-	ProviderFlutterwave PaymentProvider = "flutterwave"
-	ProviderCellulant   PaymentProvider = "cellulant"
-	ProviderKopoKopo    PaymentProvider = "kopokopo"
+	ProviderCellulant PaymentProvider = "cellulant"
+	ProviderKopoKopo  PaymentProvider = "kopokopo"
 )
 
 type PaymentResult struct {
@@ -25,10 +24,6 @@ func ValidateWebhookPayload(payload map[string]interface{}, provider PaymentProv
 		return fmt.Errorf("payload is required")
 	}
 	switch provider {
-	case ProviderFlutterwave:
-		if _, ok := payload["event"]; !ok {
-			return fmt.Errorf("missing event field")
-		}
 	case ProviderCellulant:
 		if _, ok := payload["transaction_id"]; !ok {
 			return fmt.Errorf("missing transaction_id field")
@@ -46,8 +41,6 @@ func ValidateWebhookPayload(payload map[string]interface{}, provider PaymentProv
 func SanitizeProvider(provider string) PaymentProvider {
 	p := strings.ToLower(strings.TrimSpace(provider))
 	switch p {
-	case "flutterwave":
-		return ProviderFlutterwave
 	case "cellulant":
 		return ProviderCellulant
 	case "kopokopo":
