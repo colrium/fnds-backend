@@ -55,8 +55,25 @@ func TestCORSMiddleware(t *testing.T) {
 			wantOrigin: "http://localhost:5173",
 		},
 		{
-			name:   "localhost outside development",
-			appEnv: "staging",
+			name:       "localhost in staging",
+			appEnv:     "staging",
+			origin:     "http://localhost:5173",
+			wantOrigin: "http://localhost:5173",
+		},
+		{
+			name:       "loopback IP in staging",
+			appEnv:     "staging",
+			origin:     "http://127.0.0.1:5173",
+			wantOrigin: "http://127.0.0.1:5173",
+		},
+		{
+			name:   "localhost in production",
+			appEnv: "production",
+			origin: "http://localhost:5173",
+		},
+		{
+			name:   "localhost with APP_ENV unset",
+			appEnv: "",
 			origin: "http://localhost:5173",
 		},
 		{

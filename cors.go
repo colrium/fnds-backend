@@ -10,12 +10,12 @@ import (
 )
 
 func newCORSMiddleware(appEnv string) echo.MiddlewareFunc {
-	allowLocalDevelopment := appEnv == "development"
+	allowLocalOrigins := allowsLocalOrigins(appEnv)
 
 	return echomiddleware.CORSWithConfig(echomiddleware.CORSConfig{
 		AllowOriginFunc: func(origin string) (bool, error) {
 			return isFundisOrigin(origin) ||
-				(allowLocalDevelopment && isLocalDevelopmentOrigin(origin)), nil
+				(allowLocalOrigins && isLocalDevelopmentOrigin(origin)), nil
 		},
 		AllowMethods: []string{
 			http.MethodGet,
@@ -33,6 +33,23 @@ func newCORSMiddleware(appEnv string) echo.MiddlewareFunc {
 		},
 		MaxAge: 86400,
 	})
+}
+
+// allowsLocalOrigins reports whether a locally-run frontend may call this
+// environment. Staging is included so the admin dashboard can be developed on
+// localhost against staging data without needing a local backend.
+//
+// This is an explicit allowlist rather than `appEnv != "production"` so that an
+// unset or misspelled APP_ENV fails closed: APP_ENV comes straight from the
+// environment with no default (see configs.AppEnv), and a deploy that loses it
+// must not silently start accepting localhost origins.
+func allowsLocalOrigins(appEnv string) bool {
+	switch appEnv {
+	case "development", "staging", "test":
+		return true
+	default:
+		return false
+	}
 }
 
 func isFundisOrigin(origin string) bool {
