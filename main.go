@@ -215,7 +215,9 @@ func main() {
 		slog.Error("failed to configure S3 storage", "error", err)
 		os.Exit(1)
 	}
-	fileHandler := files.NewHandler(files.NewMongoRepository(), s3Store, maxUploadBytes)
+	fileRepository := files.NewMongoRepository()
+	fileHandler := files.NewHandler(fileRepository, s3Store, maxUploadBytes)
+	adminapi.SetArtisanFileDependencies(fileRepository, s3Store)
 	avatarHandler := users.NewAvatarHandler(&users.MongoAvatarRepository{}, s3Store)
 
 	// CV parser: instantiate the Bedrock-backed parser and handler.

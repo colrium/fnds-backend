@@ -85,6 +85,41 @@ func EnsureIndexes(ctx context.Context) error {
 		return err
 	}
 
+	// Supports vacancy-scoped application lists with stable newest-first
+	// pagination. Status remains an optional filter on the bounded vacancy set.
+	_, err = configs.MI.DB.Collection("job_applications").Indexes().CreateOne(
+		ctx,
+		mongo.IndexModel{
+			Keys: bson.D{
+				{Key: "vacancy_id", Value: 1},
+				{Key: "created_at", Value: -1},
+				{Key: "_id", Value: -1},
+			},
+			Options: options.Index().SetName("job_applications_vacancy_created"),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	// Adds selectivity for status-filtered vacancy application pages while
+	// retaining the same stable newest-first ordering.
+	_, err = configs.MI.DB.Collection("job_applications").Indexes().CreateOne(
+		ctx,
+		mongo.IndexModel{
+			Keys: bson.D{
+				{Key: "vacancy_id", Value: 1},
+				{Key: "status", Value: 1},
+				{Key: "created_at", Value: -1},
+				{Key: "_id", Value: -1},
+			},
+			Options: options.Index().SetName("job_applications_vacancy_status_created"),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
 	// companies indexes: workspace scoping and owner lookup.
 	_, err = configs.MI.DB.Collection("companies").Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
@@ -333,9 +368,43 @@ func CountApplicationsByStatusForVacancies(vacancyIDs []string) (map[string]int,
 	return counts, nil
 }
 
+// CountApplicationsByVacancyIDs returns each vacancy's total application count
+// in one aggregation, avoiding an application query per vacancy list row.
+func CountApplicationsByVacancyIDs(ctx context.Context, vacancyIDs []string) (map[string]int64, error) {
+	counts := make(map[string]int64, len(vacancyIDs))
+	if len(vacancyIDs) == 0 {
+		return counts, nil
+	}
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"vacancy_id": bson.M{"$in": vacancyIDs}}}},
+		{{Key: "$group", Value: bson.M{"_id": "$vacancy_id", "count": bson.M{"$sum": 1}}}},
+	}
+	cursor, err := configs.MI.DB.Collection("job_applications").Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+
+	var rows []struct {
+		VacancyID string `bson:"_id"`
+		Count     int64  `bson:"count"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		counts[row.VacancyID] = row.Count
+	}
+	return counts, nil
+}
+
 func GetJobVacancyByID(id string) (*JobVacancy, error) {
+	return GetJobVacancyByIDContext(context.TODO(), id)
+}
+
+func GetJobVacancyByIDContext(ctx context.Context, id string) (*JobVacancy, error) {
 	var v JobVacancy
-	err := configs.MI.DB.Collection("job_vacancies").FindOne(context.TODO(), bson.M{"_id": id}).Decode(&v)
+	err := configs.MI.DB.Collection("job_vacancies").FindOne(ctx, bson.M{"_id": id}).Decode(&v)
 	if err != nil {
 		return nil, err
 	}
@@ -419,6 +488,30 @@ func ListJobApplicationsByVacancy(vacancyID string) ([]JobApplication, error) {
 		return nil, err
 	}
 	return applications, nil
+}
+
+// ListJobApplications returns a stable, paginated application list for admin
+// data-management screens. Callers own authorization and filter validation.
+func ListJobApplications(ctx context.Context, filter bson.M, page, limit int64) ([]JobApplication, int64, error) {
+	opts := options.Find().
+		SetSkip((page - 1) * limit).
+		SetLimit(limit).
+		SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}})
+	cursor, err := configs.MI.DB.Collection("job_applications").Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+
+	applications := []JobApplication{}
+	if err := cursor.All(ctx, &applications); err != nil {
+		return nil, 0, err
+	}
+	total, err := configs.MI.DB.Collection("job_applications").CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	return applications, total, nil
 }
 
 func UpdateJobApplicationStatus(id, status string) (bool, error) {

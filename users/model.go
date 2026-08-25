@@ -358,16 +358,20 @@ func GetUserBySlug(ctx context.Context, slug string) (*User, error) {
 }
 
 func GetUsersByIDs(ids []string) ([]User, error) {
+	return GetUsersByIDsContext(context.TODO(), ids)
+}
+
+func GetUsersByIDsContext(ctx context.Context, ids []string) ([]User, error) {
 	users := []User{}
 	if len(ids) == 0 {
 		return users, nil
 	}
-	cursor, err := configs.MI.DB.Collection("users").Find(context.TODO(), bson.M{"_id": bson.M{"$in": ids}})
+	cursor, err := configs.MI.DB.Collection("users").Find(ctx, bson.M{"_id": bson.M{"$in": ids}})
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cursor.Close(context.TODO()) }()
-	if err := cursor.All(context.TODO(), &users); err != nil {
+	defer func() { _ = cursor.Close(ctx) }()
+	if err := cursor.All(ctx, &users); err != nil {
 		return nil, err
 	}
 	return users, nil

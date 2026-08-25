@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"backend/jobrequests"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
 )
@@ -49,6 +47,13 @@ func TestHandleListVacanciesReturnsPagedEnvelope(t *testing.T) {
 		mtest.FirstBatch,
 		bson.D{{Key: "n", Value: 1}},
 	))
+	// Per-vacancy application count aggregation response.
+	mt.AddMockResponses(mtest.CreateCursorResponse(
+		0,
+		"test.job_applications",
+		mtest.FirstBatch,
+		bson.D{{Key: "_id", Value: "vac-1"}, {Key: "count", Value: 3}},
+	))
 
 	ctx, rec := adminHandlerContext(http.MethodGet, "/vacancies", "")
 	if err := HandleListVacancies(ctx); err != nil {
@@ -60,10 +65,10 @@ func TestHandleListVacanciesReturnsPagedEnvelope(t *testing.T) {
 
 	var body struct {
 		Data struct {
-			Data  []jobrequests.JobVacancy `json:"data"`
-			Total int64                    `json:"total"`
-			Page  int64                    `json:"page"`
-			Limit int64                    `json:"limit"`
+			Data  []adminVacancyListItem `json:"data"`
+			Total int64                  `json:"total"`
+			Page  int64                  `json:"page"`
+			Limit int64                  `json:"limit"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
@@ -71,6 +76,9 @@ func TestHandleListVacanciesReturnsPagedEnvelope(t *testing.T) {
 	}
 	if len(body.Data.Data) != 1 || body.Data.Data[0].ID != "vac-1" {
 		t.Errorf("response data = %#v", body.Data.Data)
+	}
+	if body.Data.Data[0].ApplicationCount != 3 {
+		t.Errorf("application_count = %d, want 3", body.Data.Data[0].ApplicationCount)
 	}
 	if body.Data.Total != 1 {
 		t.Errorf("total = %d, want 1", body.Data.Total)
