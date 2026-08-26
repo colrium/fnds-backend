@@ -11,6 +11,7 @@ var catalogNames = [...]string{
 	"Gardener",
 	"Cleaner",
 	"General Labourer",
+	"Driver",
 	"Aluminum Fabrication & Installation",
 }
 
