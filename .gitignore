@@ -17,5 +17,6 @@ infra/.terraform/
 infra/*.tfplan
 infra/tfplan
 infra/.terraform.lock.hcl
+infra/env/*.secrets.tfvars
 .claude/worktrees/
 .agents/skills/*
