@@ -177,13 +177,32 @@ the essentials are:
 | `MONGODB_URI`, `PORT` | |
 | `SESSION_KEY` | HS256 signing key. Employer onboarding tickets additionally require ≥32 bytes, and fail at mint time (not startup) if it is shorter |
 | `AWS_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` / `AWS_REGION` | |
-| `AWS_S3_BUCKET`, `AWS_S3_REGION` | Set `AWS_S3_REGION` only when the bucket is in a different region from the service; a mismatch fails presigned uploads with an opaque CORS-looking error |
+| `AWS_S3_BUCKET`, `AWS_S3_REGION` | Set `AWS_S3_REGION` to the bucket's actual region; otherwise it falls back to the effective `AWS_REGION`, including shell overrides |
 | `STYTCH_PROJECT_ID`, `STYTCH_SECRET`, `STYTCH_PUBLIC_TOKEN`, `STYTCH_ENV`, `STYTCH_WEBHOOK_SECRET` | All five required when Stytch employer auth is on; startup fails naming the first missing one |
 | `SENDGRID_*`, `ADVANTA_*` | Email and SMS/OTP delivery |
 | `REDIS_URL`, `NOTIFICATIONS_CACHE_*` | Optional notifications cache; Mongo stays authoritative |
 | `TURNSTILE_SECRET_KEY` | Required in production |
 
 Never log or echo `STYTCH_SECRET`, `STYTCH_WEBHOOK_SECRET`, `SESSION_KEY`, or any AWS credential.
+
+### Local uploads stop after a successful presign request
+
+Photos and documents upload directly from the browser to S3 after the API returns
+the presigned URL. A `200` from `/profile/avatar/presign` or `/files/presign` only
+confirms URL generation; a failed S3 request will not appear in the API request log.
+
+Set `AWS_S3_REGION` in `.env` to the bucket's actual region and restart the backend.
+For `fundis-bucket-staging`, this is `eu-west-1`. Exported shell variables take
+precedence over `.env`, so a shell with `AWS_REGION=us-east-1` overrides
+`AWS_REGION="eu-west-1"` in that file. Setting `AWS_S3_REGION` explicitly avoids
+that fallback. Air does not watch `.env` changes, so editing it alone does not
+reload the running process.
+
+The upload URL's regional S3 endpoint must match the bucket. A mismatch causes
+S3 to return `301 PermanentRedirect`, which the browser can report as a CORS
+failure. Also check that the bucket's own CORS policy allows the frontend's exact
+origin (for example, `http://localhost:5173`) and `PUT`; the API's CORS policy
+does not control direct S3 uploads.
 
 ---
 

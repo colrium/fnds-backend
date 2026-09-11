@@ -13,6 +13,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	stytchOrganizationClaim = "https://stytch.com/organization"
+	stytchSessionClaim      = "https://stytch.com/session"
+)
+
 // jwksCache holds the cached JWKS keys and manages refresh.
 type jwksCache struct {
 	mu        sync.RWMutex
@@ -238,9 +243,15 @@ func (a *Adapter) VerifySessionJWT(tokenStr string) (Session, error) {
 		}
 	}
 
-	// Extract required claims.
+	// Stytch's production B2B session JWTs put organization and session
+	// metadata in namespaced objects. Keep the legacy flat claim fallback for
+	// tokens minted by older Fundis test fixtures and any sessions issued
+	// before this verifier was corrected.
 	memberID, _ := claims["sub"].(string)
-	orgID, _ := claims["org_id"].(string)
+	orgID := nestedStringClaim(claims, stytchOrganizationClaim, "organization_id")
+	if orgID == "" {
+		orgID, _ = claims["org_id"].(string)
+	}
 	iss, _ := claims["iss"].(string)
 
 	// Validate issuer matches expected pattern.
@@ -276,7 +287,10 @@ func (a *Adapter) VerifySessionJWT(tokenStr string) (Session, error) {
 	}
 
 	// Extract session ID if present.
-	sessionID, _ := claims["session_id"].(string)
+	sessionID := nestedStringClaim(claims, stytchSessionClaim, "id")
+	if sessionID == "" {
+		sessionID, _ = claims["session_id"].(string)
+	}
 
 	return Session{
 		MemberID:       memberID,
@@ -284,4 +298,22 @@ func (a *Adapter) VerifySessionJWT(tokenStr string) (Session, error) {
 		SessionID:      sessionID,
 		ExpiresAt:      expiresAt,
 	}, nil
+}
+
+func nestedStringClaim(claims jwt.MapClaims, namespace, key string) string {
+	raw, ok := claims[namespace]
+	if !ok {
+		return ""
+	}
+
+	switch nested := raw.(type) {
+	case map[string]any:
+		value, _ := nested[key].(string)
+		return value
+	case jwt.MapClaims:
+		value, _ := nested[key].(string)
+		return value
+	default:
+		return ""
+	}
 }

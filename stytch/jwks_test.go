@@ -41,6 +41,9 @@ func TestVerifySessionJWT_ValidToken(t *testing.T) {
 	if session.OrganizationID != orgID {
 		t.Errorf("OrganizationID = %q, want %q", session.OrganizationID, orgID)
 	}
+	if session.SessionID != "session-"+memberID {
+		t.Errorf("SessionID = %q, want %q", session.SessionID, "session-"+memberID)
+	}
 	if session.ExpiresAt.IsZero() {
 		t.Error("ExpiresAt should not be zero")
 	}

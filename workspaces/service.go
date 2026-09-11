@@ -234,9 +234,9 @@ func (w *WorkspaceService) CreateForOnboarding(ctx context.Context, in CreateFor
 		// the session for it comes from exchanging the intermediate session
 		// for that Organization instead.
 		var sess stytch.Session
-		err := w.adapter.Do(ctx, "ExchangeSession", true, func(attemptCtx context.Context) error {
+		err := w.adapter.Do(ctx, "ExchangeIntermediateSession", true, func(attemptCtx context.Context) error {
 			var callErr error
-			sess, callErr = w.adapter.Client().ExchangeSession(attemptCtx, in.IntermediateSession, stytchOrgID)
+			sess, callErr = w.adapter.Client().ExchangeIntermediateSession(attemptCtx, in.IntermediateSession, stytchOrgID)
 			return callErr
 		})
 		if err != nil {

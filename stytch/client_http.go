@@ -12,6 +12,7 @@ import (
 
 	"github.com/stytchauth/stytch-go/v18/stytch/b2b/b2bstytchapi"
 	"github.com/stytchauth/stytch-go/v18/stytch/b2b/discovery"
+	intermediatesessions "github.com/stytchauth/stytch-go/v18/stytch/b2b/discovery/intermediatesessions"
 	discoveryorgs "github.com/stytchauth/stytch-go/v18/stytch/b2b/discovery/organizations"
 	magiclinksdiscovery "github.com/stytchauth/stytch-go/v18/stytch/b2b/magiclinks/discovery"
 	emaildiscovery "github.com/stytchauth/stytch-go/v18/stytch/b2b/magiclinks/email/discovery"
@@ -214,6 +215,29 @@ func (c *HTTPClient) OAuthDiscoveryAuthenticate(ctx context.Context, token strin
 		return DiscoveryResult{}, classify("OAuthDiscoveryAuthenticate", err)
 	}
 	return toDiscoveryResult(resp.IntermediateSessionToken, resp.EmailAddress, resp.DiscoveredOrganizations), nil
+}
+
+func (c *HTTPClient) ExchangeIntermediateSession(ctx context.Context, intermediateToken, targetOrgID string) (Session, error) {
+	resp, err := c.api.Discovery.IntermediateSessions.Exchange(ctx, &intermediatesessions.ExchangeParams{
+		IntermediateSessionToken: intermediateToken,
+		OrganizationID:           targetOrgID,
+	})
+	if err != nil {
+		return Session{}, classify("ExchangeIntermediateSession", err)
+	}
+
+	if resp.MemberSession != nil {
+		return toSession(*resp.MemberSession, resp.Member.EmailAddress, resp.SessionJWT, resp.SessionToken), nil
+	}
+
+	return Session{
+		MemberID:       resp.MemberID,
+		OrganizationID: resp.Organization.OrganizationID,
+		Email:          resp.Member.EmailAddress,
+		EmailVerified:  true,
+		SessionJWT:     resp.SessionJWT,
+		SessionToken:   resp.SessionToken,
+	}, nil
 }
 
 // --- Organizations ---

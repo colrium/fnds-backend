@@ -88,10 +88,16 @@ func TestCompleteOnboarding(t *testing.T) {
 		useLinkChallengeTestMongo(mt)
 		svc := &Service{rate: ratelimit.NewLimiter(nil, nil)}
 
-		mt.AddMockResponses(mtest.CreateSuccessResponse(
-			bson.E{Key: "n", Value: 1},
-			bson.E{Key: "nModified", Value: 1},
-		))
+		mt.AddMockResponses(
+			mtest.CreateCursorResponse(0, ns(mt, "workspaces"), mtest.FirstBatch, bson.D{
+				{Key: "_id", Value: "ws-1"},
+				{Key: "stytch_organization_id", Value: "org-1"},
+			}),
+			mtest.CreateSuccessResponse(
+				bson.E{Key: "n", Value: 1},
+				bson.E{Key: "nModified", Value: 1},
+			),
+		)
 
 		if err := svc.CompleteOnboarding(context.Background(), "state-1", "ws-1"); err != nil {
 			mt.Fatalf("unexpected error: %v", err)
@@ -102,10 +108,16 @@ func TestCompleteOnboarding(t *testing.T) {
 		useLinkChallengeTestMongo(mt)
 		svc := &Service{rate: ratelimit.NewLimiter(nil, nil)}
 
-		mt.AddMockResponses(mtest.CreateSuccessResponse(
-			bson.E{Key: "n", Value: 0},
-			bson.E{Key: "nModified", Value: 0},
-		))
+		mt.AddMockResponses(
+			mtest.CreateCursorResponse(0, ns(mt, "workspaces"), mtest.FirstBatch, bson.D{
+				{Key: "_id", Value: "ws-1"},
+				{Key: "stytch_organization_id", Value: "org-1"},
+			}),
+			mtest.CreateSuccessResponse(
+				bson.E{Key: "n", Value: 0},
+				bson.E{Key: "nModified", Value: 0},
+			),
+		)
 
 		err := svc.CompleteOnboarding(context.Background(), "state-1", "ws-1")
 		var serviceErr *ServiceError

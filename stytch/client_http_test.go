@@ -70,6 +70,92 @@ func TestCreateOrganizationFromDiscoveryParsesResponse(t *testing.T) {
 	}
 }
 
+func TestExchangeIntermediateSessionUsesDiscoveryEndpoint(t *testing.T) {
+	var gotPath string
+	var gotBody map[string]any
+	client := newTestHTTPClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status_code":          200,
+			"member_authenticated": true,
+			"member_id":            "member-123",
+			"session_jwt":          "jwt-abc",
+			"session_token":        "session-token-abc",
+			"member": map[string]any{
+				"member_id":       "member-123",
+				"organization_id": "org-456",
+				"email_address":   "member@example.com",
+			},
+			"organization": map[string]any{
+				"organization_id": "org-456",
+			},
+		})
+	})
+
+	result, err := client.ExchangeIntermediateSession(context.Background(), "intermediate-token-1", "org-456")
+	if err != nil {
+		t.Fatalf("ExchangeIntermediateSession() error = %v", err)
+	}
+	if gotPath != "/v1/b2b/discovery/intermediate_sessions/exchange" {
+		t.Errorf("path = %q, want discovery intermediate-session exchange endpoint", gotPath)
+	}
+	if gotBody["intermediate_session_token"] != "intermediate-token-1" {
+		t.Errorf("intermediate_session_token = %v, want intermediate-token-1", gotBody["intermediate_session_token"])
+	}
+	if _, exists := gotBody["session_token"]; exists {
+		t.Errorf("request unexpectedly sent session_token: %v", gotBody["session_token"])
+	}
+	if result.MemberID != "member-123" || result.OrganizationID != "org-456" {
+		t.Errorf("result = %+v, want member-123 in org-456", result)
+	}
+	if result.SessionJWT != "jwt-abc" || result.SessionToken != "session-token-abc" {
+		t.Errorf("result session credentials = %q/%q, want jwt-abc/session-token-abc", result.SessionJWT, result.SessionToken)
+	}
+}
+
+func TestExchangeSessionUsesExistingSessionEndpoint(t *testing.T) {
+	var gotPath string
+	var gotBody map[string]any
+	client := newTestHTTPClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&gotBody); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status_code":   200,
+			"member_id":     "member-123",
+			"session_jwt":   "jwt-abc",
+			"session_token": "session-token-abc",
+			"member": map[string]any{
+				"member_id":       "member-123",
+				"organization_id": "org-456",
+				"email_address":   "member@example.com",
+			},
+			"organization": map[string]any{
+				"organization_id": "org-456",
+			},
+		})
+	})
+
+	if _, err := client.ExchangeSession(context.Background(), "existing-session-token", "org-456"); err != nil {
+		t.Fatalf("ExchangeSession() error = %v", err)
+	}
+	if gotPath != "/v1/b2b/sessions/exchange" {
+		t.Errorf("path = %q, want existing-session exchange endpoint", gotPath)
+	}
+	if gotBody["session_token"] != "existing-session-token" {
+		t.Errorf("session_token = %v, want existing-session-token", gotBody["session_token"])
+	}
+	if _, exists := gotBody["intermediate_session_token"]; exists {
+		t.Errorf("request unexpectedly sent intermediate_session_token: %v", gotBody["intermediate_session_token"])
+	}
+}
+
 func TestClassifyMapsNotFoundStatus(t *testing.T) {
 	client := newTestHTTPClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

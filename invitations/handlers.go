@@ -260,7 +260,7 @@ func acceptHandler(cfg HandlersConfig) echo.HandlerFunc {
 		var sess stytch.Session
 		exchangeErr := cfg.Adapter.Do(ctx, "ExchangeSession", true, func(attemptCtx context.Context) error {
 			var err error
-			sess, err = cfg.Adapter.Client().ExchangeSession(attemptCtx, discoveryResult.IntermediateSessionToken, ws.StytchOrganizationID)
+			sess, err = cfg.Adapter.Client().ExchangeIntermediateSession(attemptCtx, discoveryResult.IntermediateSessionToken, ws.StytchOrganizationID)
 			return err
 		})
 		if exchangeErr != nil {

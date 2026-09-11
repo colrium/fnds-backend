@@ -304,9 +304,13 @@ func (s *Service) Authenticate(ctx context.Context, in AuthenticateInput) (AuthR
 			OnboardingID: state.ID,
 		}
 		if state.Stage == StageComplete {
+			orgID, resolveErr := completedWorkspaceOrganizationID(ctx, coll, &state)
+			if resolveErr != nil {
+				return AuthResult{}, resolveErr
+			}
 			authResult.UserID = state.UserID
 			authResult.WorkspaceID = state.WorkspaceID
-			authResult.StytchOrganizationID = state.StytchOrganizationID
+			authResult.StytchOrganizationID = orgID
 			authResult.IntermediateSessionToken = result.IntermediateSessionToken
 			authResult.Email = normalizedEmail
 		}
@@ -975,13 +979,19 @@ func (s *Service) CompleteOnboarding(ctx context.Context, stateID, workspaceID s
 	coll := configs.MI.DB.Collection("onboarding_states")
 	now := time.Now()
 
+	orgID, err := workspaceOrganizationID(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+
 	filter := bson.M{"_id": stateID, "stage": string(StageAwaitingWorkspaceName)}
 	update := bson.M{
 		"$set": bson.M{
-			"stage":        string(StageComplete),
-			"workspace_id": workspaceID,
-			"completed_at": now,
-			"updated_at":   now,
+			"stage":                  string(StageComplete),
+			"workspace_id":           workspaceID,
+			"stytch_organization_id": orgID,
+			"completed_at":           now,
+			"updated_at":             now,
 		},
 	}
 
@@ -998,6 +1008,76 @@ func (s *Service) CompleteOnboarding(ctx context.Context, stateID, workspaceID s
 	}
 
 	return nil
+}
+
+func completedWorkspaceOrganizationID(ctx context.Context, states *mongo.Collection, state *OnboardingState) (string, error) {
+	orgID, err := workspaceOrganizationID(ctx, state.WorkspaceID)
+	if err != nil {
+		return "", err
+	}
+
+	if state.StytchOrganizationID != "" && state.StytchOrganizationID != orgID {
+		return "", &ServiceError{
+			Status:          503,
+			Code:            "auth_data_inconsistent",
+			Message:         "employer sign-in is temporarily unavailable; please contact support",
+			SuggestedAction: "contact_support",
+		}
+	}
+
+	if state.StytchOrganizationID == "" {
+		if _, err := states.UpdateOne(ctx,
+			bson.M{"_id": state.ID, "stage": string(StageComplete)},
+			bson.M{"$set": bson.M{
+				"stytch_organization_id": orgID,
+				"updated_at":             time.Now(),
+			}},
+		); err != nil {
+			return "", fmt.Errorf("authenticate: backfill onboarding organization: %w", err)
+		}
+	}
+
+	return orgID, nil
+}
+
+func workspaceOrganizationID(ctx context.Context, workspaceID string) (string, error) {
+	if strings.TrimSpace(workspaceID) == "" {
+		return "", &ServiceError{
+			Status:          503,
+			Code:            "workspace_link_missing",
+			Message:         "employer sign-in is temporarily unavailable; please contact support",
+			SuggestedAction: "contact_support",
+		}
+	}
+
+	var workspace struct {
+		StytchOrganizationID string `bson:"stytch_organization_id"`
+	}
+	err := configs.MI.DB.Collection("workspaces").FindOne(
+		ctx,
+		bson.M{"_id": workspaceID},
+		options.FindOne().SetProjection(bson.M{"stytch_organization_id": 1}),
+	).Decode(&workspace)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return "", &ServiceError{
+				Status:          503,
+				Code:            "workspace_link_missing",
+				Message:         "employer sign-in is temporarily unavailable; please contact support",
+				SuggestedAction: "contact_support",
+			}
+		}
+		return "", fmt.Errorf("load workspace organization: %w", err)
+	}
+	if strings.TrimSpace(workspace.StytchOrganizationID) == "" {
+		return "", &ServiceError{
+			Status:          503,
+			Code:            "workspace_link_missing",
+			Message:         "employer sign-in is temporarily unavailable; please contact support",
+			SuggestedAction: "contact_support",
+		}
+	}
+	return workspace.StytchOrganizationID, nil
 }
 
 // IssueChallengeResult is the response from IssueLinkChallenge.

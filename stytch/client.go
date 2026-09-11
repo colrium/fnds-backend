@@ -24,6 +24,10 @@ type Client interface {
 	// OAuthDiscoveryAuthenticate redeems an OAuth discovery token.
 	OAuthDiscoveryAuthenticate(ctx context.Context, token string) (DiscoveryResult, error)
 
+	// ExchangeIntermediateSession exchanges a discovery intermediate-session
+	// token for a full Member session in an existing Organization.
+	ExchangeIntermediateSession(ctx context.Context, intermediateToken, targetOrgID string) (Session, error)
+
 	// --- Organizations (Req 2.1, 2.13, 2.16, 3.8, 18.8) ---
 
 	// CreateOrganizationFromDiscovery creates a Stytch Organization from the

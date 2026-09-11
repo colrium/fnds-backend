@@ -18,3 +18,4 @@ infra/*.tfplan
 infra/tfplan
 infra/.terraform.lock.hcl
 .claude/worktrees/
+.agents/skills/*

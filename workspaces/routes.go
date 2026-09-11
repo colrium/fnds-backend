@@ -573,9 +573,9 @@ func RegisterRoutes(cfg RouteConfig) {
 		// left to do.
 		if onboarding.Stage(result.Stage) == onboarding.StageComplete {
 			var sess stytch.Session
-			exchangeErr := cfg.Adapter.Do(c.Request().Context(), "ExchangeSession", true, func(attemptCtx context.Context) error {
+			exchangeErr := cfg.Adapter.Do(c.Request().Context(), "ExchangeIntermediateSession", true, func(attemptCtx context.Context) error {
 				var innerErr error
-				sess, innerErr = cfg.Adapter.Client().ExchangeSession(attemptCtx, result.IntermediateSessionToken, result.StytchOrganizationID)
+				sess, innerErr = cfg.Adapter.Client().ExchangeIntermediateSession(attemptCtx, result.IntermediateSessionToken, result.StytchOrganizationID)
 				return innerErr
 			})
 			if exchangeErr != nil {

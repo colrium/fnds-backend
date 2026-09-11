@@ -105,11 +105,16 @@ func (f *Fake) JWKS() []byte {
 func (f *Fake) MintSessionJWT(memberID, orgID string, ttl time.Duration) string {
 	now := f.Clock.Now()
 	claims := jwt.MapClaims{
-		"sub":    memberID,
-		"org_id": orgID,
-		"iss":    "stytch.com/project-test",
-		"iat":    now.Unix(),
-		"exp":    now.Add(ttl).Unix(),
+		"sub": memberID,
+		"https://stytch.com/organization": map[string]any{
+			"organization_id": orgID,
+		},
+		"https://stytch.com/session": map[string]any{
+			"id": "session-" + memberID,
+		},
+		"iss": "stytch.com/project-test",
+		"iat": now.Unix(),
+		"exp": now.Add(ttl).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	token.Header["kid"] = f.kid
@@ -220,6 +225,46 @@ func (f *Fake) OAuthDiscoveryAuthenticate(_ context.Context, token string) (Disc
 		Name:                     "OAuth User",
 		MemberID:                 "member-" + uuid.New().String()[:8],
 	}, nil
+}
+
+func (f *Fake) ExchangeIntermediateSession(_ context.Context, intermediateToken, targetOrgID string) (Session, error) {
+	if err := f.before("ExchangeIntermediateSession", map[string]string{
+		"intermediateToken": intermediateToken,
+		"targetOrgID":       targetOrgID,
+	}); err != nil {
+		return Session{}, err
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	targetOrg, ok := f.Orgs[targetOrgID]
+	if !ok {
+		return Session{}, &Error{Kind: KindNotFound, Op: "ExchangeIntermediateSession", Status: 404}
+	}
+
+	var member Member
+	for _, candidate := range targetOrg.Members {
+		member = candidate
+		break
+	}
+	if member.MemberID == "" {
+		return Session{}, &Error{Kind: KindUnauthenticated, Op: "ExchangeIntermediateSession", Status: 401}
+	}
+
+	newSessionID := "session-" + uuid.New().String()
+	newSess := Session{
+		MemberID:       member.MemberID,
+		OrganizationID: targetOrgID,
+		SessionID:      newSessionID,
+		Email:          member.Email,
+		EmailVerified:  true,
+		ExpiresAt:      f.Clock.Now().Add(time.Hour),
+		SessionJWT:     f.mintSessionJWTLocked(member.MemberID, targetOrgID, time.Hour),
+		SessionToken:   "session_token_" + newSessionID,
+	}
+	targetOrg.Sessions[newSessionID] = newSess
+	return newSess, nil
 }
 
 func (f *Fake) CreateOrganizationFromDiscovery(_ context.Context, in CreateOrgInput) (CreateOrgResult, error) {

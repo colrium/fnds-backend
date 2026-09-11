@@ -213,6 +213,65 @@ func TestAuthenticate_ExistingAccountLinkSignsIn(t *testing.T) {
 	})
 }
 
+func TestAuthenticate_CompleteStateBackfillsOrganizationFromWorkspace(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+
+	mt.Run("completed legacy state without organization id still signs in", func(mt *mtest.T) {
+		useLinkChallengeTestMongo(mt)
+
+		clock := &fakeClock{now: time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)}
+		fake := stytch.NewFake(clock)
+		adapter := stytch.NewWithClient(stytch.Config{
+			ProjectID:     "proj-test",
+			Secret:        "secret-test",
+			PublicToken:   "pub-test",
+			Environment:   "test",
+			WebhookSecret: "whsec_test",
+			Clock:         clock,
+		}, fake)
+		svc := NewService(adapter, nil)
+
+		mt.AddMockResponses(
+			bson.D{
+				{Key: "ok", Value: 1},
+				{Key: "value", Value: bson.D{
+					{Key: "_id", Value: "state-1"},
+					{Key: "stage", Value: string(StageComplete)},
+					{Key: "email", Value: "user@example.com"},
+					{Key: "email_verified", Value: true},
+					{Key: "user_id", Value: "user-1"},
+					{Key: "workspace_id", Value: "ws-1"},
+				}},
+			},
+			mtest.CreateCursorResponse(0, ns(mt, "workspaces"), mtest.FirstBatch, bson.D{
+				{Key: "_id", Value: "ws-1"},
+				{Key: "stytch_organization_id", Value: "org-1"},
+			}),
+			mtest.CreateSuccessResponse(
+				bson.E{Key: "n", Value: 1},
+				bson.E{Key: "nModified", Value: 1},
+			),
+		)
+
+		result, err := svc.Authenticate(context.Background(), AuthenticateInput{
+			DiscoveryToken: "tok",
+			TokenType:      "magic_link",
+		})
+		if err != nil {
+			mt.Fatalf("Authenticate() error = %v", err)
+		}
+		if result.Stage != string(StageComplete) {
+			mt.Errorf("Stage = %q, want %q", result.Stage, StageComplete)
+		}
+		if result.StytchOrganizationID != "org-1" {
+			mt.Errorf("StytchOrganizationID = %q, want org-1", result.StytchOrganizationID)
+		}
+		if result.IntermediateSessionToken == "" {
+			mt.Error("IntermediateSessionToken is empty")
+		}
+	})
+}
+
 // A linked account must win over a withheld one: with legacy case-variant
 // duplicates, an artisan record sharing the address must not block the
 // returning Employer from signing in.
