@@ -23,6 +23,10 @@ type VacancyCreatedActivity struct {
 	VacancyID     string
 	VacancyTitle  string
 	CreatorUserID string
+	CreatorName   string
+	OwnerUserID   string
+	OwnerName     string
+	CompanyName   string
 	CreatedAt     time.Time
 }
 
@@ -57,12 +61,26 @@ type ProfileSubmittedActivity struct {
 
 // NotifyVacancyCreated builds and sends the vacancy activity message.
 func NotifyVacancyCreated(ctx context.Context, a VacancyCreatedActivity) error {
+	if resolveWebhookURL(SlackChannelOps) != "" && (a.CreatorName == "" || a.OwnerName == "") {
+		names := AdminUserNames(ctx, a.CreatorUserID, a.OwnerUserID)
+		if a.CreatorName == "" {
+			a.CreatorName = names[a.CreatorUserID]
+		}
+		if a.OwnerName == "" {
+			a.OwnerName = names[a.OwnerUserID]
+		}
+	}
 	msg := integrations.BuildVacancyCreatedMessage(integrations.VacancyCreatedEvent{
 		VacancyID:     a.VacancyID,
 		VacancyTitle:  a.VacancyTitle,
 		CreatorUserID: a.CreatorUserID,
+		CreatorName:   a.CreatorName,
+		OwnerUserID:   a.OwnerUserID,
+		OwnerName:     a.OwnerName,
+		CompanyName:   a.CompanyName,
 		CreatedAt:     a.CreatedAt,
 		AdminBaseURL:  configs.AdminDashboardURL(),
+		Environment:   configs.AppEnv(),
 	})
 	return sendActivity(ctx, msg, "vacancy_created", SlackChannelOps)
 }
@@ -78,6 +96,7 @@ func NotifyApplicationCreated(ctx context.Context, a ApplicationActivity) error 
 		VacancyTitle:   a.VacancyTitle,
 		AppliedAt:      a.AppliedAt,
 		AdminBaseURL:   configs.AdminDashboardURL(),
+		Environment:    configs.AppEnv(),
 	})
 	return sendActivity(ctx, msg, "application_created", SlackChannelOps)
 }
@@ -92,6 +111,7 @@ func NotifyUserRegistered(ctx context.Context, a RegistrationActivity) error {
 		UserType:     a.UserType,
 		RegisteredAt: a.RegisteredAt,
 		AdminBaseURL: configs.AdminDashboardURL(),
+		Environment:  configs.AppEnv(),
 	})
 	return sendActivity(ctx, msg, "user_registered", SlackChannelOps)
 }
@@ -104,6 +124,7 @@ func NotifyProfileSubmitted(ctx context.Context, a ProfileSubmittedActivity) err
 		UserEmail:    a.UserEmail,
 		SubmittedAt:  a.SubmittedAt,
 		AdminBaseURL: configs.AdminDashboardURL(),
+		Environment:  configs.AppEnv(),
 	})
 	return sendActivity(ctx, msg, "profile_submitted", SlackChannelOps)
 }

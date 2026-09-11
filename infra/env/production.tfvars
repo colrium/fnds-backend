@@ -6,6 +6,7 @@ max_count      = 4
 
 api_public_url         = "https://api.fundis.co.ke"
 app_public_url         = "https://app.fundis.co.ke"
+admin_dashboard_url    = "https://admin.fundis.co.ke"
 sendgrid_from_email    = "notifications@fundis.co.ke"
 sendgrid_from_name     = "Fundis App"
 cellulant_base_url     = "https://api-test.tingg.africa"

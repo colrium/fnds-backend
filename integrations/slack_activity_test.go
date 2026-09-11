@@ -544,6 +544,7 @@ func TestBuildVacancyCreatedMessage_WithAdminLinks(t *testing.T) {
 		VacancyID:     "v-123",
 		VacancyTitle:  "Plumber",
 		CreatorUserID: "u-1",
+		CreatorName:   "Amina Otieno",
 		AdminBaseURL:  "https://admin.fundis.co.ke",
 	}
 	msg := BuildVacancyCreatedMessage(e)
@@ -552,10 +553,10 @@ func TestBuildVacancyCreatedMessage_WithAdminLinks(t *testing.T) {
 	if len(msg.Blocks) < 2 {
 		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
 	}
-	section := msg.Blocks[1]
+	section := activityFieldSection(t, msg)
 
-	assertFieldContains(t, section.Fields, "Vacancy ID", "<https://admin.fundis.co.ke/vacancies/v-123|v-123>")
-	assertFieldContains(t, section.Fields, "Created By", "<https://admin.fundis.co.ke/users/u-1|u-1>")
+	assertFieldContains(t, section.Fields, "Vacancy", "<https://admin.fundis.co.ke/vacancies/v-123|Plumber>")
+	assertFieldContains(t, section.Fields, "Posted by", "<https://admin.fundis.co.ke/users/u-1|Amina Otieno>")
 }
 
 func TestBuildVacancyCreatedMessage_WithoutAdminLinks(t *testing.T) {
@@ -563,6 +564,7 @@ func TestBuildVacancyCreatedMessage_WithoutAdminLinks(t *testing.T) {
 		VacancyID:     "v-123",
 		VacancyTitle:  "Plumber",
 		CreatorUserID: "u-1",
+		CreatorName:   "Amina Otieno",
 		AdminBaseURL:  "",
 	}
 	msg := BuildVacancyCreatedMessage(e)
@@ -570,13 +572,13 @@ func TestBuildVacancyCreatedMessage_WithoutAdminLinks(t *testing.T) {
 	if len(msg.Blocks) < 2 {
 		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
 	}
-	section := msg.Blocks[1]
+	section := activityFieldSection(t, msg)
 
 	// Should have plain text, not links.
-	assertFieldContains(t, section.Fields, "Vacancy ID", "v-123")
-	assertFieldNotContains(t, section.Fields, "Vacancy ID", "<")
-	assertFieldContains(t, section.Fields, "Created By", "u-1")
-	assertFieldNotContains(t, section.Fields, "Created By", "<")
+	assertFieldContains(t, section.Fields, "Vacancy", "Plumber")
+	assertFieldNotContains(t, section.Fields, "Vacancy", "<")
+	assertFieldContains(t, section.Fields, "Posted by", "Amina Otieno")
+	assertFieldNotContains(t, section.Fields, "Posted by", "<")
 }
 
 func TestBuildApplicationMessage_WithAdminLinks(t *testing.T) {
@@ -594,10 +596,10 @@ func TestBuildApplicationMessage_WithAdminLinks(t *testing.T) {
 	if len(msg.Blocks) < 2 {
 		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
 	}
-	section := msg.Blocks[1]
+	section := activityFieldSection(t, msg)
 
-	assertFieldContains(t, section.Fields, "Applicant ID", "<https://admin.fundis.co.ke/users/u-42|u-42>")
-	assertFieldContains(t, section.Fields, "Vacancy ID", "<https://admin.fundis.co.ke/vacancies/v-99|v-99>")
+	assertFieldContains(t, section.Fields, "Applicant", "<https://admin.fundis.co.ke/users/u-42|Jane Doe>")
+	assertFieldContains(t, section.Fields, "Vacancy", "<https://admin.fundis.co.ke/vacancies/v-99|Electrician>")
 }
 
 func TestBuildApplicationMessage_WithoutAdminLinks(t *testing.T) {
@@ -615,12 +617,12 @@ func TestBuildApplicationMessage_WithoutAdminLinks(t *testing.T) {
 	if len(msg.Blocks) < 2 {
 		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
 	}
-	section := msg.Blocks[1]
+	section := activityFieldSection(t, msg)
 
-	assertFieldContains(t, section.Fields, "Applicant ID", "u-42")
-	assertFieldNotContains(t, section.Fields, "Applicant ID", "<")
-	assertFieldContains(t, section.Fields, "Vacancy ID", "v-99")
-	assertFieldNotContains(t, section.Fields, "Vacancy ID", "<")
+	assertFieldContains(t, section.Fields, "Applicant", "Jane Doe")
+	assertFieldNotContains(t, section.Fields, "Applicant", "<")
+	assertFieldContains(t, section.Fields, "Vacancy", "Electrician")
+	assertFieldNotContains(t, section.Fields, "Vacancy", "<")
 }
 
 func TestBuildRegistrationMessage_WithAdminLinks(t *testing.T) {
@@ -637,9 +639,9 @@ func TestBuildRegistrationMessage_WithAdminLinks(t *testing.T) {
 	if len(msg.Blocks) < 2 {
 		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
 	}
-	section := msg.Blocks[1]
+	section := activityFieldSection(t, msg)
 
-	assertFieldContains(t, section.Fields, "User ID", "<https://admin.fundis.co.ke/users/u-77|u-77>")
+	assertFieldContains(t, section.Fields, "Person", "<https://admin.fundis.co.ke/users/u-77|John Smith>")
 }
 
 func TestBuildRegistrationMessage_WithoutAdminLinks(t *testing.T) {
@@ -656,10 +658,10 @@ func TestBuildRegistrationMessage_WithoutAdminLinks(t *testing.T) {
 	if len(msg.Blocks) < 2 {
 		t.Fatalf("expected at least 2 blocks, got %d", len(msg.Blocks))
 	}
-	section := msg.Blocks[1]
+	section := activityFieldSection(t, msg)
 
-	assertFieldContains(t, section.Fields, "User ID", "u-77")
-	assertFieldNotContains(t, section.Fields, "User ID", "<")
+	assertFieldContains(t, section.Fields, "Person", "John Smith")
+	assertFieldNotContains(t, section.Fields, "Person", "<")
 }
 
 // --- test helpers ---
@@ -688,4 +690,15 @@ func assertFieldNotContains(t *testing.T, fields []TextObject, label, substr str
 		}
 	}
 	t.Fatalf("field %q not found in section fields", label)
+}
+
+func activityFieldSection(t *testing.T, msg BlockKitMessage) Block {
+	t.Helper()
+	for _, block := range msg.Blocks {
+		if len(block.Fields) > 0 {
+			return block
+		}
+	}
+	t.Fatal("message has no record fields")
+	return Block{}
 }

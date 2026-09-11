@@ -172,6 +172,7 @@ module "service" {
     REDIS_URL                    = data.aws_ssm_parameter.redis_url.value
     API_PUBLIC_URL               = var.api_public_url
     APP_PUBLIC_URL               = var.app_public_url
+    ADMIN_DASHBOARD_URL          = var.admin_dashboard_url
     AWS_REGION                   = var.aws_region
     AWS_S3_BUCKET                = data.aws_ssm_parameter.s3_bucket_name.value
     AWS_S3_REGION                = data.aws_ssm_parameter.s3_bucket_region.value

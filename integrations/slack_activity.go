@@ -14,6 +14,7 @@ import (
 
 // BlockKitMessage is the top-level Slack webhook payload.
 type BlockKitMessage struct {
+	Text   string  `json:"text,omitempty"`
 	Blocks []Block `json:"blocks"`
 }
 
@@ -35,6 +36,7 @@ type TextObject struct {
 type MessageField struct {
 	Label string
 	Value string
+	URL   string
 }
 
 // buildActivityMessage renders a header block with the title, then a section
@@ -43,7 +45,7 @@ type MessageField struct {
 func buildActivityMessage(title string, fields []MessageField) BlockKitMessage {
 	header := Block{
 		Type: "header",
-		Text: &TextObject{Type: "plain_text", Text: title},
+		Text: &TextObject{Type: "plain_text", Text: clipSlackText(title, 150)},
 	}
 
 	columns := make([]TextObject, 0, len(fields))
@@ -51,15 +53,21 @@ func buildActivityMessage(title string, fields []MessageField) BlockKitMessage {
 		if strings.TrimSpace(f.Value) == "" {
 			continue
 		}
+		value := SlackText(clipSlackText(f.Value, 250))
+		if f.URL != "" {
+			value = slackNamedLink(f.URL, f.Value)
+		}
 		columns = append(columns, TextObject{
 			Type: "mrkdwn",
-			Text: fmt.Sprintf("*%s:*\n%s", f.Label, f.Value),
+			Text: fmt.Sprintf("*%s:*\n%s", SlackText(clipSlackText(f.Label, 60)), value),
 		})
 	}
 
 	blocks := []Block{header}
-	if len(columns) > 0 {
-		blocks = append(blocks, Block{Type: "section", Fields: columns})
+	for len(columns) > 0 {
+		n := min(len(columns), 10)
+		blocks = append(blocks, Block{Type: "section", Fields: columns[:n]})
+		columns = columns[n:]
 	}
 	return BlockKitMessage{Blocks: blocks}
 }
@@ -143,11 +151,15 @@ type VacancyCreatedEvent struct {
 	VacancyID     string
 	VacancyTitle  string
 	CreatorUserID string
+	CreatorName   string
+	OwnerUserID   string
+	OwnerName     string
+	CompanyName   string
 	CreatedAt     time.Time
 	AdminBaseURL  string
+	Environment   string
 }
 
-// ApplicationEvent carries application fields for building the notification.
 type ApplicationEvent struct {
 	ApplicantName  string
 	ApplicantEmail string
@@ -157,9 +169,9 @@ type ApplicationEvent struct {
 	VacancyTitle   string
 	AppliedAt      time.Time
 	AdminBaseURL   string
+	Environment    string
 }
 
-// RegistrationEvent carries registration fields for building the notification.
 type RegistrationEvent struct {
 	UserName     string
 	UserEmail    string
@@ -168,73 +180,78 @@ type RegistrationEvent struct {
 	UserType     string
 	RegisteredAt time.Time
 	AdminBaseURL string
+	Environment  string
 }
 
-// SlackLink returns a Slack mrkdwn link (<baseURL/path|displayText>) when
-// baseURL is non-empty, or just displayText when baseURL is empty.
-func SlackLink(baseURL, path, displayText string) string {
-	if baseURL == "" {
-		return displayText
-	}
-	return fmt.Sprintf("<%s/%s|%s>", strings.TrimRight(baseURL, "/"), strings.TrimLeft(path, "/"), displayText)
-}
-
-// BuildVacancyCreatedMessage translates a VacancyCreatedEvent into a Block Kit message.
-func BuildVacancyCreatedMessage(e VacancyCreatedEvent) BlockKitMessage {
-	vacancyDisplay := SlackLink(e.AdminBaseURL, "vacancies/"+e.VacancyID, e.VacancyID)
-	creatorDisplay := SlackLink(e.AdminBaseURL, "users/"+e.CreatorUserID, e.CreatorUserID)
-	return buildActivityMessage("New Vacancy Created", []MessageField{
-		{Label: "Vacancy ID", Value: vacancyDisplay},
-		{Label: "Title", Value: e.VacancyTitle},
-		{Label: "Created By", Value: creatorDisplay},
-		{Label: "Created At", Value: e.CreatedAt.Format(time.RFC3339)},
-	})
-}
-
-// BuildApplicationMessage translates an ApplicationEvent into a Block Kit message.
-func BuildApplicationMessage(e ApplicationEvent) BlockKitMessage {
-	applicantDisplay := SlackLink(e.AdminBaseURL, "users/"+e.ApplicantID, e.ApplicantID)
-	vacancyDisplay := SlackLink(e.AdminBaseURL, "vacancies/"+e.VacancyID, e.VacancyID)
-	return buildActivityMessage("New Vacancy Application", []MessageField{
-		{Label: "Applicant", Value: e.ApplicantName},
-		{Label: "Email", Value: e.ApplicantEmail},
-		{Label: "Phone", Value: e.ApplicantPhone},
-		{Label: "Applicant ID", Value: applicantDisplay},
-		{Label: "Vacancy ID", Value: vacancyDisplay},
-		{Label: "Vacancy Title", Value: e.VacancyTitle},
-		{Label: "Applied At", Value: e.AppliedAt.Format(time.RFC3339)},
-	})
-}
-
-// BuildRegistrationMessage translates a RegistrationEvent into a Block Kit message.
-func BuildRegistrationMessage(e RegistrationEvent) BlockKitMessage {
-	userDisplay := SlackLink(e.AdminBaseURL, "users/"+e.UserID, e.UserID)
-	return buildActivityMessage("New User Registration", []MessageField{
-		{Label: "Name", Value: e.UserName},
-		{Label: "User Type", Value: e.UserType},
-		{Label: "Email", Value: e.UserEmail},
-		{Label: "Phone", Value: e.UserPhone},
-		{Label: "User ID", Value: userDisplay},
-		{Label: "Registered At", Value: e.RegisteredAt.Format(time.RFC3339)},
-	})
-}
-
-// ProfileSubmittedEvent carries fields for the profile-submitted-for-review notification.
 type ProfileSubmittedEvent struct {
 	UserID       string
 	UserName     string
 	UserEmail    string
 	SubmittedAt  time.Time
 	AdminBaseURL string
+	Environment  string
 }
 
-// BuildProfileSubmittedMessage translates a ProfileSubmittedEvent into a Block Kit message.
+func BuildVacancyCreatedMessage(e VacancyCreatedEvent) BlockKitMessage {
+	vacancyURL := DashboardRecordURL(e.AdminBaseURL, "vacancies", e.VacancyID)
+	fields := []MessageField{
+		{Label: "Vacancy", Value: DisplayName(e.VacancyTitle, "", "Untitled vacancy"), URL: vacancyURL},
+		{Label: "Posted by", Value: DisplayName(e.CreatorName, "", "View account"), URL: DashboardRecordURL(e.AdminBaseURL, "users", e.CreatorUserID)},
+		{Label: "Company", Value: e.CompanyName, URL: vacancyURL},
+	}
+	if e.OwnerUserID != "" && e.OwnerUserID != e.CreatorUserID {
+		fields = append(fields, MessageField{Label: "On behalf of", Value: DisplayName(e.OwnerName, "", "View employer"), URL: DashboardRecordURL(e.AdminBaseURL, "users", e.OwnerUserID)})
+	}
+	return BuildDashboardMessage(DashboardMessage{
+		Title: "💼 New vacancy", Summary: "A new opportunity is ready to view in the admin dashboard.",
+		Fields:     fields,
+		Actions:    []DashboardAction{{Label: "View vacancy", URL: vacancyURL}},
+		OccurredAt: e.CreatedAt, Environment: e.Environment,
+	})
+}
+
+func BuildApplicationMessage(e ApplicationEvent) BlockKitMessage {
+	vacancyURL := DashboardRecordURL(e.AdminBaseURL, "vacancies", e.VacancyID)
+	applicantURL := DashboardRecordURL(e.AdminBaseURL, "users", e.ApplicantID)
+	return BuildDashboardMessage(DashboardMessage{
+		Title: "📩 New application", Summary: "An artisan has applied. Open the vacancy to view their application.",
+		Fields: []MessageField{
+			{Label: "Applicant", Value: DisplayName(e.ApplicantName, e.ApplicantEmail, "View applicant"), URL: applicantURL},
+			{Label: "Vacancy", Value: DisplayName(e.VacancyTitle, "", "View vacancy"), URL: vacancyURL},
+			{Label: "Email", Value: e.ApplicantEmail},
+			{Label: "Phone", Value: e.ApplicantPhone},
+		},
+		Actions:    []DashboardAction{{Label: "View applications", URL: vacancyURL}, {Label: "View applicant", URL: applicantURL}},
+		OccurredAt: e.AppliedAt, Environment: e.Environment,
+	})
+}
+
+func BuildRegistrationMessage(e RegistrationEvent) BlockKitMessage {
+	userURL := DashboardRecordURL(e.AdminBaseURL, "users", e.UserID)
+	return BuildDashboardMessage(DashboardMessage{
+		Title: "👋 New registration", Summary: "A new account has joined Fundis.",
+		Fields: []MessageField{
+			{Label: "Person", Value: DisplayName(e.UserName, e.UserEmail, "View account"), URL: userURL},
+			{Label: "Account type", Value: strings.ReplaceAll(e.UserType, "_", " ")},
+			{Label: "Email", Value: e.UserEmail},
+			{Label: "Phone", Value: e.UserPhone},
+		},
+		Actions:    []DashboardAction{{Label: "View account", URL: userURL}},
+		OccurredAt: e.RegisteredAt, Environment: e.Environment,
+	})
+}
+
 func BuildProfileSubmittedMessage(e ProfileSubmittedEvent) BlockKitMessage {
-	reviewLink := SlackLink(e.AdminBaseURL, "profile-reviews/"+e.UserID, e.UserID)
-	return buildActivityMessage("Profile Submitted for Review", []MessageField{
-		{Label: "Name", Value: e.UserName},
-		{Label: "Email", Value: e.UserEmail},
-		{Label: "Profile Review", Value: reviewLink},
-		{Label: "Submitted At", Value: e.SubmittedAt.Format(time.RFC3339)},
+	reviewURL := DashboardRecordURL(e.AdminBaseURL, "profile-reviews", e.UserID)
+	userURL := DashboardRecordURL(e.AdminBaseURL, "users", e.UserID)
+	return BuildDashboardMessage(DashboardMessage{
+		Title: "📝 Profile ready for review", Summary: "Review the submitted information and documents in Fundis Admin.",
+		Fields: []MessageField{
+			{Label: "Person", Value: DisplayName(e.UserName, e.UserEmail, "View account"), URL: userURL},
+			{Label: "Profile", Value: "Pending review", URL: reviewURL},
+			{Label: "Email", Value: e.UserEmail},
+		},
+		Actions:    []DashboardAction{{Label: "Review profile", URL: reviewURL}, {Label: "View account", URL: userURL}},
+		OccurredAt: e.SubmittedAt, Environment: e.Environment,
 	})
 }

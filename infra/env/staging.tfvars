@@ -6,6 +6,7 @@ max_count      = 2
 
 api_public_url         = "https://staging-api.fundis.co.ke"
 app_public_url         = "https://staging.fundis.co.ke"
+admin_dashboard_url    = "https://staging-admin.fundis.co.ke"
 sendgrid_from_email    = "notifications@fundis.co.ke"
 sendgrid_from_name     = "Fundis"
 cellulant_base_url     = ""

@@ -40,6 +40,16 @@ variable "app_public_url" {
   type = string
 }
 
+variable "admin_dashboard_url" {
+  description = "Admin dashboard origin used for record and action links in Slack notifications"
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.admin_dashboard_url == "" || can(regex("^https?://[^/?#@]+/?$", var.admin_dashboard_url))
+    error_message = "admin_dashboard_url must be an HTTP(S) origin without credentials, query parameters, or a path."
+  }
+}
+
 variable "sendgrid_from_email" {
   type = string
 }

@@ -35,6 +35,7 @@ func TestNotifyVacancyCreated_Delivery(t *testing.T) {
 		VacancyID:     "v-123",
 		VacancyTitle:  "Plumber",
 		CreatorUserID: "u-1",
+		CreatorName:   "Amina Otieno",
 		CreatedAt:     time.Now(),
 	})
 	if err != nil {
@@ -47,10 +48,10 @@ func TestNotifyVacancyCreated_Delivery(t *testing.T) {
 	// Verify admin links are present in the payload.
 	// Note: Go's json encoder escapes < and > as \u003c and \u003e in JSON.
 	body := string(gotBody)
-	if !strings.Contains(body, "admin.fundis.co.ke/vacancies/v-123|v-123") {
+	if !strings.Contains(body, "admin.fundis.co.ke/vacancies/v-123|Plumber") {
 		t.Fatalf("payload missing vacancy link, got: %s", body)
 	}
-	if !strings.Contains(body, "admin.fundis.co.ke/users/u-1|u-1") {
+	if !strings.Contains(body, "admin.fundis.co.ke/users/u-1|Amina Otieno") {
 		t.Fatalf("payload missing user link, got: %s", body)
 	}
 }
@@ -89,10 +90,10 @@ func TestNotifyApplicationCreated_Delivery(t *testing.T) {
 	// Verify admin links are present in the payload.
 	// Note: Go's json encoder escapes < and > as \u003c and \u003e in JSON.
 	body := string(gotBody)
-	if !strings.Contains(body, "admin.fundis.co.ke/users/u-42|u-42") {
+	if !strings.Contains(body, "admin.fundis.co.ke/users/u-42|Jane Doe") {
 		t.Fatalf("payload missing applicant link, got: %s", body)
 	}
-	if !strings.Contains(body, "admin.fundis.co.ke/vacancies/v-99|v-99") {
+	if !strings.Contains(body, "admin.fundis.co.ke/vacancies/v-99|Electrician") {
 		t.Fatalf("payload missing vacancy link, got: %s", body)
 	}
 }
@@ -130,7 +131,7 @@ func TestNotifyUserRegistered_Delivery(t *testing.T) {
 	// Verify admin link is present in the payload.
 	// Note: Go's json encoder escapes < and > as \u003c and \u003e in JSON.
 	body := string(gotBody)
-	if !strings.Contains(body, "admin.fundis.co.ke/users/u-77|u-77") {
+	if !strings.Contains(body, "admin.fundis.co.ke/users/u-77|John Smith") {
 		t.Fatalf("payload missing user link, got: %s", body)
 	}
 }
@@ -148,6 +149,7 @@ func TestNotifyUnconfiguredWebhook_SilentSkip(t *testing.T) {
 		VacancyID:     "v-1",
 		VacancyTitle:  "Test",
 		CreatorUserID: "u-1",
+		CreatorName:   "Amina Otieno",
 		CreatedAt:     time.Now(),
 	})
 	if err != nil {
@@ -290,6 +292,7 @@ func TestProperty8_OpsNotifsFallsBackToSlackWebhookURL(t *testing.T) {
 		VacancyID:     "v-fallback",
 		VacancyTitle:  "Fallback Test",
 		CreatorUserID: "u-1",
+		CreatorName:   "Amina Otieno",
 		CreatedAt:     time.Now(),
 	})
 	if err != nil {

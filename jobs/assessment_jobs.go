@@ -63,72 +63,29 @@ func CheckReviewSLA() {
 		return
 	}
 
-	var warningJourneys, breachJourneys int
-	var warningUserIDs, breachUserIDs []string
+	var warningReviews, breachReviews []integrations.PendingReview
 	for _, j := range journeys {
 		elapsed := timeutil.BusinessHoursSince(j.UpdatedAt, now)
 		if elapsed >= float64(reviewSLABreachHours) {
-			breachJourneys++
-			breachUserIDs = append(breachUserIDs, j.UserID)
+			breachReviews = append(breachReviews, integrations.PendingReview{UserID: j.UserID, JourneyID: j.ID})
 		} else if elapsed >= float64(reviewSLAWarningHours) {
-			warningJourneys++
-			warningUserIDs = append(warningUserIDs, j.UserID)
+			warningReviews = append(warningReviews, integrations.PendingReview{UserID: j.UserID, JourneyID: j.ID})
 		}
 	}
 
-	if warningJourneys > 0 {
-		sendSLASlackAlert(ctx, warningJourneys, "warning", fmt.Sprintf(
+	if len(warningReviews) > 0 {
+		sendSLASlackAlert(ctx, "warning", fmt.Sprintf(
 			"Profile reviews approaching %dh SLA breach", reviewSLABreachHours,
-		), warningUserIDs)
+		), warningReviews)
 	}
-	if breachJourneys > 0 {
-		sendSLASlackAlert(ctx, breachJourneys, "breach", fmt.Sprintf(
+	if len(breachReviews) > 0 {
+		sendSLASlackAlert(ctx, "breach", fmt.Sprintf(
 			"Profile reviews have BREACHED %dh SLA", reviewSLABreachHours,
-		), breachUserIDs)
+		), breachReviews)
 	}
 }
 
-func sendSLASlackAlert(ctx context.Context, count int, level, title string, userIDs []string) {
-	adminBaseURL := configs.AdminDashboardURL()
-
-	// Build a linked list of profile reviews (limit to 10 to avoid oversized messages).
-	const maxLinks = 10
-	var linkLines string
-	for i, uid := range userIDs {
-		if i >= maxLinks {
-			linkLines += fmt.Sprintf("\n... and %d more", len(userIDs)-maxLinks)
-			break
-		}
-		link := integrations.SlackLink(adminBaseURL, "profile-reviews/"+uid, uid)
-		linkLines += fmt.Sprintf("\n• %s", link)
-	}
-
-	blocks := []integrations.Block{
-		{
-			Type: "header",
-			Text: &integrations.TextObject{Type: "plain_text", Text: title},
-		},
-		{
-			Type: "section",
-			Text: &integrations.TextObject{
-				Type: "mrkdwn",
-				Text: fmt.Sprintf("*%d* profile review(s) pending beyond %s threshold (weekends excluded).",
-					count, level),
-			},
-		},
-	}
-
-	if linkLines != "" {
-		blocks = append(blocks, integrations.Block{
-			Type: "section",
-			Text: &integrations.TextObject{
-				Type: "mrkdwn",
-				Text: "*Affected profiles:*" + linkLines,
-			},
-		})
-	}
-
-	msg := integrations.BlockKitMessage{Blocks: blocks}
+func sendSLASlackAlert(ctx context.Context, level, title string, reviews []integrations.PendingReview) {
 	webhookURL := configs.SlackOpsNotifsURL()
 	if webhookURL == "" {
 		webhookURL = configs.SlackWebhookURL()
@@ -137,11 +94,19 @@ func sendSLASlackAlert(ctx context.Context, count int, level, title string, user
 		slog.Debug("review SLA slack alert skipped; webhook not configured", "level", level)
 		return
 	}
-	client := integrations.NewSlackActivityClient(webhookURL)
-	if err := client.Send(ctx, msg); err != nil {
+	var ids []string
+	for _, review := range reviews[:min(len(reviews), 10)] {
+		ids = append(ids, review.UserID)
+	}
+	names := notifications.AdminUserNames(ctx, ids...)
+	for i := range reviews {
+		reviews[i].UserName = names[reviews[i].UserID]
+	}
+	msg := integrations.BuildReviewSLAMessage(configs.AdminDashboardURL(), configs.AppEnv(), title, level, reviews, time.Now().UTC())
+	if err := integrations.NewSlackActivityClient(webhookURL).Send(ctx, msg); err != nil {
 		slog.Error("review SLA slack alert failed", "level", level, "error", err)
 	} else {
-		slog.Info("review SLA alert sent", "level", level, "count", count)
+		slog.Info("review SLA alert sent", "level", level, "count", len(reviews))
 	}
 }
 
@@ -186,15 +151,7 @@ func CheckNoShows() {
 	}
 	defer func() { _ = cursor.Close(ctx) }()
 
-	type appointment struct {
-		ID           string    `bson:"_id"`
-		UserID       string    `bson:"user_id"`
-		AssessorID   string    `bson:"assessor_id"`
-		Stage        string    `bson:"stage"`
-		ScheduledFor time.Time `bson:"scheduled_for"`
-	}
-
-	var appointments []appointment
+	var appointments []integrations.NoShowAppointment
 	if err := cursor.All(ctx, &appointments); err != nil {
 		slog.Error("no-show check decode failed", "error", err)
 		return
@@ -204,31 +161,27 @@ func CheckNoShows() {
 		return
 	}
 
-	// Send Slack alert for ops
-	msg := integrations.BlockKitMessage{
-		Blocks: []integrations.Block{
-			{
-				Type: "header",
-				Text: &integrations.TextObject{Type: "plain_text", Text: "Assessment No-Shows Detected"},
-			},
-			{
-				Type: "section",
-				Text: &integrations.TextObject{
-					Type: "mrkdwn",
-					Text: fmt.Sprintf("*%d* appointment(s) appear to be no-shows (scheduled >2h ago, still in 'scheduled' status). Admin may need to reassign or follow up.",
-						len(appointments)),
-				},
-			},
-		},
-	}
-
 	webhookURL := configs.SlackOpsNotifsURL()
 	if webhookURL == "" {
 		webhookURL = configs.SlackWebhookURL()
 	}
+	if webhookURL == "" {
+		return
+	}
+	var ids []string
+	for _, appointment := range appointments[:min(len(appointments), 10)] {
+		ids = append(ids, appointment.UserID, appointment.AssessorID)
+	}
+	names := notifications.AdminUserNames(ctx, ids...)
+	for i := range appointments {
+		appointments[i].UserName = names[appointments[i].UserID]
+		appointments[i].AssessorName = names[appointments[i].AssessorID]
+	}
+	msg := integrations.BuildNoShowMessage(configs.AdminDashboardURL(), configs.AppEnv(), appointments, now)
 	client := integrations.NewSlackActivityClient(webhookURL)
 	if err := client.Send(ctx, msg); err != nil {
 		slog.Error("no-show slack alert failed", "error", err)
+		return
 	} else {
 		slog.Info("no-show alert sent", "count", len(appointments))
 	}

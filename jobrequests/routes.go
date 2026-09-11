@@ -189,6 +189,8 @@ func NotifyVacancyPublished(ctx context.Context, vacancy JobVacancy, creatorID s
 			VacancyID:     v.ID,
 			VacancyTitle:  v.Title,
 			CreatorUserID: creatorID,
+			OwnerUserID:   v.OwnerID,
+			CompanyName:   v.CompanyName,
 			CreatedAt:     v.CreatedAt,
 		})
 	}(vacancy, creatorID)
