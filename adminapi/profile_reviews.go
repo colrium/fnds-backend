@@ -10,7 +10,6 @@ import (
 	"backend/contextutil"
 	"backend/notifications"
 	"backend/profileapproval"
-	"backend/profiles"
 	"backend/responses"
 	"backend/users"
 
@@ -64,13 +63,14 @@ func HandleListProfileReviews(c echo.Context) error {
 
 func HandleGetProfileReview(c echo.Context) error {
 	userID := c.Param("user_id")
-	profile, err := profiles.GetFullProfile(c.Request().Context(), userID)
+	profile, err := loadProfileReviewDetail(c.Request().Context(), userID)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return responses.SendError(c, http.StatusNotFound, "user not found")
 		}
 		return responses.SendError(c, http.StatusInternalServerError, "failed to load profile")
 	}
+	c.Response().Header().Set("Cache-Control", "no-store")
 	return responses.SendOK(c, profile, "Profile retrieved")
 }
 

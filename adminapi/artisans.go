@@ -47,8 +47,8 @@ type artisanDetail struct {
 var artisanFileRepository files.Repository
 var artisanFileStorage files.Storage
 
-// SetArtisanFileDependencies configures CV lookup and presigning for the admin
-// artisan detail endpoint. It is called once during application startup.
+// SetArtisanFileDependencies configures file lookup and presigning for admin
+// artisan details and profile reviews. It is called once during startup.
 func SetArtisanFileDependencies(repository files.Repository, storage files.Storage) {
 	artisanFileRepository = repository
 	artisanFileStorage = storage
