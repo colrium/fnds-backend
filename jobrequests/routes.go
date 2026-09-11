@@ -176,7 +176,14 @@ func HandleCreateJobVacancy(ctx echo.Context) error {
 	if err := CreateJobVacancy(&v); err != nil {
 		return responses.SendError(ctx, 500, "Failed to create job vacancy")
 	}
-	notifyWorkersAboutVacancy(ctx.Request().Context(), v)
+	NotifyVacancyPublished(ctx.Request().Context(), v, userID)
+	return responses.SendCreated(ctx, v, "Job vacancy created successfully")
+}
+
+// NotifyVacancyPublished shares the normal publication notifications with admin
+// creation. creatorID identifies the actor; vacancy.OwnerID remains the employer.
+func NotifyVacancyPublished(ctx context.Context, vacancy JobVacancy, creatorID string) {
+	notifyWorkersAboutVacancy(ctx, vacancy)
 	go func(v JobVacancy, creatorID string) {
 		_ = notifications.NotifyVacancyCreated(context.Background(), notifications.VacancyCreatedActivity{
 			VacancyID:     v.ID,
@@ -184,8 +191,7 @@ func HandleCreateJobVacancy(ctx echo.Context) error {
 			CreatorUserID: creatorID,
 			CreatedAt:     v.CreatedAt,
 		})
-	}(v, userID)
-	return responses.SendCreated(ctx, v, "Job vacancy created successfully")
+	}(vacancy, creatorID)
 }
 
 func notifyWorkersAboutVacancy(ctx context.Context, vacancy JobVacancy) {

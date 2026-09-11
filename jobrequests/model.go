@@ -40,6 +40,7 @@ type JobRequest struct {
 type JobVacancy struct {
 	ID                   string     `json:"id" bson:"_id"`
 	OwnerID              string     `json:"owner_id" bson:"owner_id"`
+	CreatedBy            string     `json:"created_by,omitempty" bson:"created_by,omitempty"`
 	WorkspaceID          string     `json:"workspace_id,omitempty" bson:"workspace_id,omitempty"`
 	CompanyID            string     `json:"company_id" bson:"company_id"`
 	Title                string     `json:"title" bson:"title"`
@@ -209,6 +210,7 @@ type JobApplicationWithApplicant struct {
 type Company struct {
 	ID                 string    `json:"id" bson:"_id"`
 	OwnerID            string    `json:"owner_id" bson:"owner_id"`
+	CreatedBy          string    `json:"created_by,omitempty" bson:"created_by,omitempty"`
 	WorkspaceID        string    `json:"workspace_id,omitempty" bson:"workspace_id,omitempty"`
 	Name               string    `json:"name" bson:"name"`
 	Website            string    `json:"website" bson:"website"`
@@ -318,10 +320,14 @@ func ListJobVacancies(filter bson.M, page, limit int64) ([]JobVacancy, int64, er
 }
 
 func CreateJobVacancy(v *JobVacancy) error {
+	return CreateJobVacancyContext(context.Background(), v)
+}
+
+func CreateJobVacancyContext(ctx context.Context, v *JobVacancy) error {
 	v.ID = uuid.New().String()
 	v.CreatedAt = time.Now()
 	v.UpdatedAt = time.Now()
-	_, err := configs.MI.DB.Collection("job_vacancies").InsertOne(context.TODO(), v)
+	_, err := configs.MI.DB.Collection("job_vacancies").InsertOne(ctx, v)
 	return err
 }
 
@@ -527,10 +533,14 @@ func UpdateJobApplicationStatus(id, status string) (bool, error) {
 }
 
 func CreateCompany(c *Company) error {
+	return CreateCompanyContext(context.Background(), c)
+}
+
+func CreateCompanyContext(ctx context.Context, c *Company) error {
 	c.ID = uuid.New().String()
 	c.CreatedAt = time.Now()
 	c.UpdatedAt = time.Now()
-	_, err := configs.MI.DB.Collection("companies").InsertOne(context.TODO(), c)
+	_, err := configs.MI.DB.Collection("companies").InsertOne(ctx, c)
 	return err
 }
 
@@ -538,11 +548,15 @@ func CreateCompany(c *Company) error {
 // Returns (nil, nil) when none exists so callers can distinguish "not found"
 // from a real error.
 func GetCompanyByName(ownerID, name string) (*Company, error) {
+	return GetCompanyByNameContext(context.Background(), ownerID, name)
+}
+
+func GetCompanyByNameContext(ctx context.Context, ownerID, name string) (*Company, error) {
 	trimmed := strings.TrimSpace(name)
 	pattern := "^" + regexp.QuoteMeta(trimmed) + "$"
 	var c Company
 	err := configs.MI.DB.Collection("companies").FindOne(
-		context.TODO(),
+		ctx,
 		bson.M{"owner_id": ownerID, "name": bson.M{"$regex": pattern, "$options": "i"}},
 	).Decode(&c)
 	if err == mongo.ErrNoDocuments {
@@ -575,15 +589,19 @@ func CountCompaniesByOwner(ownerID string) (int64, error) {
 }
 
 func ListCompaniesByOwner(ownerID string) ([]Company, error) {
+	return ListCompaniesByOwnerContext(context.Background(), ownerID)
+}
+
+func ListCompaniesByOwnerContext(ctx context.Context, ownerID string) ([]Company, error) {
 	opts := options.Find().SetSort(bson.M{"created_at": -1})
-	cursor, err := configs.MI.DB.Collection("companies").Find(context.TODO(), bson.M{"owner_id": ownerID}, opts)
+	cursor, err := configs.MI.DB.Collection("companies").Find(ctx, bson.M{"owner_id": ownerID}, opts)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cursor.Close(context.TODO()) }()
+	defer func() { _ = cursor.Close(ctx) }()
 
 	companies := []Company{}
-	if err := cursor.All(context.TODO(), &companies); err != nil {
+	if err := cursor.All(ctx, &companies); err != nil {
 		return nil, err
 	}
 	return companies, nil
@@ -592,9 +610,13 @@ func ListCompaniesByOwner(ownerID string) ([]Company, error) {
 // GetCompanyForOwner fetches a company by id but only if it belongs to ownerID,
 // so one employer can never read or reuse another's company.
 func GetCompanyForOwner(id, ownerID string) (*Company, error) {
+	return GetCompanyForOwnerContext(context.Background(), id, ownerID)
+}
+
+func GetCompanyForOwnerContext(ctx context.Context, id, ownerID string) (*Company, error) {
 	var c Company
 	err := configs.MI.DB.Collection("companies").
-		FindOne(context.TODO(), bson.M{"_id": id, "owner_id": ownerID}).
+		FindOne(ctx, bson.M{"_id": id, "owner_id": ownerID}).
 		Decode(&c)
 	if err != nil {
 		return nil, err
